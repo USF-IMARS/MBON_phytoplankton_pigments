@@ -1,0 +1,28 @@
+---
+title: "Load Data"
+author: "Sebastian DiGeronimo"
+date: '2022-06-13'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r create-dir}
+# will create a set directory if does not exists
+# useful for new projects
+mainDir <- rprojroot::find_rstudio_root_file()
+subDir <-
+    c("data/raw",
+      "data/processed",
+      "data/plots",
+      "data/metadata",
+      "Rmd",
+      "scripts")
+
+fs::dir_create(path = paste0(mainDir,"/",subDir))
+rm(mainDir, subDir)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
