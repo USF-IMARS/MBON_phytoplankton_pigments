@@ -1,0 +1,220 @@
+---
+title: "Template for Mapping"
+author: "Sebastian DiGeronimo"
+date: '2022-06-14'
+output: html_document
+---
+
+## Creates map of site locations for Natalia Lopez Figueroa Zooplankton Paper
+Uses topography and coastline data from NOAA.
+Dataframe of station location from Natalia, programmed here.
+
+```{r setup, include=FALSE}
+root <- rprojroot::find_rstudio_root_file()
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = root)
+library("fields")
+library("raster")
+library("rerddap")
+library("rgdal")
+library("ncdf4")
+library("magrittr")
+library("ggplot2")
+library("sf")
+library("metR")
+
+# fixes issue with reading file?
+sf::sf_use_s2(FALSE)
+
+path <- paste0(root,"/data/map/")
+
+# Region of Interest Bounding Box    ------------- edit this
+# Change the spatial extent
+exnt <- c(xmin = -82, # West
+          xmax = -79, # East
+          ymin = 30.5,# South
+          ymax = 32   # North 
+        )
+
+# inset extent (i.e. smaller map on top of zoomed in map)
+exnt2 <-  c(-75, # West
+            -84, # EAst
+            24,  # South
+            40   # North
+            ) 
+names(exnt2) <- names(exnt)
+```
+
+Load some dataset here!!!
+```{r}
+
+```
+
+
+# download bathymetry and coastline files
+**Note:** this will be done automatically if files **do not exists**
+```{r download-maps}
+fs::dir_create(path)
+
+# Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface)
+# from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
+# download if not already 
+if (!file.exists(paste0(path,"etopo1.nc"))){
+  message("Getting Topography Data")
+  # ERDDAP method
+  etopo    <- info('etopo180')
+
+  # ERDDAP extract and save
+  griddap(etopo, latitude=exnt[3:4], longitude=exnt[1:2], stride=c(1,1), fields='altitude',
+          store = disk(paste0(root,"/data/map/")))
+  
+  # Rename file 
+  file.rename(fs::dir_ls(path, regexp = "\\.nc$"),
+              paste0(root,"/data/map/etopo1.nc"))
+  
+  rm(etopo)
+}
+
+# Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG)
+# from https://www.ngdc.noaa.gov/mgg/shorelines/
+# download GSHHS shapefile if not already downloaded
+coast         <- fs::dir_ls(path = paste0(path),
+               recurse = TRUE ,
+               regexp = "GSHHS_h_L1.shp")
+
+if (rlang::is_empty(coast)){
+  message("Getting Coastline Data")
+  temp        <- tempfile()
+      download.file(
+          "ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip",
+          temp,
+          method = "libcurl",
+          mode = "wb"
+      )
+      unzip(exdir = paste0(path), temp)
+      unlink(temp)
+      rm(temp)
+}
+
+rm(root, coast)
+```
+
+# ggplot way of mapping
+```{r load-map}
+# select and read coastline file from GSHHS then crop
+world2 <- fs::dir_ls(path = paste0(path),
+               recurse = TRUE ,
+               regexp = "GSHHS_h_L1.shp") %>%
+               st_read(.) %>%
+               st_crop(., st_bbox(exnt2))
+
+# read state lines and crop
+state <- fs::dir_ls(path = paste0(path),
+               recurse = TRUE ,
+               regexp = "WDBII_border_h_L2.shp") %>%
+               st_read(.) %>%
+               st_crop(., st_bbox(exnt2))
+
+# read bahtymetry data
+bathy <- raster::raster(paste0(path,"etopo1.nc")) %>%
+  as.data.frame(xy = T)
+```
+
+```{r plots, fig.height=6, fig.width=10}
+stn.map <- ggplot() +
+  geom_contour2(data = bathy, 
+                aes(x = x, y = y, z = -Altitude), 
+                col = "grey40",
+                breaks = c(100, 40, 25, 10, 0)
+                ) +
+  geom_sf(data = world2) +
+  geom_point(data = df,
+             aes(
+               x = lon,
+               y = lat,
+               fill = stn,
+               shape = stn
+             ),
+             size = 4,
+             stroke = 1.5) +
+  scale_shape_manual(values = c(24,25,21))+
+  scale_x_continuous(expand = c(0,0)) + 
+  scale_y_continuous(expand = c(0,0), breaks = seq(30.5,32,0.5)) +
+  coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
+  labs(
+    x = "",
+    y = "",
+    shape = "Station",
+    fill = "Station") +
+  theme_bw() +
+  theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position = c(0.85, 0.25),
+        legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 10),
+        legend.key.size = unit(0.6, "cm"),
+        legend.margin=margin(c(0.1,0.1,0.1,0.1), unit='cm')
+        )
+
+stn.map
+```
+# Zoomed out map 
+```{r us-map-plot, fig.width=2.862162, fig.height=6}
+east.map <- ggplot() +
+  geom_sf(data = world2) +  
+  geom_sf(data = state) +
+  geom_rect(                  # create red box on map to show sampling locations
+    aes(
+      xmin = min(df$lon) - 0.25, # West
+      xmax = max(df$lon) + 0.25, # East
+      ymin = min(df$lat) - 0.25, # South
+      ymax = max(df$lat) + 0.25  # North
+    ),
+    color = "red",
+    fill = NA
+  ) +
+  scale_x_continuous(expand = c(0,0)) + 
+  scale_y_continuous(expand = c(0,0)) +
+  coord_sf(xlim = exnt2[1:2], ylim = exnt2[3:4], 
+           ) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        plot.margin=grid::unit(c(0,0,0,0), "in"),
+        panel.border = element_rect(linetype = "solid", color = "black", fill = NA)
+        )
+
+east.map
+```
+
+# putting both of the maps together
+May need to play with draw_plot(east.map, x, y, width and height)
+```{r fig.height=6, fig.width=10}
+library("cowplot")
+
+ggdraw() +
+  draw_plot(stn.map) +
+  draw_plot(east.map, x = 0.04, y = 0.57, width = 0.1908108, height = 0.4)
+
+
+
+save_plot(filename = paste0(path,"../plots/map", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
+
+save_plot(filename = paste0(path,"../plots/map", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".svg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='svg')
+```
