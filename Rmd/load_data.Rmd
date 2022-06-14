@@ -5,8 +5,40 @@ date: '2022-06-13'
 output: html_document
 ---
 
+# Small lists of things to do
+* rename headers to be `tidy`
+    can use: .name_repair = janitor::make_clean_names inside read_csv
+    
+* combine date and time columns to a standard date_time
+    - Something like this
+     mutate(
+    date_time_utc = ymd_hms(paste(`year col`, `month col`, `day col`, `time col`), tz = "utc"),
+    .before = lat
+  )
+  
+* set -8888 to 0
+* address notes from file to potentially ignore certain rows 
+* start plotting
+    * histogram, per stations, per pigments, etc
+    * simple plots over time
+    * maybe some heatmap
+    * maybe map
+
 ```{r setup, include=FALSE}
+root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
+library("ggplot2")
+library("tibble")
+library("tidyr")
+library("readr")
+library("purrr")
+library("dplyr")
+library("stringr")
+library("forcats")
+library("lubridate")
+library("glue")
+library("fs")
+library("magrittr")
 ```
 
 ```{r create-dir}
@@ -25,4 +57,28 @@ fs::dir_create(path = paste0(mainDir,"/",subDir))
 rm(mainDir, subDir)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r file-paths}
+# find carbonate data
+dir <- "//data//raw//"
+
+# pigment files
+file.pig <-
+  fs::dir_ls(path = paste0(root,dir),
+             recurse = TRUE,
+             regexp = "\\.xlsx$")
+
+```
+
+```{r}
+df <- readxl::read_xlsx(file.pig[1], sheet = 2, skip = 8, na = "-9999")
+# janitor functions
+# 
+str(df)
+
+df %>%
+    filter(`[Allo]` >= 0) %>%
+    ggplot(aes(`Sequential Day of Year`,`[Allo]`)) +
+    geom_point()
+```
+
