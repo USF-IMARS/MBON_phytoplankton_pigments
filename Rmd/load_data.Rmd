@@ -71,14 +71,65 @@ file.pig <-
 ```
 
 ```{r}
-df <- readxl::read_xlsx(file.pig[1], sheet = 2, skip = 8, na = "-9999")
-# janitor functions
-# 
-str(df)
+df <- readxl::read_xlsx(file.pig[1], sheet = 2, skip = 8, na = "-9999", .name_repair = janitor::make_clean_names)
+df[df == -8888] <- 0
+df$gmt_time <- gsub("1899-12-31 ", "", as.character(df$gmt_time))
+df <- mutate(df, date_time_utc = ymd_hms(paste(year_of_sample, gregorian_month, day_of_gregorian_month, gmt_time), tz = "utc"), .before = longitude)
 
-df %>%
-    filter(`[Allo]` >= 0) %>%
-    ggplot(aes(`Sequential Day of Year`,`[Allo]`)) +
-    geom_point()
+# janitor functions
+# str(df)
+
+# df %>%
+#     filter(`[Allo]` >= 0) %>%
+#     ggplot(aes(`Sequential Day of Year`,`[Allo]`)) +
+#     geom_point()
+```
+
+```{r}
+df2 <- 
+    readxl::read_xlsx(file.pig[2], sheet = 2, skip = 8, na = "-9999", 
+                      .name_repair = janitor::make_clean_names)
+df2[df2 == -8888] <- 0
+df2$time <- gsub("1899-12-31 ", "", as.character(df2$time))
+df2 <-
+    mutate(df2,
+           date_time_utc = ymd_hms(paste(year, month, day, time), tz = "utc"),
+           .before = lon)
+df2$indicate_if_filters_are_replicates <- as.character(df2$indicate_if_filters_are_replicates)
+
+
+df3 <-readxl::read_xlsx(file.pig[3], sheet = "Report", skip = 8, na = "-9999", 
+                      .name_repair = janitor::make_clean_names) 
+df3[df3 == -8888] <- 0
+df3$time <- gsub("1899-12-31 ", "", as.character(df3$time))
+df3 <- mutate(df3, date_time_utc = ymd_hms(paste(year, month, day, time), tz = "utc"), 
+              water_depth = case_when(water_depth == "flow trough" ~ 0,
+                                      TRUE ~ as.numeric(water_depth)),
+              .before = lon) 
+
+df4 <- 
+    readxl::read_xlsx(file.pig[4], sheet = "Report", skip = 8, na = "-9999", 
+                      .name_repair = janitor::make_clean_names)
+df4[df4 == -8888] <- 0
+df4$time <- gsub("1899-12-31 ", "", as.character(df4$time))
+df4 <- mutate(df4, date_time_utc = ymd_hms(paste(year, month, day, time), tz = "utc"), .before = lon)
+
+df234 <- full_join(df3, df2)
+df234 <- mutate(df234, hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
+                                                TRUE ~ hplc_gsfc_id))
+```
+```{r}
+df5 <- 
+    readxl::read_xlsx(file.pig[5], sheet = "Report", skip = 8, na = "-9999", 
+                      .name_repair =janitor::make_clean_names)
+df5[df5 == -8888] <- 0
+df5$gmt_time <- gsub("1899-12-31 ", "", as.character(df5$gmt_time))
+df <- mutate(df, date_time_utc = ymd_hms(paste(year_of_sample, gregorian_month, day_of_gregorian_month, gmt_time), tz = "utc"), .before = longitude)
+
+
+
+
+#for looking at similarities in the column names between different files
+# x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
 ```
 
