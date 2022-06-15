@@ -155,29 +155,50 @@ df4 <-
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
-    ) 
-test <- df4 %>%
-    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d"))) %>%
-    select(depth)
-test[140,]
+    ) %>%
+    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d")))
 df4[df4 == -8888] <- 0
 
-
-
-df234 <- full_join(df3, df2)
-
+df234 <- 
+    full_join(df3, df2) 
 df234 <- mutate(df234, hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
-                                                TRUE ~ hplc_gsfc_id))
+                                           TRUE ~ hplc_gsfc_id))
+df234 <- full_join(df234, df4)
 ```
 ```{r}
-df5 <- 
-    readxl::read_xlsx(file.pig[5], sheet = "Report", skip = 8, na = "-9999", 
-                      .name_repair =janitor::make_clean_names)
+df5 <-
+    readxl::read_xlsx(
+        file.pig[5],
+        sheet = "Report",
+        skip = 8,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    rename(lon = longitude,
+         lat = latitude) %>%
+    mutate(
+        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
+        date_time_utc = ymd_hms(
+            paste(
+                year_of_sample,
+                gregorian_month,
+                day_of_gregorian_month,
+                gmt_time
+            ),
+            tz = "utc"
+        ),
+        .before = lon,
+        date_extracted_month_day_year = na_if(df5$date_extracted_month_day_year, "box")
+        ## in the date_extracted_month_day_year column, most of the cells are in date format in the excel
+        ## but the first cell has the word "box" in it, so when I read the file into r the whole column 
+        ## is in character format, and the dates are completely reformatted. Line 191 converts the "box"
+        ## to NA, but the rest of the dates are still messed up and I'm not sure how to make them dates again
+    )
+
+# set -8888 to 0, represent below Limit of Detection (LOD)
 df5[df5 == -8888] <- 0
-df5$gmt_time <- gsub("1899-12-31 ", "", as.character(df5$gmt_time))
-df <- mutate(df, date_time_utc = ymd_hms(paste(year_of_sample, gregorian_month, day_of_gregorian_month, gmt_time), tz = "utc"), .before = longitude)
 
-
+df15 <- full_join(df, df5)
 
 
 #for looking at similarities in the column names between different files
