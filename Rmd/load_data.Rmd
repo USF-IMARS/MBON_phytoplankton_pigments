@@ -71,50 +71,98 @@ file.pig <-
 ```
 
 ```{r}
-df <- readxl::read_xlsx(file.pig[1], sheet = 2, skip = 8, na = "-9999", .name_repair = janitor::make_clean_names)
+df <-
+    readxl::read_xlsx(
+        file.pig[1],
+        sheet = 2,
+        skip = 8,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    rename(lon = longitude,
+         lat = latitude) %>%
+    mutate(
+        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
+        date_time_utc = ymd_hms(
+            paste(
+                year_of_sample,
+                gregorian_month,
+                day_of_gregorian_month,
+                gmt_time
+            ),
+            tz = "utc"
+        ),
+        .before = lon
+    )
+
+# set -8888 to 0, represent below Limit of Detection (LOD)
 df[df == -8888] <- 0
-df$gmt_time <- gsub("1899-12-31 ", "", as.character(df$gmt_time))
-df <- mutate(df, date_time_utc = ymd_hms(paste(year_of_sample, gregorian_month, day_of_gregorian_month, gmt_time), tz = "utc"), .before = longitude)
-
-# janitor functions
-# str(df)
-
-# df %>%
-#     filter(`[Allo]` >= 0) %>%
-#     ggplot(aes(`Sequential Day of Year`,`[Allo]`)) +
-#     geom_point()
 ```
 
 ```{r}
 df2 <- 
     readxl::read_xlsx(file.pig[2], sheet = 2, skip = 8, na = "-9999", 
-                      .name_repair = janitor::make_clean_names)
+                      .name_repair = janitor::make_clean_names) %>%
+    mutate(
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        date_time_utc = ymd_hms(
+            paste(
+                year, month, day, time
+            ),
+            tz = "utc"
+        ),
+        .before = lon
+    ) %>%
+    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates) )
 df2[df2 == -8888] <- 0
-df2$time <- gsub("1899-12-31 ", "", as.character(df2$time))
-df2 <-
-    mutate(df2,
-           date_time_utc = ymd_hms(paste(year, month, day, time), tz = "utc"),
-           .before = lon)
-df2$indicate_if_filters_are_replicates <- as.character(df2$indicate_if_filters_are_replicates)
 
 
-df3 <-readxl::read_xlsx(file.pig[3], sheet = "Report", skip = 8, na = "-9999", 
-                      .name_repair = janitor::make_clean_names) 
+
+df3 <-
+    readxl::read_xlsx(
+        file.pig[3],
+        sheet = "Report",
+        skip = 8,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        date_time_utc = ymd_hms(paste(year, month, day, time),
+                                tz = "utc"),
+        .before = lon
+    ) %>%
+    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates),
+           # matches any digit or decimal and convert to numeric
+           water_depth = as.numeric(str_extract(water_depth, "\\d*\\.{0,1}\\d")),
+           water_depth = replace_na(water_depth, 0)
+    )
 df3[df3 == -8888] <- 0
-df3$time <- gsub("1899-12-31 ", "", as.character(df3$time))
-df3 <- mutate(df3, date_time_utc = ymd_hms(paste(year, month, day, time), tz = "utc"), 
-              water_depth = case_when(water_depth == "flow trough" ~ 0,
-                                      TRUE ~ as.numeric(water_depth)),
-              .before = lon) 
 
-df4 <- 
-    readxl::read_xlsx(file.pig[4], sheet = "Report", skip = 8, na = "-9999", 
-                      .name_repair = janitor::make_clean_names)
+df4 <-
+    readxl::read_xlsx(
+        file.pig[4],
+        sheet = "Report",
+        skip = 8,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+    )  %>%
+    # Fixed misspelled month
+    mutate(month = case_when(!month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
+           TRUE ~ month)) %>%
+    mutate(
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        date_time_utc = ymd_hms(paste(year, month, day, time),
+                                tz = "utc"),
+        .before = lon
+    ) 
+
 df4[df4 == -8888] <- 0
-df4$time <- gsub("1899-12-31 ", "", as.character(df4$time))
-df4 <- mutate(df4, date_time_utc = ymd_hms(paste(year, month, day, time), tz = "utc"), .before = lon)
+
+
 
 df234 <- full_join(df3, df2)
+
 df234 <- mutate(df234, hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
                                                 TRUE ~ hplc_gsfc_id))
 ```
