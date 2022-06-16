@@ -92,7 +92,9 @@ df <-
             ),
             tz = "utc"
         ),
-        .before = lon
+        .before = lon, 
+        date_extracted_month_day_year = as.character(date_extracted_month_day_year)
+        #converted to character so that I could join df and df5
     )
 
 # set -8888 to 0, represent below Limit of Detection (LOD)
@@ -113,7 +115,8 @@ df2 <-
         ),
         .before = lon
     ) %>%
-    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates) )
+    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates)) %>%
+    rename(filter_storage_before_shipment_to_gsfc = filter_storage_before_shipment_to_gfc)
 df2[df2 == -8888] <- 0
 
 
@@ -163,7 +166,8 @@ df234 <-
     full_join(df3, df2) 
 df234 <- mutate(df234, hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
                                            TRUE ~ hplc_gsfc_id))
-df234 <- full_join(df234, df4)
+df234 <- full_join(df234, df4) %>%
+    mutate(sequential_sample_number = as.numeric(sequential_sample_number)) #one cell had "28A", converted to NA
 ```
 ```{r}
 df5 <-
@@ -189,10 +193,6 @@ df5 <-
         ),
         .before = lon,
         date_extracted_month_day_year = na_if(df5$date_extracted_month_day_year, "box")
-        ## in the date_extracted_month_day_year column, most of the cells are in date format in the excel
-        ## but the first cell has the word "box" in it, so when I read the file into r the whole column 
-        ## is in character format, and the dates are completely reformatted. Line 191 converts the "box"
-        ## to NA, but the rest of the dates are still messed up and I'm not sure how to make them dates again
     )
 
 # set -8888 to 0, represent below Limit of Detection (LOD)
@@ -200,8 +200,29 @@ df5[df5 == -8888] <- 0
 
 df15 <- full_join(df, df5)
 
+params <- c("hplc_gsfc_id"="gsfc_lab_sample_code", "pi", "station", "sample" = "original_pi_sample_label", 
+            "cruise"="cruise_name", "indicate_if_filters_are_replicates",
+            "volfilt" = "volume_filtered_ml", "bottle" ="bottle_number", 
+            "depth" = "sampling_depth_meters", "water_depth" = "total_water_depth_meters",
+            "name_of_water_body", "year" = "year_of_sample", "month"= "gregorian_month",
+            "day" = "day_of_gregorian_month", "sdy" = "sequential_day_of_year", 
+            "time"="gmt_time", "date_time_utc","lon", "lat", "filter_type",
+            "filter_diameter_mm", "filter_storage_before_shipment_to_gfsc"="filter_storage_before_shipping_to_gsfc",
+            "tot_chl_a", "tot_chl_b", "tot_chl_c", "alpha_beta_car","but_fuco", 
+            "hex_fuco", "allo", "diadino", "diato", "fuco", "perid", "zea", "mv_chl_a", 
+            "dv_chl_a", "chlide_a", "mv_chl_b", "dv_chl_b", "chl_c1c2" = "chl_c12",
+            "chl_c3", "lut", "neo", "viola", "phytin_a", "phide_a", "pras", "gyro", 
+            "tchl"="t_chl", "ppc", "psc", "psp", "tcar"="t_caro", "tacc" = "t_acc",
+            "tpg" = "t_pg", "dp", "tacc_tchla" = "t_acc_tchla", "psc_tcar" = "psc_t_caro",
+            "ppc_tcar" = "ppc_t_caro", "tchl_tcar"="t_chl_t_caro", "ppc_tpg" = "ppc_tpig",
+            "psp_tpg" = "psp_t_pg", "tchl_a_tpg" = "t_chl_a_t_pig",
+            "comments", "sequential_sample_number")
+
+dfall <- full_join(df234, df15, by=params)
+
 
 #for looking at similarities in the column names between different files
 # x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
+# x2 <- cbind(names(df234), names(df15))
 ```
 
