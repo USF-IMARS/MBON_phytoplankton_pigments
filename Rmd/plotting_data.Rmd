@@ -1,0 +1,36 @@
+---
+title: "Plotting Data"
+author: "Anna Finch"
+date: "6/16/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library("dplyr")
+library("ggplot2")
+library("tidyverse")
+
+root <- rprojroot::find_rstudio_root_file()
+dir2 <- "//data//processed//"
+path_out = paste0(root,dir2)
+pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+```
+
+```{r concentration vs time}
+ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
+    geom_point(size=4) +
+    theme_classic()
+```
+
+```{r scatter plots}
+
+```
+
+```{r histogram}
+
+```
+
+```{r violin, boxplot, jitter}
+
+```
+

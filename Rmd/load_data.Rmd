@@ -225,10 +225,22 @@ dfall <- full_join(df234, df15, by=params)
 # x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
 # x2 <- cbind(names(df234), names(df15))
 ```
+
+```{r summary statistics}
+#group by seasons
+winter <- c("January", "Jan", "February", "Feb")
+spring <- c("April", "May")
+summer <- c("July", "Aug","August")
+autumn <- c("November", "Nov", "October", "Oct")
+
+
+
+```
+
 ```{r}
 
-dir2 <- "//data//processed//"
-path_out = paste0(root,dir2)
-write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
+# dir2 <- "//data//processed//"
+# path_out = paste0(root,dir2)
+# write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
 ```
 
