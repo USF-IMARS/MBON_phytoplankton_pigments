@@ -228,12 +228,22 @@ dfall <- full_join(df234, df15, by=params)
 
 ```{r summary statistics}
 #group by seasons
-winter <- c("January", "Jan", "February", "Feb")
-spring <- c("April", "May")
-summer <- c("July", "Aug","August")
-autumn <- c("November", "Nov", "October", "Oct")
+dfall$month <- strtrim(dfall$month, 3)
+winter <- c("Dec", "Jan", "Feb")
+spring <- c("Mar","Apr", "May")
+summer <- c("Jun","Jul", "Aug")
+autumn <- c("Sep","Nov", "Oct")
 
+dfall <- mutate(dfall, season = case_when(month %in% winter ~ "W",
+                                          month %in% spring ~ "Sp",
+                                          month %in% summer ~ "Su",
+                                          month %in% autumn ~ "F"))
 
+pig_stat <- dfall %>%
+  group_by(year) %>%
+  group_by(season, .add = TRUE) %>%
+  summarise_at(vars(tot_chl_a, tot_chl_b, tot_chl_c), list(avg = mean, sd= sd, var= var))
+# add more variables. what to do with NAs?
 
 ```
 
