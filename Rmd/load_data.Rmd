@@ -116,7 +116,8 @@ df2 <-
         .before = lon
     ) %>%
     mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates)) %>%
-    rename(filter_storage_before_shipment_to_gsfc = filter_storage_before_shipment_to_gfc)
+    rename(filter_storage_before_shipment_to_gsfc = filter_storage_before_shipment_to_gfc) %>%
+    filter(!is.na(station))
 df2[df2 == -8888] <- 0
 
 
@@ -238,19 +239,17 @@ dfall <- mutate(dfall, season = case_when(month %in% winter ~ "W",
                                           month %in% spring ~ "Sp",
                                           month %in% summer ~ "Su",
                                           month %in% autumn ~ "F"))
-
 pig_stat <- dfall %>%
-  group_by(year) %>%
-  group_by(season, .add = TRUE) %>%
-  summarise_at(vars(tot_chl_a, tot_chl_b, tot_chl_c), list(avg = mean, sd= sd, var= var))
-# add more variables. what to do with NAs?
+    group_by(season) %>% 
+    summarise_at(vars(tot_chl_a:tchl_a_tpg),list(avg = mean, sd= sd, var= var), na.rm = TRUE)
 
 ```
 
 ```{r}
 
-# dir2 <- "//data//processed//"
-# path_out = paste0(root,dir2)
-# write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
+dir2 <- "//data//processed//"
+path_out = paste0(root,dir2)
+write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
+write.csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
 ```
 
