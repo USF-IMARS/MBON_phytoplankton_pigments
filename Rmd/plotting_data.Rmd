@@ -23,6 +23,10 @@ ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
 ```
 
 ```{r scatter plots}
+ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
+    geom_point(color = "red") +
+    facet_wrap(~season)
+
 
 ```
 
@@ -60,9 +64,12 @@ p <- pig_dat %>%
     scale_y_continuous(expand = c(0,0)) +
     facet_wrap(facet = ~name_of_water_body)
 p
-p2 <-ggplot(filter(pig_dat, month == "December"), aes(x=month, y=tot_chl_a)) +
+p2 <-ggplot(filter(pig_dat, month == "December"), 
+            aes(x=month, y=tot_chl_a)) +
     geom_jitter()
 p2
-                
+
+ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
+    geom_violin()     
 ```
 
