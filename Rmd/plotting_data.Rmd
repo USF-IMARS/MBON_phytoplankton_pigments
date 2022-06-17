@@ -18,7 +18,7 @@ pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
 
 ```{r concentration vs time}
 ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
-    geom_point(size=4) +
+    geom_point(size=2) +
     theme_classic()
 ```
 
@@ -27,14 +27,39 @@ ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
 ```
 
 ```{r histogram}
+# # hist_dat <- 
+#     pig_dat %>%
+#     pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
+#                  values_to = "value") %>%
+#     group_by(pigment) %>%
+#     ggplot(aes(value)) +
+#     geom_histogram() 
+#     # scale_x_continuous(limits = c(0,1)) +
+#     # scale_y_continuous(limits = c(0,500)) 
+#     # facet_wrap(~pigment)
 
+pig_long <- pig_dat %>%
+    pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
+                 values_to = "value") %>%
+    select(season, pigment, value)
+ pig_hist <- lapply(unique(pig_long$pigment), function(i) {
+  ggplot(pig_long[pig_long$pigment==i,], aes(value, fill = season)) +
+    geom_histogram(position = "dodge") +
+    labs(title=i)
+})
+ pig_hist
 ```
 
 ```{r violin, boxplot, jitter}
-p <- ggplot(filter(pig_dat, month == "December"), aes(x=month, y=allo))+
-    geom_violin(trim = FALSE)
+p <- pig_dat %>% 
+    # filter(month == "December") %>%
+    ggplot(aes(x=season, y=zea))+
+    geom_violin(trim = TRUE) +
+    geom_jitter(width = 0.1, size=0.5, alpha = 0.5) +
+    theme_bw() +
+    scale_y_continuous(expand = c(0,0)) +
+    facet_wrap(facet = ~name_of_water_body)
 p
-
 p2 <-ggplot(filter(pig_dat, month == "December"), aes(x=month, y=tot_chl_a)) +
     geom_jitter()
 p2
