@@ -85,3 +85,17 @@ pig_dat <- pig_dat %>%
 
 
 ```
+
+```{r size fractionation}
+ggplot(pig_dat, aes(x=season, y=micro, color=name_of_water_body)) +
+    geom_boxplot() +
+    ylim(0,5)
+
+ggplot(pig_dat, aes(x=season, y=nano, color=name_of_water_body)) +
+    geom_boxplot() +
+    ylim(0,0.5)
+
+ggplot(pig_dat, aes(x=season, y=pico, color=name_of_water_body)) +
+    geom_boxplot() +
+    ylim(0,1.5)
+```
