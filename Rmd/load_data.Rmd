@@ -220,6 +220,11 @@ params <- c("hplc_gsfc_id"="gsfc_lab_sample_code", "pi", "station", "sample" = "
             "comments", "sequential_sample_number")
 
 dfall <- full_join(df234, df15, by=params)
+dfall <- mutate(dfall, lat = case_when(lat < 0 ~ lat*(-1),
+                                TRUE ~ lat),
+                lon = case_when(lon > 0 ~ lon*(-1),
+                                TRUE ~ lon)
+)
 
 
 #for looking at similarities in the column names between different files
