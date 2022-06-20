@@ -30,23 +30,26 @@ path <- paste0(root,"/data/map/")
 
 # Region of Interest Bounding Box    ------------- edit this
 # Change the spatial extent
-exnt <- c(xmin = -82, # West
+exnt <- c(xmin = -86, # West
           xmax = -79, # East
-          ymin = 30.5,# South
+          ymin = 24,# South
           ymax = 32   # North 
         )
 
 # inset extent (i.e. smaller map on top of zoomed in map)
-exnt2 <-  c(-75, # West
-            -84, # EAst
-            24,  # South
-            40   # North
+exnt2 <-  c(-71, # West
+            -80, # East
+            20,  # South
+            28   # North
             ) 
 names(exnt2) <- names(exnt)
 ```
 
 Load some dataset here!!!
 ```{r}
+dir2 <- "//data//processed//"
+path_out = paste0(root,dir2)
+pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
 
 ```
 
@@ -128,12 +131,12 @@ stn.map <- ggplot() +
                 breaks = c(100, 40, 25, 10, 0)
                 ) +
   geom_sf(data = world2) +
-  geom_point(data = df,
+  geom_point(data = pig_dat,
              aes(
                x = lon,
                y = lat,
-               fill = stn,
-               shape = stn
+               fill = station,
+               ##shape = station
              ),
              size = 4,
              stroke = 1.5) +
