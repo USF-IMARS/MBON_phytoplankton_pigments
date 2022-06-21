@@ -176,7 +176,7 @@ east.map <- ggplot() +
       xmax = -79.83275, # East
       ymin = min(pig_dat$lat) - 0.25, # South
       # ymax = max(pig_dat$lat) + 0.25  # North
-      ymax = 25.89524 # North, incorrect coordinate was messing up box size
+      ymax = 28.25 # North, incorrect coordinate was messing up box size
     ),
     color = "red",
     fill = NA
