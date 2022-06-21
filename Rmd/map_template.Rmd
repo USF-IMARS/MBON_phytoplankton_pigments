@@ -30,17 +30,17 @@ path <- paste0(root,"/data/map/")
 
 # Region of Interest Bounding Box    ------------- edit this
 # Change the spatial extent
-exnt <- c(xmin = -86, # West
+exnt <- c(xmin = -85, # West
           xmax = -79, # East
           ymin = 24,# South
-          ymax = 32   # North 
+          ymax = 29   # North 
         )
 
 # inset extent (i.e. smaller map on top of zoomed in map)
-exnt2 <-  c(-71, # West
-            -80, # East
+exnt2 <-  c(-90, # West
+            -75, # East
             20,  # South
-            28   # North
+            35   # North
             ) 
 names(exnt2) <- names(exnt)
 ```
@@ -136,10 +136,12 @@ stn.map <- ggplot() +
                x = lon,
                y = lat,
                fill = station,
-               ##shape = station
+               ##shape = station,
              ),
-             size = 4,
-             stroke = 1.5) +
+             size = 2,
+             # alpha = 0.5,
+             stroke = 1.5,
+             show.legend = FALSE) +
   scale_shape_manual(values = c(24,25,21))+
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0), breaks = seq(30.5,32,0.5)) +
@@ -169,10 +171,12 @@ east.map <- ggplot() +
   geom_sf(data = state) +
   geom_rect(                  # create red box on map to show sampling locations
     aes(
-      xmin = min(df$lon) - 0.25, # West
-      xmax = max(df$lon) + 0.25, # East
-      ymin = min(df$lat) - 0.25, # South
-      ymax = max(df$lat) + 0.25  # North
+      xmin = min(pig_dat$lon) - 0.25, # West
+      # xmax = max(pig_dat$lon) + 0.25, # East
+      xmax = -79.83275, # East
+      ymin = min(pig_dat$lat) - 0.25, # South
+      # ymax = max(pig_dat$lat) + 0.25  # North
+      ymax = 25.89524 # North, incorrect coordinate was messing up box size
     ),
     color = "red",
     fill = NA
