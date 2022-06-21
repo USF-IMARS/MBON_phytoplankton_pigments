@@ -258,3 +258,24 @@ write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
 write.csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
 ```
 
+```{r log dat}
+dir2 <- "//data//processed//"
+path_out = paste0(root,dir2)
+pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+
+add1 <- function(n) {
+    n + 1
+}
+
+log_pig <- pig_dat %>% 
+    mutate_at(.vars = vars(tot_chl_a:dp), add1) %>%
+    mutate_at(.vars = vars(tot_chl_a:dp), .funs = (log = log10))
+
+log_pig_stat <- log_pig %>%
+    group_by(season) %>% 
+    summarise_at(vars(tot_chl_a:tchl_a_tpg),list(log_avg = mean, log_sd= sd, log_var= var), na.rm = TRUE)
+write.csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
+write.csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
+    
+    
+```
