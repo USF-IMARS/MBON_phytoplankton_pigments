@@ -273,9 +273,26 @@ log_pig <- pig_dat %>%
 
 log_pig_stat <- log_pig %>%
     group_by(season) %>% 
-    summarise_at(vars(tot_chl_a:tchl_a_tpg),list(log_avg = mean, log_sd= sd, log_var= var), na.rm = TRUE)
+    summarise_at(vars(tot_chl_a:dp),list(log_avg = mean, log_sd= sd, log_var= var), na.rm = TRUE)
 write.csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
 write.csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
+```
+
+```{r}
+clust <- pig_dat %>%
+    select(f_micro, f_nano, f_pico)
+rownames(clust) <- pig_dat$hplc_gsfc_id
+clust <- scale(clust)
+
+d=dist(clust)
     
-    
+hc1 <-hclust(d, method = "ward.D")
+plot(hc1, cex=0.6, hang=-1)
+
+clust_num <- cutree(hc1, k=9)
+
+factoextra::fviz_cluster(list(data=clust, cluster=clust_num))
+clust_num_df <- data.frame(clust_num= clust_num)
+clust <- data.frame(clust)
+cluster_groups <- merge(clust, clust_num_df, by="row.names")
 ```
