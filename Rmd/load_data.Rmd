@@ -193,7 +193,7 @@ df5 <-
             tz = "utc"
         ),
         .before = lon,
-        date_extracted_month_day_year = na_if(df5$date_extracted_month_day_year, "box")
+        date_extracted_month_day_year = na_if(date_extracted_month_day_year, "box")
     )
 
 # set -8888 to 0, represent below Limit of Detection (LOD)
@@ -279,20 +279,30 @@ write.csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
 ```
 
 ```{r}
-clust <- pig_dat %>%
-    select(f_micro, f_nano, f_pico)
-rownames(clust) <- pig_dat$hplc_gsfc_id
-clust <- scale(clust)
+#  clustering by size fractionation
+size_clust <- pig_dat %>%
+    filter(sample != "WS20278-191") %>%
+    #select(lon, lat, f_micro, f_nano, f_pico)
+    select(hplc_gsfc_id, lon, lat, micro, nano, pico) %>%
+    #select(hplc_gsfc_id, lon, lat, but_fuco, fuco, hex_fuco, perid) %>%
+    drop_na()
+rownames(size_clust) <- size_clust$hplc_gsfc_id 
+ size_clust <-   select(size_clust,-hplc_gsfc_id)
+size_clust <- scale(size_clust) # z-score
 
-d=dist(clust)
+d1=dist(size_clust)
     
-hc1 <-hclust(d, method = "ward.D")
+hc1 <-hclust(d1, method = "ward.D")
 plot(hc1, cex=0.6, hang=-1)
 
-clust_num <- cutree(hc1, k=9)
+opt_clust <- fviz_nbclust(size_clust, hcut, method = "silhouette", k.max = 24) + theme_minimal() + ggtitle("The Silhouette Plot")
+clust_num_1 <- cutree(hc1, k=5)
 
-factoextra::fviz_cluster(list(data=clust, cluster=clust_num))
-clust_num_df <- data.frame(clust_num= clust_num)
-clust <- data.frame(clust)
-cluster_groups <- merge(clust, clust_num_df, by="row.names")
+factoextra::fviz_cluster(list(data=size_clust, cluster=clust_num_1))
+s_clust_num_df <- data.frame(s_clust_num= clust_num)
+size_clust <- data.frame(size_clust)
+s_clus_groups <- merge(size_clust, s_clust_num_df, by="row.names")
+
+
+
 ```
