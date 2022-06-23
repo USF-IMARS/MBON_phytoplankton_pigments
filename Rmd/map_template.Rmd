@@ -139,7 +139,7 @@ stn.map <- ggplot() +
                ##shape = station,
              ),
              size = 2,
-             # alpha = 0.5,
+             alpha = 0.5,
              stroke = 1.5,
              show.legend = FALSE) +
   scale_shape_manual(values = c(24,25,21))+
