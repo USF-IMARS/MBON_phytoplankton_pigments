@@ -232,21 +232,21 @@ dfall <- mutate(dfall, lat = case_when(lat < 0 ~ lat*(-1),
 # x2 <- cbind(names(df234), names(df15))
 ```
 
-```{r summary statistics}
+```{r seasons}
 #group by seasons
 dfall$month <- strtrim(dfall$month, 3)
-winter <- c("Dec", "Jan", "Feb")
-spring <- c("Mar","Apr", "May")
-summer <- c("Jun","Jul", "Aug")
-autumn <- c("Sep","Nov", "Oct")
+winter <- c("Jan", "Feb", "Mar")
+spring <- c("Apr", "May", "Jun")
+summer <- c("Jul", "Aug", "Sep")
+autumn <- c("Oct", "Nov", "Dec")
 
 dfall <- mutate(dfall, season = case_when(month %in% winter ~ "W",
                                           month %in% spring ~ "Sp",
                                           month %in% summer ~ "Su",
                                           month %in% autumn ~ "F"))
-pig_stat <- dfall %>%
-    group_by(season) %>% 
-    summarise_at(vars(tot_chl_a:tchl_a_tpg),list(avg = mean, sd= sd, var= var), na.rm = TRUE)
+# pig_stat <- dfall %>%
+#     group_by(season) %>% 
+#     summarise_at(vars(tot_chl_a:tchl_a_tpg),list(avg = mean, sd= sd, var= var), na.rm = TRUE)
 
 ```
 
@@ -255,7 +255,7 @@ pig_stat <- dfall %>%
 dir2 <- "//data//processed//"
 path_out = paste0(root,dir2)
 write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
-write.csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
+#write.csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
 ```
 
 ```{r log dat}
@@ -279,30 +279,47 @@ write.csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
 ```
 
 ```{r}
-#  clustering by size fractionation
-size_clust <- pig_dat %>%
-    filter(sample != "WS20278-191") %>%
-    #select(lon, lat, f_micro, f_nano, f_pico)
-    select(hplc_gsfc_id, lon, lat, micro, nano, pico) %>%
-    #select(hplc_gsfc_id, lon, lat, but_fuco, fuco, hex_fuco, perid) %>%
-    drop_na()
-rownames(size_clust) <- size_clust$hplc_gsfc_id 
- size_clust <-   select(size_clust,-hplc_gsfc_id)
-size_clust <- scale(size_clust) # z-score
+# #  clustering by size fractionation
+# size_clust <- pig_dat %>%
+#     filter(sample != "WS20278-191") %>%
+#     select(hplc_gsfc_id, lon, lat, micro, nano, pico) %>%
+#     drop_na()
+# rownames(size_clust) <- size_clust$hplc_gsfc_id 
+#  size_clust <-   select(size_clust,-hplc_gsfc_id)
+# size_clust <- scale(size_clust) # z-score
+# 
+# d1=dist(size_clust)
+#     
+# hc1 <-hclust(d1, method = "ward.D")
+# plot(hc1, cex=0.6, hang=-1)
+# 
+# opt_clust <- fviz_nbclust(size_clust, hcut, method = "silhouette", k.max = 24) + theme_minimal() + ggtitle("The Silhouette Plot")
+# clust_num_1 <- cutree(hc1, k=5)
+# 
+# factoextra::fviz_cluster(list(data=size_clust, cluster=clust_num_1))
+# s_clust_num_df <- data.frame(s_clust_num= clust_num_1)
+# size_clust <- data.frame(size_clust)
+# s_clus_groups <- merge(size_clust, s_clust_num_df, by="row.names") %>%
+#     tibble::rownames_to_column()
+# colnames(s_clus_groups)[1] <- "hplc_gsfc_id"
+# chem_tax <- left_join(pig_dat, select(.data = s_clus_groups, hplc_gsfc_id, s_clust_num),
+#                       by=c("hplc_gsfc_id")) %>%
+#     select(hplc_gsfc_id, s_clust_num, chl_c3, chl_c1c2, perid, but_fuco,
+#            fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
+# write.csv(chem_tax, paste0(path_out, "dat_for_chemtax_size_clustering.csv"))
 
-d1=dist(size_clust)
-    
-hc1 <-hclust(d1, method = "ward.D")
-plot(hc1, cex=0.6, hang=-1)
+```
 
-opt_clust <- fviz_nbclust(size_clust, hcut, method = "silhouette", k.max = 24) + theme_minimal() + ggtitle("The Silhouette Plot")
-clust_num_1 <- cutree(hc1, k=5)
+```{r}
+#filter for Florida Keys and cluster by seasons
+chemtax_seasons <- pig_dat %>%
+    filter(name_of_water_body == "Florida Keys") %>%
+    mutate(cluster_code = case_when(season == "W" ~ 1,
+                                    season == "Sp" ~ 2, 
+                                    season == "Su" ~ 3,
+                                    season == "F" ~ 4)) %>%
+    dplyr::select(hplc_gsfc_id, cluster_code, chl_c3, chl_c1c2, perid, but_fuco,
+           fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
 
-factoextra::fviz_cluster(list(data=size_clust, cluster=clust_num_1))
-s_clust_num_df <- data.frame(s_clust_num= clust_num)
-size_clust <- data.frame(size_clust)
-s_clus_groups <- merge(size_clust, s_clust_num_df, by="row.names")
-
-
-
+write_csv(chemtax_seasons, paste0(path_out,"dat_for_chemtax_season_clust.csv"))
 ```
