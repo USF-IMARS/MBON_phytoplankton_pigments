@@ -318,7 +318,7 @@ chemtax_seasons <- pig_dat %>%
                                     season == "Sp" ~ 2, 
                                     season == "Su" ~ 3,
                                     season == "F" ~ 4)) %>%
-    dplyr::select(hplc_gsfc_id, cluster_code, chl_c3, chl_c1c2, perid, but_fuco,
+    dplyr::select(hplc_gsfc_id, cluster_code, sample, chl_c3, chl_c1c2, perid, but_fuco,
            fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
 
 write_csv(chemtax_seasons, paste0(path_out,"dat_for_chemtax_season_clust.csv"))
