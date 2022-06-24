@@ -1,0 +1,277 @@
+---
+title: "Chemtax Analysis"
+author: "Anna Finch"
+date: '2022-06-24'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("dplyr")
+library("ggplot2")
+library("tidyverse")
+
+root <- rprojroot::find_rstudio_root_file()
+
+```
+
+```{r reading in data}
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
+
+# Chemtax files
+file.chem <-
+  fs::dir_ls(path = paste0(root,dir3),
+             recurse = TRUE,
+             regexp = "\\.xls$")
+```
+
+
+```{r}
+cmtx1 <-
+    readxl::read_xls(
+        file.chem[1],
+        sheet = 2,
+        range = "D177:N178",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 1, season = "W")
+
+cmtx2 <-
+    readxl::read_xls(
+        file.chem[2],
+        sheet = 2,
+        range = "D273:N274",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 2, season = "Sp")
+
+cmtx3 <-
+    readxl::read_xls(
+        file.chem[3],
+        sheet = 2,
+        range = "D241:N242",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 3, season = "Su")
+
+cmtx4 <-
+    readxl::read_xls(
+        file.chem[4],
+        sheet = 2,
+        range = "D305:N306",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 4, season = "F")
+
+cmtx_all <- full_join(cmtx1, cmtx2) %>%
+    full_join(cmtx3) %>%
+    full_join(cmtx4) %>%
+    mutate(season = forcats::fct_relevel(season, "W", "Sp", "Su", "F"))
+```
+
+```{r plotting}
+chloro_seasons <- ggplot(cmtx_all, aes(x=season, y=chloro)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Chlorophytes") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+chloro_seasons
+
+
+crypto_seasons <- ggplot(cmtx_all, aes(x=season, y=crypto)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Cryptophytes") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+crypto_seasons
+
+cyano2_seasons <- ggplot(cmtx_all, aes(x=season, y=cyano2)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Cyanobacteria 2") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+cyano2_seasons
+
+cyano4_seasons <- ggplot(cmtx_all, aes(x=season, y=cyano4)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Cyanobacteria 4") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+cyano4_seasons
+
+diat1_seasons <- ggplot(cmtx_all, aes(x=season, y=diat1)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Diatoms 1") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+diat1_seasons
+
+diat2_seasons <- ggplot(cmtx_all, aes(x=season, y=diat2)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Diatoms 2") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+diat2_seasons
+
+dino_seasons <- ggplot(cmtx_all, aes(x=season, y=dino)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Dinoflagellates") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+dino_seasons
+
+hapt6_seasons <- ggplot(cmtx_all, aes(x=season, y=hapt6)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Haptophytes 6") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+hapt6_seasons
+
+hapt8_seasons <- ggplot(cmtx_all, aes(x=season, y=hapt8)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Haptophytes 8") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+hapt8_seasons
+
+pras_seasons <- ggplot(cmtx_all, aes(x=season, y=pras)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = "Prasinophytes") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+pras_seasons
+
+```
+
+```{r}
+cmtx_avgs <- readxl::read_xls(
+    file.chem[5],
+    sheet=1,
+    .name_repair = janitor::make_clean_names
+)
+
+meta_data <- dplyr::select(.data=pig_dat, 
+                            hplc_gsfc_id:filter_storage_before_shipment_to_gfsc, 
+                            comments, season) %>%
+    filter(name_of_water_body == "Florida Keys")
+cmtx_avgs <- full_join(meta_data, cmtx_avgs, by=c("sample" = "sample_id")) %>%
+    mutate(season= forcats::fct_relevel(season, "W", "Sp", "Su", "F"))
+```
+
+```{r boxplots}
+ggplot(cmtx_avgs, aes(x=season, y=chloro))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.125) +
+    theme_bw() +
+    labs(title = "Chlorophytes") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=crypto))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.15) +
+    theme_bw() +
+    labs(title = "Cryptophytes") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=cyano2))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.15) +
+    theme_bw() +
+    labs(title = "Cyanobacteria 2") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=cyano4))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.15) +
+    theme_bw() +
+    labs(title = "Cyanobacteria 4") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=diat1))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.15) +
+    theme_bw() +
+    labs(title = "Diatoms 1") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=diat2))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.15) +
+    theme_bw() +
+    labs(title = "Diatoms 2") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=dino))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.05) +
+    theme_bw() +
+    labs(title = "Dinoflagellates") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=hapt6))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.15) +
+    theme_bw() +
+    labs(title = "Haptophytes 6") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+ggplot(cmtx_avgs, aes(x=season, y=hapt8))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.15) +
+    theme_bw() +
+    labs(title = "Haptophytes 8") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+ggplot(cmtx_avgs, aes(x=season, y=pras))+
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.125) +
+    theme_bw() +
+    labs(title = "Prasinophytes") +
+    xlab("Season") +
+    ylab("Concentration (mg/m^3)")
+
+```
+
+```{r ANOVA}
+summary(aov(diat2 ~ season, data=cmtx_avgs))
+
+```
