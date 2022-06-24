@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library("dplyr")
 library("ggplot2")
 library("tidyverse")
+library("rstatix")
 
 root <- rprojroot::find_rstudio_root_file()
 
@@ -185,6 +186,12 @@ ggplot(cmtx_avgs, aes(x=season, y=chloro))+
     theme_bw() +
     ylim(0,0.125) +
     theme_bw() +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     labs(title = "Chlorophytes") +
     xlab("Season") +
     ylab("Concentration (mg/m^3)")
@@ -194,6 +201,12 @@ ggplot(cmtx_avgs, aes(x=season, y=crypto))+
     theme_bw() +
     ylim(0,0.15) +
     theme_bw() +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     labs(title = "Cryptophytes") +
     xlab("Season") +
     ylab("Concentration (mg/m^3)")
@@ -203,6 +216,12 @@ ggplot(cmtx_avgs, aes(x=season, y=cyano2))+
     theme_bw() +
     ylim(0,0.15) +
     theme_bw() +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     labs(title = "Cyanobacteria 2") +
     xlab("Season") +
     ylab("Concentration (mg/m^3)")
@@ -211,6 +230,12 @@ ggplot(cmtx_avgs, aes(x=season, y=cyano4))+
     geom_boxplot() +
     theme_bw() +
     ylim(0,0.15) +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     theme_bw() +
     labs(title = "Cyanobacteria 4") +
     xlab("Season") +
@@ -221,6 +246,12 @@ ggplot(cmtx_avgs, aes(x=season, y=diat1))+
     theme_bw() +
     ylim(0,0.15) +
     theme_bw() +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     labs(title = "Diatoms 1") +
     xlab("Season") +
     ylab("Concentration (mg/m^3)")
@@ -228,6 +259,12 @@ ggplot(cmtx_avgs, aes(x=season, y=diat1))+
 ggplot(cmtx_avgs, aes(x=season, y=diat2))+
     geom_boxplot() +
     theme_bw() +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     ylim(0,0.15) +
     theme_bw() +
     labs(title = "Diatoms 2") +
@@ -238,6 +275,12 @@ ggplot(cmtx_avgs, aes(x=season, y=dino))+
     geom_boxplot() +
     theme_bw() +
     ylim(0,0.05) +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     theme_bw() +
     labs(title = "Dinoflagellates") +
     xlab("Season") +
@@ -247,6 +290,12 @@ ggplot(cmtx_avgs, aes(x=season, y=hapt6))+
     geom_boxplot() +
     theme_bw() +
     ylim(0,0.15) +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     theme_bw() +
     labs(title = "Haptophytes 6") +
     xlab("Season") +
@@ -255,6 +304,12 @@ ggplot(cmtx_avgs, aes(x=season, y=hapt6))+
 ggplot(cmtx_avgs, aes(x=season, y=hapt8))+
     geom_boxplot() +
     theme_bw() +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     ylim(0,0.15) +
     theme_bw() +
     labs(title = "Haptophytes 8") +
@@ -263,6 +318,12 @@ ggplot(cmtx_avgs, aes(x=season, y=hapt8))+
 ggplot(cmtx_avgs, aes(x=season, y=pras))+
     geom_boxplot() +
     theme_bw() +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
     ylim(0,0.125) +
     theme_bw() +
     labs(title = "Prasinophytes") +
@@ -272,6 +333,16 @@ ggplot(cmtx_avgs, aes(x=season, y=pras))+
 ```
 
 ```{r ANOVA}
+#ANOVA test
 summary(aov(diat2 ~ season, data=cmtx_avgs))
+
+#Dunn test with Bonferroni correction
+chloro_dunn <- dunn_test(cmtx_avgs, chloro ~ season, p.adjust.method = "bonferroni")
+crypto_dunn <- dunn_test(cmtx_avgs, crypto ~ season, p.adjust.method = "bonferroni")
+cyano4_dunn <- dunn_test(cmtx_avgs, cyano4 ~ season, p.adjust.method = "bonferroni")
+dino_dunn <- dunn_test(cmtx_avgs, dino ~ season, p.adjust.method = "bonferroni")
+hapt6_dunn <- dunn_test(cmtx_avgs, hapt6 ~ season, p.adjust.method = "bonferroni")
+hapt8_dunn <- dunn_test(cmtx_avgs, hapt8 ~ season, p.adjust.method = "bonferroni")
+pras_dunn <- dunn_test(cmtx_avgs, pras ~ season, p.adjust.method = "bonferroni")
 
 ```
