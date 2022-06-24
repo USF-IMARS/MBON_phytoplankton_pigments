@@ -323,3 +323,11 @@ chemtax_seasons <- pig_dat %>%
 
 write_csv(chemtax_seasons, paste0(path_out,"dat_for_chemtax_season_clust.csv"))
 ```
+
+```{r wind speed data}
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
+wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
+
+
+```
