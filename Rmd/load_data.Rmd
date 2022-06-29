@@ -70,7 +70,11 @@ file.pig <-
 
 ```
 
-```{r}
+# HPLC data is loaded and cleanup
+Cleans name for tidying, renames some, creates date_time column, replace -9999 to
+NA, -8888 to 0 (is LOD), corrects formatting issues,
+```{r load-data}
+# ---- M-K 06-12 report_may_and_sept_2016 ----
 df <-
     readxl::read_xlsx(
         file.pig[1],
@@ -79,8 +83,10 @@ df <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     ) %>%
+    
     rename(lon = longitude,
-         lat = latitude) %>%
+           lat = latitude) %>%
+    
     mutate(
         gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(
@@ -92,36 +98,41 @@ df <-
             ),
             tz = "utc"
         ),
-        .before = lon, 
-        date_extracted_month_day_year = as.character(date_extracted_month_day_year)
-        #converted to character so that I could join df and df5
-    )
-
-# set -8888 to 0, represent below Limit of Detection (LOD)
-df[df == -8888] <- 0
-```
-
-```{r}
-df2 <- 
-    readxl::read_xlsx(file.pig[2], sheet = 2, skip = 8, na = "-9999", 
-                      .name_repair = janitor::make_clean_names) %>%
-    mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
-        date_time_utc = ymd_hms(
-            paste(
-                year, month, day, time
-            ),
-            tz = "utc"
-        ),
         .before = lon
     ) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
+
+# ---- M-K 09-02 report_nov16_mar17_jun17_oct17_jan18 ----
+df2 <-
+    readxl::read_xlsx(
+        file.pig[2],
+        sheet = 2,
+        skip = 8,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    
+    mutate(
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        date_time_utc = ymd_hms(paste(year, month, day, time),
+                                tz = "utc"),
+        .before = lon
+    ) %>%
+    
+    #converted to character, b/c is logical
     mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates)) %>%
+    
     rename(filter_storage_before_shipment_to_gsfc = filter_storage_before_shipment_to_gfc) %>%
-    filter(!is.na(station))
-df2[df2 == -8888] <- 0
+    
+    # one station was included in metadata, but does not exist
+    filter(!is.na(station)) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
-
-
+# ---- M-K 10-11 part1 report ----
 df3 <-
     readxl::read_xlsx(
         file.pig[3],
@@ -130,19 +141,25 @@ df3 <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     ) %>%
+    
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
     ) %>%
-    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates),
-           # matches any digit or decimal and convert to numeric
-           water_depth = as.numeric(str_extract(water_depth, "\\d*\\.{0,1}\\d")),
-           water_depth = replace_na(water_depth, 0)
-    )
-df3[df3 == -8888] <- 0
+    
+    mutate(
+        indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates),
+        # matches any digit or decimal and convert to numeric (issue with format)
+        water_depth = as.numeric(str_extract(water_depth, "\\d*\\.{0,1}\\d")),
+        water_depth = replace_na(water_depth, 0)
+    ) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
+# ---- M-K 10-11 part2 report ----
 df4 <-
     readxl::read_xlsx(
         file.pig[4],
@@ -151,26 +168,26 @@ df4 <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     )  %>%
+    
     # Fixed misspelled month
-    mutate(month = case_when(!month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
-           TRUE ~ month)) %>%
+    mutate(month = case_when(
+        !month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
+        TRUE ~ month
+    )) %>%
+    
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
     ) %>%
-    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d")))
-df4[df4 == -8888] <- 0
+    
+    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d"))) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
-df234 <- 
-    full_join(df3, df2) 
-df234 <- mutate(df234, hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
-                                           TRUE ~ hplc_gsfc_id))
-df234 <- full_join(df234, df4) %>%
-    mutate(sequential_sample_number = as.numeric(sequential_sample_number)) #one cell had "28A", converted to NA
-```
-```{r}
+# ---- M-K_05-17_report_mar16 ----
 df5 <-
     readxl::read_xlsx(
         file.pig[5],
@@ -179,8 +196,10 @@ df5 <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     ) %>%
+    
     rename(lon = longitude,
-         lat = latitude) %>%
+           lat = latitude) %>%
+    
     mutate(
         gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(
@@ -192,15 +211,45 @@ df5 <-
             ),
             tz = "utc"
         ),
-        .before = lon,
-        date_extracted_month_day_year = na_if(df5$date_extracted_month_day_year, "box")
-    )
+        .before = lon
+    ) %>%
+    
+    # converts numeric to date, replace str to NA
+    mutate(
+        date_extracted_month_day_year = case_when(!is.na(
+            as.numeric(date_extracted_month_day_year)
+        ) ~ paste(
+            as.Date(as.numeric(date_extracted_month_day_year), origin = "1899-12-30")
+        ),
+        TRUE ~ NA_character_),
+        date_extracted_month_day_year = ymd(date_extracted_month_day_year, tz = "utc")
+    ) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
-# set -8888 to 0, represent below Limit of Detection (LOD)
-df5[df5 == -8888] <- 0
+```
+```{r}
 
-df15 <- full_join(df, df5)
+# ---- merge df 2, 3, 4 ----
+df_merg  <-
+    full_join(df3, df2)
 
+df_merg  <-
+    mutate(df_merg,
+           hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
+                                    TRUE ~ hplc_gsfc_id))
+
+df_merg  <- full_join(df_merg, df4) %>%
+    
+    # one cell had "28A", converted to NA
+    mutate(sequential_sample_number = as.numeric(sequential_sample_number)) 
+
+# ---- merge df 1, 5 ----
+df_merg2 <- full_join(df, df5)
+
+# ---- full merge ----
+# select variables that match data sets
 params <- c("hplc_gsfc_id"="gsfc_lab_sample_code", "pi", "station", "sample" = "original_pi_sample_label", 
             "cruise"="cruise_name", "indicate_if_filters_are_replicates",
             "volfilt" = "volume_filtered_ml", "bottle" ="bottle_number", 
@@ -219,80 +268,167 @@ params <- c("hplc_gsfc_id"="gsfc_lab_sample_code", "pi", "station", "sample" = "
             "psp_tpg" = "psp_t_pg", "tchl_a_tpg" = "t_chl_a_t_pig",
             "comments", "sequential_sample_number")
 
-dfall <- full_join(df234, df15, by=params)
-dfall <- mutate(dfall, lat = case_when(lat < 0 ~ lat*(-1),
-                                TRUE ~ lat),
-                lon = case_when(lon > 0 ~ lon*(-1),
-                                TRUE ~ lon)
-)
+
+df_all <- full_join(df_merg, df_merg2, by = params)  %>%
+    
+    # fix small errors with negative values
+    mutate(lat = case_when(lat < 0 ~ lat * (-1),
+                           TRUE ~ lat),
+           lon = case_when(lon > 0 ~ lon * (-1),
+                           TRUE ~ lon)) %>%
+    
+    # fix spelling and spacing of stations
+    mutate(
+        station = stringr::str_replace_all(station, fixed(" "), ""),
+        station = stringr::str_to_upper(station),
+        
+        # specifically TB1 was off, need to use NOAA AOML for coords
+        lat = case_when(station == "TB1" ~ 27.8013, TRUE~lat),
+        lon = case_when(station == "TB1" ~ -82.8819, TRUE~lon)
+    ) 
+
+# ---- fix lat long ----
+# summarize most freq value for lat/lon per station
+indx <- df_all %>% 
+    select(station, lat, lon) %>%
+    group_by(station) %>%
+    # summarise(n = n())
+    summarise(
+        # lat_mod = modeest::mlv(lat, method = "mfv"),
+        # lon_mod = modeest::mlv(lon, method = "mfv1"),
+        lat_mod = statip::mfv1(lat),
+        lon_mod = statip::mfv1(lon),
+        # sumss = sum(lat)
+        # .groups = "drop_last"
+    ) 
+
+# left join indx to df_all
+df_all <- df_all %>%
+    # group_by(station) %>%
+    left_join(indx, by = "station") %>%
+    mutate(lat = lat_mod, 
+           lon = lon_mod) %>%
+    select(-lat_mod, -lon_mod)
+
+```
 
 
-#for looking at similarities in the column names between different files
+```{r plot-points}
+# will need plotly 
+# plotly::ggplotly(
+#     ggplot() +
+#         geom_point(data= df_all, aes(x = lon, y = lat, color = station), show.legend = F) + 
+#         geom_point(data = indx, mapping = aes(lon_mod, lat_mod, stn = station), shape = 21, fill = NA ,
+#                    inherit.aes = F, show.legend = F) #+
+#         # geom_point(data=tibble(x = -82.8819, y =	27.8013), aes(x=x, y=y), color = "black")
+# )
+
+
+# for looking at similarities in the column names between different files
 # x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
 # x2 <- cbind(names(df234), names(df15))
 ```
 
-```{r summary statistics}
+```{r summary-statistics}
 #group by seasons
-dfall$month <- strtrim(dfall$month, 3)
+df_all$month <- strtrim(df_all$month, 3)
 winter <- c("Dec", "Jan", "Feb")
-spring <- c("Mar","Apr", "May")
-summer <- c("Jun","Jul", "Aug")
-autumn <- c("Sep","Nov", "Oct")
+spring <- c("Mar", "Apr", "May")
+summer <- c("Jun", "Jul", "Aug")
+autumn <- c("Sep", "Nov", "Oct")
 
-dfall <- mutate(dfall, season = case_when(month %in% winter ~ "W",
-                                          month %in% spring ~ "Sp",
-                                          month %in% summer ~ "Su",
-                                          month %in% autumn ~ "F"))
-pig_stat <- dfall %>%
-    group_by(season) %>% 
-    summarise_at(vars(tot_chl_a:tchl_a_tpg),list(avg = mean, sd= sd, var= var), na.rm = TRUE)
+df_all <- mutate(
+    df_all,
+    season = case_when(
+        month %in% winter ~ "W",
+        month %in% spring ~ "Sp",
+        month %in% summer ~ "Su",
+        month %in% autumn ~ "F"
+    )
+)
+
+pig_stat <- df_all %>%
+    group_by(season) %>%
+    summarise_at(vars(tot_chl_a:tchl_a_tpg),
+                 list(avg = mean, sd = sd, var = var),
+                 na.rm = TRUE)
+
+```
+
+```{r size-fractionation}
+df_all <- df_all %>%
+    mutate(dp_w = 1.41*fuco + 1.41*perid + 1.27*hex_fuco + 0.35*but_fuco +
+               0.6*allo + 1.01*tot_chl_b + 0.86*zea) %>%
+    mutate(f_micro = (1.41*fuco + 1.41 * perid) / dp_w) %>%
+    mutate(f_nano = (1.27 * hex_fuco + 0.35*but_fuco + 0.6*allo)/dp_w) %>%
+    mutate(f_pico = (1.01*tot_chl_b + 0.86*zea)/dp_w) %>%
+    mutate(micro = f_micro * tot_chl_a) %>%
+    mutate(nano = f_nano * tot_chl_a) %>%
+    mutate(pico = f_pico * tot_chl_a)
 
 ```
 
 ```{r}
 
-dir2 <- "//data//processed//"
-path_out = paste0(root,dir2)
-write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
-write.csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
+dir2     <- "//data//processed//"
+path_out <-  paste0(root,dir2)
+readr::write_csv(df_all, paste0(path_out,"combined_pig_dat.csv"))
+readr::write_csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
 ```
 
-```{r log dat}
-dir2 <- "//data//processed//"
-path_out = paste0(root,dir2)
-pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+```{r log-dat}
+dir2     <- "//data//processed//"
+path_out <- paste0(root,dir2)
+pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
 
 add1 <- function(n) {
     n + 1
 }
 
-log_pig <- pig_dat %>% 
+log_pig <- pig_dat %>%
     mutate_at(.vars = vars(tot_chl_a:dp), add1) %>%
     mutate_at(.vars = vars(tot_chl_a:dp), .funs = (log = log10))
 
 log_pig_stat <- log_pig %>%
-    group_by(season) %>% 
-    summarise_at(vars(tot_chl_a:dp),list(log_avg = mean, log_sd= sd, log_var= var), na.rm = TRUE)
-write.csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
-write.csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
+    group_by(season) %>%
+    summarise_at(vars(tot_chl_a:dp),
+                 list(
+                     log_avg = mean,
+                     log_sd = sd,
+                     log_var = var
+                 ),
+                 na.rm = TRUE)
+
+readr::write_csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
+readr::write_csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
 ```
 
-```{r}
-clust <- pig_dat %>%
-    select(f_micro, f_nano, f_pico)
+
+
+```{r clustering}
+clust           <- pig_dat %>%
+    select(f_micro, f_nano, f_pico) 
+
 rownames(clust) <- pig_dat$hplc_gsfc_id
-clust <- scale(clust)
 
-d=dist(clust)
-    
-hc1 <-hclust(d, method = "ward.D")
-plot(hc1, cex=0.6, hang=-1)
+# Z-score data
+clust           <- scale(clust)
 
-clust_num <- cutree(hc1, k=9)
+# calc distance matrix
+d               <-  dist(clust)
 
-factoextra::fviz_cluster(list(data=clust, cluster=clust_num))
-clust_num_df <- data.frame(clust_num= clust_num)
-clust <- data.frame(clust)
-cluster_groups <- merge(clust, clust_num_df, by="row.names")
+# Hierarchical Agglomerative Clusterting w/ Ward Linkages
+hc1             <- hclust(d, method = "ward.D")
+
+# plot dendrogram
+plot(hc1, cex = 0.6, hang = -1)
+
+# estimate prunging of clusters
+clust_num       <- cutree(hc1, k = 9)
+
+# visualize clusters 
+factoextra::fviz_cluster(list(data = clust, cluster = clust_num))
+clust_num_df    <- data.frame(clust_num = clust_num)
+clust           <- data.frame(clust)
+cluster_groups  <- merge(clust, clust_num_df, by = "row.names")
 ```

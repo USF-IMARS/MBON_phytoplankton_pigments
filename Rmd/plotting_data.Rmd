@@ -72,19 +72,7 @@ p2
 ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
     geom_violin()     
 ```
-```{r size fractionation}
-pig_dat <- pig_dat %>%
-    mutate(dp_w = 1.41*fuco + 1.41*perid + 1.27*hex_fuco + 0.35*but_fuco +
-               0.6*allo + 1.01*tot_chl_b + 0.86*zea) %>%
-    mutate(f_micro = (1.41*fuco + 1.41 * perid) / dp_w) %>%
-    mutate(f_nano = (1.27 * hex_fuco + 0.35*but_fuco + 0.6*allo)/dp_w) %>%
-    mutate(f_pico = (1.01*tot_chl_b + 0.86*zea)/dp_w) %>%
-    mutate(micro = f_micro * tot_chl_a) %>%
-    mutate(nano = f_nano * tot_chl_a) %>%
-    mutate(pico = f_pico * tot_chl_a)
 
-
-```
 
 ```{r size fractionation}
 ggplot(pig_dat, aes(x=season, y=micro, color=name_of_water_body)) +
