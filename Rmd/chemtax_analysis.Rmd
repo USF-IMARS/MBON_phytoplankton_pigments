@@ -72,6 +72,23 @@ cmtx_all <- full_join(cmtx1, cmtx2) %>%
 ```
 
 ```{r plotting}
+# ---- base plot function ----
+phyto_name <- c("Chlorophytes", "Cryptophytes", "Cyanobacteria 2", 
+                "Cyanobacteria 4", "Diatoms 1", "Diatoms 2", "Dinoflagellates",
+                "Haptophytes 6","Haptophytes 8", "Prasinophytes")
+
+# this needs work, since I'm not able to test out on the data
+plot <- function(.var, .title){
+    ggplot(cmtx_all, aes_string(x="season", y=.var)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = paste(.title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+}
+
+# ---- line plots ----
 chloro_seasons <- ggplot(cmtx_all, aes(x=season, y=chloro)) +
     geom_point(size=2) +
     geom_line(group=1, size=1) +
