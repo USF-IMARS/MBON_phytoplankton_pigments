@@ -211,7 +211,6 @@ df5 <-
             ),
             tz = "utc"
         ),
-<<<<<<< HEAD
         .before = lon
     ) %>%
     
@@ -235,11 +234,6 @@ df5 <-
 # ---- merge df 2, 3, 4 ----
 df_merg  <-
     full_join(df3, df2)
-=======
-        .before = lon,
-        date_extracted_month_day_year = na_if(date_extracted_month_day_year, "box")
-    )
->>>>>>> f86f79144dc8dc47d9bbb21b57067513d9efc5d1
 
 df_merg  <-
     mutate(df_merg,
@@ -316,26 +310,25 @@ df_all <- df_all %>%
            lon = lon_mod) %>%
     select(-lat_mod, -lon_mod)
 
+rm(df, df2, df3, df4, df5, df_merg, df_merg2, params)
 ```
 
 
 ```{r plot-points}
 # will need plotly 
 # plotly::ggplotly(
-#     ggplot() +
-#         geom_point(data= df_all, aes(x = lon, y = lat, color = station), show.legend = F) + 
-#         geom_point(data = indx, mapping = aes(lon_mod, lat_mod, stn = station), shape = 21, fill = NA ,
-#                    inherit.aes = F, show.legend = F) #+
+    # ggplot() +
+    #     geom_point(data= df_all, aes(x = lon, y = lat, color = station), show.legend = F) +
+        # geom_point(data = indx, mapping = aes(lon_mod, lat_mod, stn = station), shape = 21, fill = NA ,
+        #            inherit.aes = F, show.legend = F) #+
 #         # geom_point(data=tibble(x = -82.8819, y =	27.8013), aes(x=x, y=y), color = "black")
 # )
-
 
 # for looking at similarities in the column names between different files
 # x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
 # x2 <- cbind(names(df234), names(df15))
 ```
 
-<<<<<<< HEAD
 ```{r summary-statistics}
 #group by seasons
 df_all$month <- strtrim(df_all$month, 3)
@@ -372,39 +365,15 @@ df_all <- df_all %>%
     mutate(micro = f_micro * tot_chl_a) %>%
     mutate(nano = f_nano * tot_chl_a) %>%
     mutate(pico = f_pico * tot_chl_a)
-=======
-```{r seasons}
-#group by seasons
-dfall$month <- strtrim(dfall$month, 3)
-winter <- c("Jan", "Feb", "Mar")
-spring <- c("Apr", "May", "Jun")
-summer <- c("Jul", "Aug", "Sep")
-autumn <- c("Oct", "Nov", "Dec")
-
-dfall <- mutate(dfall, season = case_when(month %in% winter ~ "W",
-                                          month %in% spring ~ "Sp",
-                                          month %in% summer ~ "Su",
-                                          month %in% autumn ~ "F"))
-# pig_stat <- dfall %>%
-#     group_by(season) %>% 
-#     summarise_at(vars(tot_chl_a:tchl_a_tpg),list(avg = mean, sd= sd, var= var), na.rm = TRUE)
->>>>>>> f86f79144dc8dc47d9bbb21b57067513d9efc5d1
 
 ```
 
 ```{r}
 
-<<<<<<< HEAD
 dir2     <- "//data//processed//"
 path_out <-  paste0(root,dir2)
 readr::write_csv(df_all, paste0(path_out,"combined_pig_dat.csv"))
 readr::write_csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
-=======
-dir2 <- "//data//processed//"
-path_out = paste0(root,dir2)
-write.csv(dfall, paste0(path_out,"combined_pig_dat.csv"))
-#write.csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
->>>>>>> f86f79144dc8dc47d9bbb21b57067513d9efc5d1
 ```
 
 ```{r log-dat}
@@ -434,7 +403,6 @@ readr::write_csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
 readr::write_csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
 ```
 
-<<<<<<< HEAD
 
 
 ```{r clustering}
@@ -463,7 +431,8 @@ factoextra::fviz_cluster(list(data = clust, cluster = clust_num))
 clust_num_df    <- data.frame(clust_num = clust_num)
 clust           <- data.frame(clust)
 cluster_groups  <- merge(clust, clust_num_df, by = "row.names")
-=======
+```
+
 ```{r}
 # #  clustering by size fractionation
 # size_clust <- pig_dat %>%
@@ -516,5 +485,4 @@ path_in = paste0(root,dir3)
 wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
 
 
->>>>>>> f86f79144dc8dc47d9bbb21b57067513d9efc5d1
 ```
