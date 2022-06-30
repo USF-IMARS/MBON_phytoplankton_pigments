@@ -77,109 +77,43 @@ phyto_name <- c("Chlorophytes", "Cryptophytes", "Cyanobacteria 2",
                 "Cyanobacteria 4", "Diatoms 1", "Diatoms 2", "Dinoflagellates",
                 "Haptophytes 6","Haptophytes 8", "Prasinophytes")
 
-# this needs work, since I'm not able to test out on the data
-plot <- function(.var, .title){
-    ggplot(cmtx_all, aes_string(x="season", y=.var)) +
+phyto_shrt <- names(cmtx_all)[-c(1,12,13)]
+
+plot.pig <- function(.var, .title){
+    ggplot(cmtx_all, aes_string(x="season", y= .var)) +
     geom_point(size=2) +
     geom_line(group=1, size=1) +
     theme_bw() +
-    labs(title = paste(.title),
+    labs(title = paste("Average Concentration per Season of", .title),
          x = "Season",
          y = expression(paste("Concentration (mg  ", m^-3, ")")))
 }
 
 # ---- line plots ----
-chloro_seasons <- ggplot(cmtx_all, aes(x=season, y=chloro)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Chlorophytes") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-chloro_seasons
+p <- list()
+for (i  in seq(phyto_name)) {
+    p[[sym(phyto_shrt[i])]] <- plot.pig(phyto_shrt[i], phyto_name[i])
+    
+}
 
+print(p)
 
-crypto_seasons <- ggplot(cmtx_all, aes(x=season, y=crypto)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Cryptophytes") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-crypto_seasons
+plot.pig1 <- function(.var, .title){
+    list(
+    # geom_point(cmtx_all, string(x=season, y= .var),size=2),
+    geom_line(group=1, size=1),
+    theme_bw(),
+    labs(title = paste("Average Concentration per Season of", .title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+    )
+    }
+i =1
+t <- plot.pig1(phyto_shrt[i], phyto_name[i])
 
-cyano2_seasons <- ggplot(cmtx_all, aes(x=season, y=cyano2)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Cyanobacteria 2") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-cyano2_seasons
-
-cyano4_seasons <- ggplot(cmtx_all, aes(x=season, y=cyano4)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Cyanobacteria 4") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-cyano4_seasons
-
-diat1_seasons <- ggplot(cmtx_all, aes(x=season, y=diat1)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Diatoms 1") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-diat1_seasons
-
-diat2_seasons <- ggplot(cmtx_all, aes(x=season, y=diat2)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Diatoms 2") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-diat2_seasons
-
-dino_seasons <- ggplot(cmtx_all, aes(x=season, y=dino)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Dinoflagellates") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-dino_seasons
-
-hapt6_seasons <- ggplot(cmtx_all, aes(x=season, y=hapt6)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Haptophytes 6") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-hapt6_seasons
-
-hapt8_seasons <- ggplot(cmtx_all, aes(x=season, y=hapt8)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Haptophytes 8") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-hapt8_seasons
-
-pras_seasons <- ggplot(cmtx_all, aes(x=season, y=pras)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
-    theme_bw() +
-    labs(title = "Prasinophytes") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-pras_seasons
-
+p$chloro + geom_line(data =cmtx_all, aes(season, chloro), color = "blue")
+ggplot() +
+    geom_point(data =cmtx_all, aes(season, chloro)) + t
 ```
 
 ```{r}
@@ -198,154 +132,47 @@ cmtx_avgs <- full_join(meta_data, cmtx_avgs, by=c("sample" = "sample_id")) %>%
 ```
 
 ```{r boxplots}
-ggplot(cmtx_avgs, aes(x=season, y=chloro))+
+# ---- box plot function ----
+plot.pig.3 <- function(.var, .title){
+    ggplot() +
+    geom_boxplot(cmtx_avgs, mapping = aes_string(x="season", y= .var)) +
+    theme_bw() +
+    ylim(0,0.125) +
+    geom_jitter(cmtx_avgs, mapping = aes_string(x="season", y= .var, color="year"), width = 0.4, size=1) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
+    geom_line(cmtx_all, mapping=aes_string(x="season", y=.var, group=1)) +
+    labs(title = paste("Concentration per Season of", .title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+}
+
+# boxplot function without geom_line
+plot.pig.3 <- function(.var, .title){
+    ggplot(cmtx_avgs, aes_string(x="season", y= .var)) +
     geom_boxplot() +
     theme_bw() +
     ylim(0,0.125) +
-    theme_bw() +
     geom_jitter(width = 0.4, size=1, aes(color = year)) +
     scale_colour_gradient2(
         low = "red",
         mid = "blue",
         high = "green",
         midpoint = 2018.5) +
-    labs(title = "Chlorophytes") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
+    labs(title = paste("Concentration per Season of", .title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+}
 
-ggplot(cmtx_avgs, aes(x=season, y=crypto))+
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.15) +
-    theme_bw() +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    labs(title = "Cryptophytes") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-
-ggplot(cmtx_avgs, aes(x=season, y=cyano2))+
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.15) +
-    theme_bw() +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    labs(title = "Cyanobacteria 2") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-
-ggplot(cmtx_avgs, aes(x=season, y=cyano4))+
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.15) +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    theme_bw() +
-    labs(title = "Cyanobacteria 4") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-
-ggplot(cmtx_avgs, aes(x=season, y=diat1))+
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.15) +
-    theme_bw() +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    labs(title = "Diatoms 1") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-
-ggplot(cmtx_avgs, aes(x=season, y=diat2))+
-    geom_boxplot() +
-    theme_bw() +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    ylim(0,0.15) +
-    theme_bw() +
-    labs(title = "Diatoms 2") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-
-ggplot(cmtx_avgs, aes(x=season, y=dino))+
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.05) +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    theme_bw() +
-    labs(title = "Dinoflagellates") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-
-ggplot(cmtx_avgs, aes(x=season, y=hapt6))+
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.15) +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    theme_bw() +
-    labs(title = "Haptophytes 6") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-
-ggplot(cmtx_avgs, aes(x=season, y=hapt8))+
-    geom_boxplot() +
-    theme_bw() +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    ylim(0,0.15) +
-    theme_bw() +
-    labs(title = "Haptophytes 8") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
-ggplot(cmtx_avgs, aes(x=season, y=pras))+
-    geom_boxplot() +
-    theme_bw() +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    ylim(0,0.125) +
-    theme_bw() +
-    labs(title = "Prasinophytes") +
-    xlab("Season") +
-    ylab("Concentration (mg/m^3)")
+# ---- box plots ----
+p2 <- list()
+for (i  in seq(phyto_name)) {
+    p2[[sym(phyto_shrt[i])]] <- plot.pig.3(phyto_shrt[i], phyto_name[i])
+    
+}
 
 ```
 
