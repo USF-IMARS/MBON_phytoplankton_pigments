@@ -66,11 +66,18 @@ dir <- "//data//raw//"
 file.pig <-
   fs::dir_ls(path = paste0(root,dir),
              recurse = TRUE,
-             regexp = "\\.xlsx$")
+             regexp = "\\.xlsx$") %>%
+    str_sort()
 
 ```
 
-```{r}
+
+# HPLC data is loaded and cleanup
+Cleans name for tidying, renames some, creates date_time column, replace -9999 to
+NA, -8888 to 0 (is LOD), corrects formatting issues,
+```{r load-data}
+# ---- M-K 06-12 report_may_and_sept_2016 ----
+
 df <-
     readxl::read_xlsx(
         file.pig[1],
@@ -79,8 +86,12 @@ df <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     ) %>%
+
+    
     rename(lon = longitude,
-         lat = latitude) %>%
+           lat = latitude) %>%
+    
+
     mutate(
         gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(
@@ -93,30 +104,41 @@ df <-
             tz = "utc"
         ),
         .before = lon
-    )
 
-# set -8888 to 0, represent below Limit of Detection (LOD)
-df[df == -8888] <- 0
-```
+    ) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
-```{r}
-df2 <- 
-    readxl::read_xlsx(file.pig[2], sheet = 2, skip = 8, na = "-9999", 
-                      .name_repair = janitor::make_clean_names) %>%
+# ---- M-K 09-02 report_nov16_mar17_jun17_oct17_jan18 ----
+df2 <-
+    readxl::read_xlsx(
+        file.pig[2],
+        sheet = 2,
+        skip = 8,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
-        date_time_utc = ymd_hms(
-            paste(
-                year, month, day, time
-            ),
-            tz = "utc"
-        ),
+        date_time_utc = ymd_hms(paste(year, month, day, time),
+                                tz = "utc"),
         .before = lon
     ) %>%
-    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates) )
-df2[df2 == -8888] <- 0
+    
+    #converted to character, b/c is logical
+    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates)) %>%
+    
+    rename(filter_storage_before_shipment_to_gsfc = filter_storage_before_shipment_to_gfc) %>%
+    
+    # one station was included in metadata, but does not exist
+    filter(!is.na(station)) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
-
+# ---- M-K 10-11 part1 report ----
 
 df3 <-
     readxl::read_xlsx(
@@ -126,19 +148,28 @@ df3 <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     ) %>%
+
+    
+
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
     ) %>%
-    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates),
-           # matches any digit or decimal and convert to numeric
-           water_depth = as.numeric(str_extract(water_depth, "\\d*\\.{0,1}\\d")),
-           water_depth = replace_na(water_depth, 0)
-    )
-df3[df3 == -8888] <- 0
 
+    
+    mutate(
+        indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates),
+        # matches any digit or decimal and convert to numeric (issue with format)
+        water_depth = as.numeric(str_extract(water_depth, "\\d*\\.{0,1}\\d")),
+        water_depth = replace_na(water_depth, 0)
+    ) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
+
+# ---- M-K 10-11 part2 report ----
 df4 <-
     readxl::read_xlsx(
         file.pig[4],
@@ -147,37 +178,345 @@ df4 <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     )  %>%
+    
     # Fixed misspelled month
-    mutate(month = case_when(!month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
-           TRUE ~ month)) %>%
+    mutate(month = case_when(
+        !month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
+        TRUE ~ month
+    )) %>%
+    
+
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
-    ) 
+    ) %>%
+    
+    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d"))) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
-df4[df4 == -8888] <- 0
+# ---- M-K_05-17_report_mar16 ----
+df5 <-
+    readxl::read_xlsx(
+        file.pig[5],
+        sheet = "Report",
+        skip = 8,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    
+    rename(lon = longitude,
+           lat = latitude) %>%
+    
+    mutate(
+        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
+        date_time_utc = ymd_hms(
+            paste(
+                year_of_sample,
+                gregorian_month,
+                day_of_gregorian_month,
+                gmt_time
+            ),
+            tz = "utc"
+        ),
+        .before = lon
+    ) %>%
+    
+    # converts numeric to date, replace str to NA
+    mutate(
+        date_extracted_month_day_year = case_when(!is.na(
+            as.numeric(date_extracted_month_day_year)
+        ) ~ paste(
+            as.Date(as.numeric(date_extracted_month_day_year), origin = "1899-12-30")
+        ),
+        TRUE ~ NA_character_),
+        date_extracted_month_day_year = ymd(date_extracted_month_day_year, tz = "utc")
+    ) %>%
+    
+    # set -8888 to 0, represent below Limit of Detection (LOD)
+    replace(., . == -8888, 0)
 
-
-
-df234 <- full_join(df3, df2)
-
-df234 <- mutate(df234, hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
-                                                TRUE ~ hplc_gsfc_id))
 ```
 ```{r}
-df5 <- 
-    readxl::read_xlsx(file.pig[5], sheet = "Report", skip = 8, na = "-9999", 
-                      .name_repair =janitor::make_clean_names)
-df5[df5 == -8888] <- 0
-df5$gmt_time <- gsub("1899-12-31 ", "", as.character(df5$gmt_time))
-df <- mutate(df, date_time_utc = ymd_hms(paste(year_of_sample, gregorian_month, day_of_gregorian_month, gmt_time), tz = "utc"), .before = longitude)
+
+# ---- merge df 2, 3, 4 ----
+df_merg  <-
+    full_join(df3, df2)
+
+df_merg  <-
+    mutate(df_merg,
+           hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
+                                    TRUE ~ hplc_gsfc_id))
+
+df_merg  <- full_join(df_merg, df4) %>%
+    
+    # one cell had "28A", converted to NA
+    mutate(sequential_sample_number = as.numeric(sequential_sample_number)) 
+
+# ---- merge df 1, 5 ----
+df_merg2 <- full_join(df, df5)
+
+# ---- full merge ----
+# select variables that match data sets
+params <- c("hplc_gsfc_id"="gsfc_lab_sample_code", "pi", "station", "sample" = "original_pi_sample_label", 
+            "cruise"="cruise_name", "indicate_if_filters_are_replicates",
+            "volfilt" = "volume_filtered_ml", "bottle" ="bottle_number", 
+            "depth" = "sampling_depth_meters", "water_depth" = "total_water_depth_meters",
+            "name_of_water_body", "year" = "year_of_sample", "month"= "gregorian_month",
+            "day" = "day_of_gregorian_month", "sdy" = "sequential_day_of_year", 
+            "time"="gmt_time", "date_time_utc","lon", "lat", "filter_type",
+            "filter_diameter_mm", "filter_storage_before_shipment_to_gfsc"="filter_storage_before_shipping_to_gsfc",
+            "tot_chl_a", "tot_chl_b", "tot_chl_c", "alpha_beta_car","but_fuco", 
+            "hex_fuco", "allo", "diadino", "diato", "fuco", "perid", "zea", "mv_chl_a", 
+            "dv_chl_a", "chlide_a", "mv_chl_b", "dv_chl_b", "chl_c1c2" = "chl_c12",
+            "chl_c3", "lut", "neo", "viola", "phytin_a", "phide_a", "pras", "gyro", 
+            "tchl"="t_chl", "ppc", "psc", "psp", "tcar"="t_caro", "tacc" = "t_acc",
+            "tpg" = "t_pg", "dp", "tacc_tchla" = "t_acc_tchla", "psc_tcar" = "psc_t_caro",
+            "ppc_tcar" = "ppc_t_caro", "tchl_tcar"="t_chl_t_caro", "ppc_tpg" = "ppc_tpig",
+            "psp_tpg" = "psp_t_pg", "tchl_a_tpg" = "t_chl_a_t_pig",
+            "comments", "sequential_sample_number")
 
 
+df_all <- full_join(df_merg, df_merg2, by = params)  %>%
+    
+    # fix small errors with negative values
+    mutate(lat = case_when(lat < 0 ~ lat * (-1),
+                           TRUE ~ lat),
+           lon = case_when(lon > 0 ~ lon * (-1),
+                           TRUE ~ lon)) %>%
+    
+    # fix spelling and spacing of stations
+    mutate(
+        station = stringr::str_replace_all(station, fixed(" "), ""),
+        station = stringr::str_to_upper(station),
+        
+        # specifically TB1 was off, need to use NOAA AOML for coords
+        lat = case_when(station == "TB1" ~ 27.8013, TRUE~lat),
+        lon = case_when(station == "TB1" ~ -82.8819, TRUE~lon)
+    ) 
 
+# ---- fix lat long ----
+# summarize most freq value for lat/lon per station
+indx <- df_all %>% 
+    select(station, lat, lon) %>%
+    group_by(station) %>%
+    # summarise(n = n())
+    summarise(
+        # lat_mod = modeest::mlv(lat, method = "mfv"),
+        # lon_mod = modeest::mlv(lon, method = "mfv1"),
+        lat_mod = statip::mfv1(lat),
+        lon_mod = statip::mfv1(lon),
+        # sumss = sum(lat)
+        # .groups = "drop_last"
+    ) 
 
-#for looking at similarities in the column names between different files
-# x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
+# left join indx to df_all
+df_all <- df_all %>%
+    # group_by(station) %>%
+    left_join(indx, by = "station") %>%
+    mutate(lat = lat_mod, 
+           lon = lon_mod) %>%
+    select(-lat_mod, -lon_mod)
+
+rm(df, df2, df3, df4, df5, df_merg, df_merg2, params)
 ```
 
+
+```{r plot-points}
+# will need plotly 
+# plotly::ggplotly(
+    # ggplot() +
+    #     geom_point(data= df_all, aes(x = lon, y = lat, color = station), show.legend = F) +
+        # geom_point(data = indx, mapping = aes(lon_mod, lat_mod, stn = station), shape = 21, fill = NA ,
+        #            inherit.aes = F, show.legend = F) #+
+#         # geom_point(data=tibble(x = -82.8819, y =	27.8013), aes(x=x, y=y), color = "black")
+# )
+
+# for looking at similarities in the column names between different files
+# x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
+# x2 <- cbind(names(df234), names(df15))
+```
+
+```{r summary-statistics}
+#group by seasons
+df_all$month <- strtrim(df_all$month, 3)
+winter <- c("Dec", "Jan", "Feb")
+spring <- c("Mar", "Apr", "May")
+summer <- c("Jun", "Jul", "Aug")
+autumn <- c("Sep", "Nov", "Oct")
+
+df_all <- mutate(
+    df_all,
+    season = case_when(
+        month %in% winter ~ "W",
+        month %in% spring ~ "Sp",
+        month %in% summer ~ "Su",
+        month %in% autumn ~ "F"
+    )
+)
+
+pig_stat <- df_all %>%
+    group_by(season) %>%
+    summarise_at(vars(tot_chl_a:tchl_a_tpg),
+                 list(avg = mean, sd = sd, var = var),
+                 na.rm = TRUE)
+
+```
+
+```{r size-fractionation}
+df_all <- df_all %>%
+    mutate(dp_w = 1.41*fuco + 1.41*perid + 1.27*hex_fuco + 0.35*but_fuco +
+               0.6*allo + 1.01*tot_chl_b + 0.86*zea) %>%
+    mutate(f_micro = (1.41*fuco + 1.41 * perid) / dp_w) %>%
+    mutate(f_nano = (1.27 * hex_fuco + 0.35*but_fuco + 0.6*allo)/dp_w) %>%
+    mutate(f_pico = (1.01*tot_chl_b + 0.86*zea)/dp_w) %>%
+    mutate(micro = f_micro * tot_chl_a) %>%
+    mutate(nano = f_nano * tot_chl_a) %>%
+    mutate(pico = f_pico * tot_chl_a)
+
+```
+
+```{r}
+
+dir2     <- "//data//processed//"
+path_out <-  paste0(root,dir2)
+readr::write_csv(df_all, paste0(path_out,"combined_pig_dat.csv"))
+readr::write_csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
+```
+
+```{r log-dat}
+dir2     <- "//data//processed//"
+path_out <- paste0(root,dir2)
+pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+
+add1 <- function(n) {
+    n + 1
+}
+
+log_pig <- pig_dat %>%
+    mutate_at(.vars = vars(tot_chl_a:dp), add1) %>%
+    mutate_at(.vars = vars(tot_chl_a:dp), .funs = (log = log10))
+
+log_pig_stat <- log_pig %>%
+    group_by(season) %>%
+    summarise_at(vars(tot_chl_a:dp),
+                 list(
+                     log_avg = mean,
+                     log_sd = sd,
+                     log_var = var
+                 ),
+                 na.rm = TRUE)
+
+readr::write_csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
+readr::write_csv(log_pig_stat, paste0(path_out, "log_pig_summary_stat.csv"))
+```
+
+
+
+```{r clustering}
+clust           <- pig_dat %>%
+    select(f_micro, f_nano, f_pico) 
+
+rownames(clust) <- pig_dat$hplc_gsfc_id
+
+# Z-score data
+clust           <- scale(clust)
+
+# calc distance matrix
+d               <-  dist(clust)
+
+# Hierarchical Agglomerative Clusterting w/ Ward Linkages
+hc1             <- hclust(d, method = "ward.D")
+
+# plot dendrogram
+plot(hc1, cex = 0.6, hang = -1)
+
+# estimate prunging of clusters
+clust_num       <- cutree(hc1, k = 9)
+
+# visualize clusters 
+factoextra::fviz_cluster(list(data = clust, cluster = clust_num))
+clust_num_df    <- data.frame(clust_num = clust_num)
+clust           <- data.frame(clust)
+cluster_groups  <- merge(clust, clust_num_df, by = "row.names")
+```
+
+```{r}
+# #  clustering by size fractionation
+# size_clust <- pig_dat %>%
+#     filter(sample != "WS20278-191") %>%
+#     select(hplc_gsfc_id, lon, lat, micro, nano, pico) %>%
+#     drop_na()
+# rownames(size_clust) <- size_clust$hplc_gsfc_id 
+#  size_clust <-   select(size_clust,-hplc_gsfc_id)
+# size_clust <- scale(size_clust) # z-score
+# 
+# d1=dist(size_clust)
+#     
+# hc1 <-hclust(d1, method = "ward.D")
+# plot(hc1, cex=0.6, hang=-1)
+# 
+# opt_clust <- fviz_nbclust(size_clust, hcut, method = "silhouette", k.max = 24) + theme_minimal() + ggtitle("The Silhouette Plot")
+# clust_num_1 <- cutree(hc1, k=5)
+# 
+# factoextra::fviz_cluster(list(data=size_clust, cluster=clust_num_1))
+# s_clust_num_df <- data.frame(s_clust_num= clust_num_1)
+# size_clust <- data.frame(size_clust)
+# s_clus_groups <- merge(size_clust, s_clust_num_df, by="row.names") %>%
+#     tibble::rownames_to_column()
+# colnames(s_clus_groups)[1] <- "hplc_gsfc_id"
+# chem_tax <- left_join(pig_dat, select(.data = s_clus_groups, hplc_gsfc_id, s_clust_num),
+#                       by=c("hplc_gsfc_id")) %>%
+#     select(hplc_gsfc_id, s_clust_num, chl_c3, chl_c1c2, perid, but_fuco,
+#            fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
+# write.csv(chem_tax, paste0(path_out, "dat_for_chemtax_size_clustering.csv"))
+
+```
+
+```{r}
+#filter for Florida Keys and cluster by seasons
+chemtax_seasons <- pig_dat %>%
+    filter(name_of_water_body == "Florida Keys") %>%
+    mutate(cluster_code = case_when(season == "W" ~ 1,
+                                    season == "Sp" ~ 2, 
+                                    season == "Su" ~ 3,
+                                    season == "F" ~ 4)) %>%
+    dplyr::select(hplc_gsfc_id, cluster_code, sample, chl_c3, chl_c1c2, perid, but_fuco,
+           fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
+
+write_csv(chemtax_seasons, paste0(path_out,"dat_for_chemtax_season_clust.csv"))
+```
+
+```{r wind-speed-data}
+# rnoaa package seems promising to gather this data
+# https://docs.ropensci.org/rnoaa/articles/rnoaa.html
+library("rnoaa")
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
+# wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
+
+# will need to go to https://www.ncdc.noaa.gov/cdo-web/token to get token
+# then paste into .rprofile using below code, should NOT be in this directory
+usethis::edit_r_profile()
+
+# when running, seems like we have to source it, then set the options to it
+source("~/.rprofile")
+options(noaakey = "CCwMqVFUvGBxevnbnPVrFGjxRBidqnSH")
+
+# test that it works
+ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
+
+# might want data from https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/gsom-gsoy.pdf
+ncdc_datasets(locationid = "ZIP:33050", startdate = '2015-03-01', enddate = '2022-05-31')
+rnoaa::ncdc_stations(locationid = "ZIP:33050")
+ncdc(locationid = "ZIP:33050", startdate = '2010-03-01', enddate = '2010-05-31', datasetid = "GHCND")
+
+# need to check station ids around the florida keys
+out <- ghcnd(stationid = "USW00012873", date_min = "2010-01-01", add_units = T) %>%
+    filter(year >= 2015)
+alldat <- ghcnd_splitvars(out)
+View(alldat$awnd)
+```

@@ -30,23 +30,26 @@ path <- paste0(root,"/data/map/")
 
 # Region of Interest Bounding Box    ------------- edit this
 # Change the spatial extent
-exnt <- c(xmin = -82, # West
+exnt <- c(xmin = -85, # West
           xmax = -79, # East
-          ymin = 30.5,# South
-          ymax = 32   # North 
+          ymin = 24,# South
+          ymax = 29   # North 
         )
 
 # inset extent (i.e. smaller map on top of zoomed in map)
-exnt2 <-  c(-75, # West
-            -84, # EAst
-            24,  # South
-            40   # North
+exnt2 <-  c(-90, # West
+            -75, # East
+            20,  # South
+            35   # North
             ) 
 names(exnt2) <- names(exnt)
 ```
 
 Load some dataset here!!!
 ```{r}
+dir2 <- "//data//processed//"
+path_out = paste0(root,dir2)
+pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
 
 ```
 
@@ -128,15 +131,17 @@ stn.map <- ggplot() +
                 breaks = c(100, 40, 25, 10, 0)
                 ) +
   geom_sf(data = world2) +
-  geom_point(data = df,
+  geom_point(data = pig_dat,
              aes(
                x = lon,
                y = lat,
-               fill = stn,
-               shape = stn
+               fill = station,
+               ##shape = station,
              ),
-             size = 4,
-             stroke = 1.5) +
+             size = 2,
+             alpha = 0.5,
+             stroke = 1.5,
+             show.legend = FALSE) +
   scale_shape_manual(values = c(24,25,21))+
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0), breaks = seq(30.5,32,0.5)) +
@@ -158,6 +163,20 @@ stn.map <- ggplot() +
         )
 
 stn.map
+# plotly::ggplotly(
+#     ggplot() +
+#   geom_point(data = pig_dat,
+#              aes(
+#                x = lon,
+#                y = lat,
+#                fill = station,
+#                ##shape = station,
+#              ),
+#              size = 2,
+#              alpha = 0.5,
+#              stroke = 1.5,
+#              show.legend = FALSE)
+# )
 ```
 # Zoomed out map 
 ```{r us-map-plot, fig.width=2.862162, fig.height=6}
@@ -166,10 +185,12 @@ east.map <- ggplot() +
   geom_sf(data = state) +
   geom_rect(                  # create red box on map to show sampling locations
     aes(
-      xmin = min(df$lon) - 0.25, # West
-      xmax = max(df$lon) + 0.25, # East
-      ymin = min(df$lat) - 0.25, # South
-      ymax = max(df$lat) + 0.25  # North
+      xmin = min(pig_dat$lon) - 0.25, # West
+      # xmax = max(pig_dat$lon) + 0.25, # East
+      xmax = -79.83275, # East
+      ymin = min(pig_dat$lat) - 0.25, # South
+      # ymax = max(pig_dat$lat) + 0.25  # North
+      ymax = 28.25 # North, incorrect coordinate was messing up box size
     ),
     color = "red",
     fill = NA

@@ -1,0 +1,192 @@
+---
+title: "Chemtax Analysis"
+author: "Anna Finch"
+date: '2022-06-24'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("dplyr")
+library("ggplot2")
+library("tidyverse")
+library("rstatix")
+
+root <- rprojroot::find_rstudio_root_file()
+
+```
+
+```{r reading in data}
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
+
+# Chemtax files
+file.chem <-
+  fs::dir_ls(path = paste0(root,dir3),
+             recurse = TRUE,
+             regexp = "\\.xls$")
+```
+
+
+```{r}
+cmtx1 <-
+    readxl::read_xls(
+        file.chem[1],
+        sheet = 2,
+        range = "D177:N178",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 1, season = "W")
+
+cmtx2 <-
+    readxl::read_xls(
+        file.chem[2],
+        sheet = 2,
+        range = "D273:N274",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 2, season = "Sp")
+
+cmtx3 <-
+    readxl::read_xls(
+        file.chem[3],
+        sheet = 2,
+        range = "D241:N242",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 3, season = "Su")
+
+cmtx4 <-
+    readxl::read_xls(
+        file.chem[4],
+        sheet = 2,
+        range = "D305:N306",
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    mutate(cluster_code = 4, season = "F")
+
+cmtx_all <- full_join(cmtx1, cmtx2) %>%
+    full_join(cmtx3) %>%
+    full_join(cmtx4) %>%
+    mutate(season = forcats::fct_relevel(season, "W", "Sp", "Su", "F"))
+```
+
+```{r plotting}
+# ---- base plot function ----
+phyto_name <- c("Chlorophytes", "Cryptophytes", "Cyanobacteria 2", 
+                "Cyanobacteria 4", "Diatoms 1", "Diatoms 2", "Dinoflagellates",
+                "Haptophytes 6","Haptophytes 8", "Prasinophytes")
+
+phyto_shrt <- names(cmtx_all)[-c(1,12,13)]
+
+plot.pig <- function(.var, .title){
+    ggplot(cmtx_all, aes_string(x="season", y= .var)) +
+    geom_point(size=2) +
+    geom_line(group=1, size=1) +
+    theme_bw() +
+    labs(title = paste("Average Concentration per Season of", .title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+}
+
+# ---- line plots ----
+p <- list()
+for (i  in seq(phyto_name)) {
+    p[[sym(phyto_shrt[i])]] <- plot.pig(phyto_shrt[i], phyto_name[i])
+    
+}
+
+print(p)
+
+plot.pig1 <- function(.var, .title){
+    list(
+    # geom_point(cmtx_all, string(x=season, y= .var),size=2),
+    geom_line(group=1, size=1),
+    theme_bw(),
+    labs(title = paste("Average Concentration per Season of", .title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+    )
+    }
+i =1
+t <- plot.pig1(phyto_shrt[i], phyto_name[i])
+
+p$chloro + geom_line(data =cmtx_all, aes(season, chloro), color = "blue")
+ggplot() +
+    geom_point(data =cmtx_all, aes(season, chloro)) + t
+```
+
+```{r}
+cmtx_avgs <- readxl::read_xls(
+    file.chem[5],
+    sheet=1,
+    .name_repair = janitor::make_clean_names
+)
+
+meta_data <- dplyr::select(.data=pig_dat, 
+                            hplc_gsfc_id:filter_storage_before_shipment_to_gfsc, 
+                            comments, season) %>%
+    filter(name_of_water_body == "Florida Keys")
+cmtx_avgs <- full_join(meta_data, cmtx_avgs, by=c("sample" = "sample_id")) %>%
+    mutate(season= forcats::fct_relevel(season, "W", "Sp", "Su", "F"))
+```
+
+```{r boxplots}
+# ---- box plot function ----
+plot.pig.3 <- function(.var, .title){
+    ggplot() +
+    geom_boxplot(cmtx_avgs, mapping = aes_string(x="season", y= .var)) +
+    theme_bw() +
+    ylim(0,0.125) +
+    geom_jitter(cmtx_avgs, mapping = aes_string(x="season", y= .var, color="year"), width = 0.4, size=1) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
+    geom_line(cmtx_all, mapping=aes_string(x="season", y=.var, group=1)) +
+    labs(title = paste("Concentration per Season of", .title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+}
+
+# boxplot function without geom_line
+plot.pig.3 <- function(.var, .title){
+    ggplot(cmtx_avgs, aes_string(x="season", y= .var)) +
+    geom_boxplot() +
+    theme_bw() +
+    ylim(0,0.125) +
+    geom_jitter(width = 0.4, size=1, aes(color = year)) +
+    scale_colour_gradient2(
+        low = "red",
+        mid = "blue",
+        high = "green",
+        midpoint = 2018.5) +
+    labs(title = paste("Concentration per Season of", .title),
+         x = "Season",
+         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+}
+
+# ---- box plots ----
+p2 <- list()
+for (i  in seq(phyto_name)) {
+    p2[[sym(phyto_shrt[i])]] <- plot.pig.3(phyto_shrt[i], phyto_name[i])
+    
+}
+
+```
+
+```{r ANOVA}
+#ANOVA test
+summary(aov(diat2 ~ season, data=cmtx_avgs))
+
+#Dunn test with Bonferroni correction
+chloro_dunn <- dunn_test(cmtx_avgs, chloro ~ season, p.adjust.method = "bonferroni")
+crypto_dunn <- dunn_test(cmtx_avgs, crypto ~ season, p.adjust.method = "bonferroni")
+cyano4_dunn <- dunn_test(cmtx_avgs, cyano4 ~ season, p.adjust.method = "bonferroni")
+dino_dunn <- dunn_test(cmtx_avgs, dino ~ season, p.adjust.method = "bonferroni")
+hapt6_dunn <- dunn_test(cmtx_avgs, hapt6 ~ season, p.adjust.method = "bonferroni")
+hapt8_dunn <- dunn_test(cmtx_avgs, hapt8 ~ season, p.adjust.method = "bonferroni")
+pras_dunn <- dunn_test(cmtx_avgs, pras ~ season, p.adjust.method = "bonferroni")
+
+```
