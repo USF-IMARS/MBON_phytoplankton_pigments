@@ -150,22 +150,22 @@ plot.pig.3 <- function(.var, .title){
          y = expression(paste("Concentration (mg  ", m^-3, ")")))
 }
 
-# boxplot function without geom_line
-plot.pig.3 <- function(.var, .title){
-    ggplot(cmtx_avgs, aes_string(x="season", y= .var)) +
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.125) +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    labs(title = paste("Concentration per Season of", .title),
-         x = "Season",
-         y = expression(paste("Concentration (mg  ", m^-3, ")")))
-}
+# # boxplot function without geom_line
+# plot.pig.3 <- function(.var, .title){
+#     ggplot(cmtx_avgs, aes_string(x="season", y= .var)) +
+#     geom_boxplot() +
+#     theme_bw() +
+#     ylim(0,0.125) +
+#     geom_jitter(width = 0.4, size=1, aes(color = year)) +
+#     scale_colour_gradient2(
+#         low = "red",
+#         mid = "blue",
+#         high = "green",
+#         midpoint = 2018.5) +
+#     labs(title = paste("Concentration per Season of", .title),
+#          x = "Season",
+#          y = expression(paste("Concentration (mg  ", m^-3, ")")))
+# }
 
 # ---- box plots ----
 p2 <- list()
