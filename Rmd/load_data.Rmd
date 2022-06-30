@@ -71,11 +71,13 @@ file.pig <-
 
 ```
 
+
 # HPLC data is loaded and cleanup
 Cleans name for tidying, renames some, creates date_time column, replace -9999 to
 NA, -8888 to 0 (is LOD), corrects formatting issues,
 ```{r load-data}
 # ---- M-K 06-12 report_may_and_sept_2016 ----
+
 df <-
     readxl::read_xlsx(
         file.pig[1],
@@ -84,10 +86,12 @@ df <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     ) %>%
+
     
     rename(lon = longitude,
            lat = latitude) %>%
     
+
     mutate(
         gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(
@@ -100,6 +104,7 @@ df <-
             tz = "utc"
         ),
         .before = lon
+
     ) %>%
     
     # set -8888 to 0, represent below Limit of Detection (LOD)
@@ -134,6 +139,7 @@ df2 <-
     replace(., . == -8888, 0)
 
 # ---- M-K 10-11 part1 report ----
+
 df3 <-
     readxl::read_xlsx(
         file.pig[3],
@@ -142,13 +148,16 @@ df3 <-
         na = "-9999",
         .name_repair = janitor::make_clean_names
     ) %>%
+
     
+
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
     ) %>%
+
     
     mutate(
         indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates),
@@ -176,6 +185,7 @@ df4 <-
         TRUE ~ month
     )) %>%
     
+
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
