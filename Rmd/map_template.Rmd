@@ -163,6 +163,20 @@ stn.map <- ggplot() +
         )
 
 stn.map
+# plotly::ggplotly(
+#     ggplot() +
+#   geom_point(data = pig_dat,
+#              aes(
+#                x = lon,
+#                y = lat,
+#                fill = station,
+#                ##shape = station,
+#              ),
+#              size = 2,
+#              alpha = 0.5,
+#              stroke = 1.5,
+#              show.legend = FALSE)
+# )
 ```
 # Zoomed out map 
 ```{r us-map-plot, fig.width=2.862162, fig.height=6}
