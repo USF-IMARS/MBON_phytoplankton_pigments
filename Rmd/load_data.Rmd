@@ -66,7 +66,8 @@ dir <- "//data//raw//"
 file.pig <-
   fs::dir_ls(path = paste0(root,dir),
              recurse = TRUE,
-             regexp = "\\.xlsx$")
+             regexp = "\\.xlsx$") %>%
+    str_sort()
 
 ```
 
@@ -400,7 +401,7 @@ log_pig_stat <- log_pig %>%
                  na.rm = TRUE)
 
 readr::write_csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
-readr::write_csv(log_pig, paste0(path_out, "log_pig_summary_stat.csv"))
+readr::write_csv(log_pig_stat, paste0(path_out, "log_pig_summary_stat.csv"))
 ```
 
 
@@ -485,7 +486,7 @@ write_csv(chemtax_seasons, paste0(path_out,"dat_for_chemtax_season_clust.csv"))
 library("rnoaa")
 dir3 <- "//data//raw//"
 path_in = paste0(root,dir3)
-wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
+# wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
 
 # will need to go to https://www.ncdc.noaa.gov/cdo-web/token to get token
 # then paste into .rprofile using below code, should NOT be in this directory
@@ -493,7 +494,7 @@ usethis::edit_r_profile()
 
 # when running, seems like we have to source it, then set the options to it
 source("~/.rprofile")
-options(noaakey = noaakey)
+options(noaakey = "CCwMqVFUvGBxevnbnPVrFGjxRBidqnSH")
 
 # test that it works
 ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
@@ -504,6 +505,8 @@ rnoaa::ncdc_stations(locationid = "ZIP:33050")
 ncdc(locationid = "ZIP:33050", startdate = '2010-03-01', enddate = '2010-05-31', datasetid = "GHCND")
 
 # need to check station ids around the florida keys
-out <- ghcnd(stationid = "USC00082046", date_min = "2010-01-01") %>%
+out <- ghcnd(stationid = "USW00012873", date_min = "2010-01-01", add_units = T) %>%
     filter(year >= 2015)
+alldat <- ghcnd_splitvars(out)
+View(alldat$awnd)
 ```
