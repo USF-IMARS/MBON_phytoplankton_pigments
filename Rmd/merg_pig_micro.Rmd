@@ -1,0 +1,192 @@
+---
+title: "HPLC Microscopy Match-up"
+author: "Sebastian DiGeronimo"
+date: '2022-06-30'
+output: html_document
+---
+
+```{r}
+library("ggplot2")
+library("tibble")
+library("tidyr")
+library("readr")
+library("purrr")
+library("dplyr")
+library("stringr")
+library("forcats")
+library("lubridate")
+library("glue")
+library("fs")
+library("magrittr")
+
+
+root <- rprojroot::find_rstudio_root_file()
+```
+
+```{r}
+df_pig <- readr::read_csv(paste0(root,"/data/processed/combined_pig_dat.csv"))
+
+```
+
+```{r microscopy}
+micro_path <-
+    fs::dir_ls(
+        paste0(root, "/data/raw/"),
+               regexp = "Sample overview.+FWRI\\.xlsx$",
+               recurse = T
+        )
+
+df_micro <-
+    readxl::read_excel(
+        micro_path,
+        skip = 2,
+        sheet = 2,
+        .name_repair = janitor::make_clean_names
+    ) %>%
+    
+    rename(lat = latitude,
+           lon = longitude) %>%
+           
+    mutate(
+        sample_time = hms::as_hms(strftime(sample_time, format = "%H:%M:%S")),
+        date_time = ymd_hms(paste(sample_date, sample_time),
+                            tz = "utc"),
+        .before = time_zone
+    ) %>%
+    # removes rows without station IDs
+    filter(!is.na(station_id)) %>%
+    
+    # extracts station #, removing 
+   mutate(station = str_remove(station_id, "^(Keys MBON |NOAA-AOML )"),
+          station = str_replace_all(station, "/|\\s", "_"),
+          station = str_replace(station, "21_LK", "LK"),
+           .after = station_id
+    ) %>%
+    
+    # replaces NA values to 0 for count data
+    mutate(across(achnanthes_sp:last_col(), ~ replace_na(., 0))) %>%
+
+    # filter rows for full counts only
+    filter(str_detect(count_details, "Full.*"))
+
+   
+
+rm(micro_path)
+```
+
+```{r}
+
+sm_mic <- 
+    df_micro %>%
+    rename(depth = sample_depth_m) %>%
+    select(date = sample_date, date_time, station, lat, lon, depth)  %>%
+    group_by(station, date_time) %>%
+    mutate(depth_id = case_when(
+        n() > 1 & depth  == min(depth) ~ "SUR",
+        n() > 1 & depth == max(depth) ~ "BOT",
+        depth > 5 ~ "BOT",
+        TRUE ~ "SUR"
+    )) %>%
+       ungroup()
+
+sm_pig <- 
+    df_pig %>%
+    select(station, date_time_utc, lat, lon, depth) %>%
+    # filters duplicates at same depth
+    distinct(station, date_time_utc, depth) %>%
+    group_by(station, date_time_utc) %>%
+    mutate(depth_id = case_when(
+        n() > 1 & depth  == min(depth) ~ "SUR",
+        n() > 1 & depth > min(depth) ~ "BOT",
+        depth > 5 ~ "BOT",
+        TRUE ~ "SUR"
+    ),
+    date = as.Date(date_time_utc)) %>%
+       ungroup()
+    
+# unique(sm_pig$station)
+# dupes <- sm_pig %>%
+#     filter(station %in% unique(sm_pig$station[duplicated(sm_pig$station)]))
+```
+```{r}
+
+# View(sm_pig[,1:2]  %>%
+#     filter(station %in% sm_mic$station )  %>%
+#     group_by(station)  %>%
+#     arrange(date_time_utc, .by_group = T))
+# View(sm_mic[,1:2]  %>%
+#     group_by(station)  %>%
+#     arrange(date_time, .by_group = T))
+
+# distinct(sm_pig, station, date_time_utc, depth, .keep_all = T)
+final <- right_join(sm_pig, sm_mic, by = c("station", "date", "depth_id")) %>%
+    filter(is.na(date_time_utc))
+
+
+final
+
+# tibble::tribble(
+#     ~station, ~date_time_utc, ~depth.x, ~depth_id,        ~date,            ~date_time,    ~lat,     ~lon, ~depth.y,
+#         "32",             NA,       NA,     "BOT", "2016-05-12", "2016-05-12 21:26:00", 25.8733, -81.8333,     11.2,NO bottom
+#         "MR",             NA,       NA,     "SUR", "2016-07-25", "2016-07-25 18:45:00",   25.01,   -80.38,        1, No DATA
+#         "MR",             NA,       NA,     "BOT", "2016-07-25", "2016-07-25 18:45:00",   25.01,   -80.38,      3.3, NO data
+#         "LK",             NA,       NA,     "SUR", "2016-07-26", "2016-07-26 10:27:00", 24.5383, -81.4133,        1, NO data
+#         "70",             NA,       NA,     "SUR", "2016-11-16", "2016-11-16 22:03:00",   24.93,  -81.025,        1, NO stn 70
+#         "MR",             NA,       NA,     "SUR", "2017-01-30", "2017-01-30 16:04:00",   25.01,   -80.38,        1 NO data
+#         "MR",             NA,       NA,     "BOT", "2017-01-30", "2017-01-30 16:04:00",   25.01,   -80.38,     31.3, NO data
+#         "LK",             NA,       NA,     "SUR", "2017-01-31", "2017-01-31 06:22:00", 24.5383, -81.4133,        1, NO data
+#         "LK",             NA,       NA,     "BOT", "2017-01-31", "2017-01-31 06:22:00", 24.5383, -81.4133,     34.7,NO data
+#         "WS",             NA,       NA,     "SUR", "2017-01-31", "2017-01-31 09:24:00",  24.478,  -81.717,        1,NO data
+#         "WS",             NA,       NA,     "BOT", "2017-01-31", "2017-01-31 09:24:00",  24.478,  -81.717,     21.7,NO data
+#         "MR",             NA,       NA,     "SUR", "2018-01-09", "2018-01-09 19:52:00",   25.01,   -80.38,        1, diff date, should add 5 hour to pig
+#         "MR",             NA,       NA,     "BOT", "2018-01-09", "2018-01-09 19:52:00",   25.01,   -80.38,      7.1, diff date
+#         "MR",             NA,       NA,     "SUR", "2018-10-12", "2018-10-12 17:00:00",   25.01,   -80.38,       31 no data
+#     )
+
+
+```
+2018-01-09 MR micro = 2018-01-08 MR pig
+2016-07-25 MR micro = NO MR pig
+2016-05-12 32 micro = no b/c bottom pig not taken
+2016-11-16 70 micro = NO 70 pig
+
+# look up data sheet to see whats what
+TB2 2018-10-16 14:25:00 or 2018-10-16 10:25:00 
+
+
+station	date_time_utc	depth.x	depth_id	date	date_time	lat	lon	depth.y
+32	NA	NA	BOT	2016-05-12	2016-05-12 21:26:00	25.8733	-81.8333	11.2
+MR	NA	NA	SUR	2016-07-25	2016-07-25 18:45:00	25.0100	-80.3800	1.0
+MR	NA	NA	BOT	2016-07-25	2016-07-25 18:45:00	25.0100	-80.3800	3.3
+LK	NA	NA	SUR	2016-07-26	2016-07-26 10:27:00	24.5383	-81.4133	1.0
+70	NA	NA	SUR	2016-11-16	2016-11-16 22:03:00	24.9300	-81.0250	1.0
+MR	NA	NA	SUR	2017-01-30	2017-01-30 16:04:00	25.0100	-80.3800	1.0
+MR	NA	NA	BOT	2017-01-30	2017-01-30 16:04:00	25.0100	-80.3800	31.3
+LK	NA	NA	SUR	2017-01-31	2017-01-31 06:22:00	24.5383	-81.4133	1.0
+LK	NA	NA	BOT	2017-01-31	2017-01-31 06:22:00	24.5383	-81.4133	34.7
+WS	NA	NA	SUR	2017-01-31	2017-01-31 09:24:00	24.4780	-81.7170	1.0
+WS	NA	NA	BOT	2017-01-31	2017-01-31 09:24:00	24.4780	-81.7170	21.7
+MR	NA	NA	SUR	2018-01-09	2018-01-09 19:52:00	25.0100	-80.3800	1.0
+MR	NA	NA	BOT	2018-01-09	2018-01-09 19:52:00	25.0100	-80.3800	7.1
+MR	NA	NA	BOT	2018-10-12	2018-10-12 17:00:00	25.0100	-80.3800	31.0
+
+```{r}
+inner_join(df_micro %>%
+    distinct( date_time, station),
+
+df_pig %>%
+    distinct(date_time_utc, station),
+
+by = c("station", "date_time"="date_time_utc"))
+
+
+df_pig %>%
+    select(cruise, station, date_time_utc, depth) %>%
+    filter(
+        station %in% df_micro$station & date_time_utc %in% df_micro$date_time
+    ) %>%
+      distinct()
+
+
+```
+
