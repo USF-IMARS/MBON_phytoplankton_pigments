@@ -177,16 +177,32 @@ for (i  in seq(phyto_name)) {
 ```
 
 ```{r ANOVA}
-#ANOVA test
-summary(aov(diat2 ~ season, data=cmtx_avgs))
-
-#Dunn test with Bonferroni correction
-chloro_dunn <- dunn_test(cmtx_avgs, chloro ~ season, p.adjust.method = "bonferroni")
-crypto_dunn <- dunn_test(cmtx_avgs, crypto ~ season, p.adjust.method = "bonferroni")
-cyano4_dunn <- dunn_test(cmtx_avgs, cyano4 ~ season, p.adjust.method = "bonferroni")
-dino_dunn <- dunn_test(cmtx_avgs, dino ~ season, p.adjust.method = "bonferroni")
-hapt6_dunn <- dunn_test(cmtx_avgs, hapt6 ~ season, p.adjust.method = "bonferroni")
-hapt8_dunn <- dunn_test(cmtx_avgs, hapt8 ~ season, p.adjust.method = "bonferroni")
-pras_dunn <- dunn_test(cmtx_avgs, pras ~ season, p.adjust.method = "bonferroni")
+# #ANOVA test
+# summary(aov(diat2 ~ season, data=cmtx_avgs))
+# 
+# #Dunn test with Bonferroni correction
+# chloro_dunn <- dunn_test(cmtx_avgs, chloro ~ season, p.adjust.method = "bonferroni")
+# crypto_dunn <- dunn_test(cmtx_avgs, crypto ~ season, p.adjust.method = "bonferroni")
+# cyano4_dunn <- dunn_test(cmtx_avgs, cyano4 ~ season, p.adjust.method = "bonferroni")
+# dino_dunn <- dunn_test(cmtx_avgs, dino ~ season, p.adjust.method = "bonferroni")
+# hapt6_dunn <- dunn_test(cmtx_avgs, hapt6 ~ season, p.adjust.method = "bonferroni")
+# hapt8_dunn <- dunn_test(cmtx_avgs, hapt8 ~ season, p.adjust.method = "bonferroni")
+# pras_dunn <- dunn_test(cmtx_avgs, pras ~ season, p.adjust.method = "bonferroni")
 
 ```
+
+```{r kruskal-and-dunn}
+cmtx_longer <- cmtx_avgs %>% 
+    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "value")
+
+cmtx_kruskal <- cmtx_longer %>% 
+    group_by(func_type) %>% 
+    kruskal_test(value ~ season)
+
+cmtx_dunn <- cmtx_longer %>%
+    filter(!(func_type %in% c("cyano2", "diat1"))) %>% 
+    group_by(func_type) %>%
+    dunn_test(value ~ season, p.adjust.method = "bonferroni")
+
+```
+
