@@ -22,6 +22,7 @@ library("magrittr")
 library("ggplot2")
 library("sf")
 library("metR")
+library(dplyr)
 
 # fixes issue with reading file?
 sf::sf_use_s2(FALSE)
@@ -118,9 +119,18 @@ state <- fs::dir_ls(path = paste0(path),
                st_read(.) %>%
                st_crop(., st_bbox(exnt2))
 
+
+bathy <- nc_open(paste0(root,"/data/map/etopo1.nc"))
+topo <- ncvar_get(bathy, 'altitude')
+topo_lat <- ncvar_get(bathy, 'latitude')
+topo_lon <- ncvar_get(bathy, 'longitude')
+nc_close(bathy)
+
 # read bahtymetry data
 bathy <- raster::raster(paste0(path,"etopo1.nc")) %>%
   as.data.frame(xy = T)
+
+
 ```
 
 ```{r plots, fig.height=6, fig.width=10}
@@ -238,4 +248,113 @@ save_plot(filename = paste0(path,"../plots/map",
           base_height = 6,
           base_width = 10,
           dpi = 600, units = "in", device='svg')
+```
+
+```{r fuco-mapping-winter}
+## testing out mapping one pigment during one season
+pig <- "fuco"
+fuco_data <- pig_dat %>%
+    filter(
+        season == "W", name_of_water_body == "Florida Keys"
+        ) %>%
+    select(
+        hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
+                  tot_chl_a, fuco
+        ) %>%
+    mutate(fuco_ratio = fuco/tot_chl_a, .after=fuco)
+
+df_fuco <- fuco_data %>%
+    group_by(station) %>%
+    summarize(fuco_rat_avg = mean(fuco_ratio), fuco_avg = mean(fuco), chla_avg = mean(tot_chl_a), across()) %>%
+    distinct(station, .keep_all = T) %>% 
+    ungroup()
+# ----    
+# sta_list_fuco <- unique(fuco_data$station)
+# df_fuco <- matrix(ncol=6, nrow=length(sta_list_fuco))
+# for (i in 1:length(sta_list_fuco)) {
+#     sta_val <- fuco_data[fuco_data$lat_lon == sta_list_fuco[i], ]
+#     chla_avg <- mean(sta_val$tot_chl_a)
+#     fuco_avg <- mean(sta_val$fuco)
+#     fuco_rat_avg <- mean(sta_val$fuco_ratio)
+#     
+#     df_fuco[i,] <- cbind(sta_list_fuco[i], sta_val$lon[1], sta_val$lat[1], chla_avg,
+#                          fuco_avg, fuco_rat_avg)
+# }
+#     
+# df_fuco <- as.data.frame(df_fuco)
+# colnames(df_fuco) <- c("station", "longitude", "latitude", "chla", "fuco", "fuco_ratio") # change column names
+# cols.num_fuco <- c("longitude", "latitude", "chla", "fuco", "fuco_ratio") # make these columns numeric vectors (double-check with "sapply(df, class)")
+# df_fuco[cols.num_fuco] <- sapply(df_fuco[cols.num_fuco],as.numeric)
+
+#### -------------- kriging FUCO --------------
+### krigging resolution
+resolution <- .01
+adj <- .1
+### krigging locations
+df_fuco.loc <- cbind(lon=df_fuco$lon,lat=df_fuco$lat)
+loc.grid_fuco <- list(lon=seq(min(df_fuco$lon, na.rm=T) - adj, max(df_fuco$lon, na.rm=T) + adj, resolution),
+                 lat=seq(min(df_fuco$lat, na.rm=T) - adj, max(df_fuco$lat, na.rm=T) + adj, resolution))
+### limits for plotting
+xlims_fuco <- range(loc.grid_fuco$lon)
+ylims_fuco <- range(loc.grid_fuco$lat)
+
+#spatialProcess()
+### ----------------- Pigment FUCO ratio krig -----------------
+my.krig_fuco <- spatialProcess(df_fuco.loc, df_fuco$fuco_rat_avg)
+ratio_kriged_fuco <- predictSurface(my.krig_fuco, loc.grid_fuco, extrap=F)
+ratio_SE_fuco <- predictSurfaceSE(my.krig_fuco, loc.grid_fuco, extrap=F)
+
+### corrects the krigged min and max to observed min and max
+if(max(ratio_kriged_fuco$z, na.rm=T) > max(df_fuco$fuco_rat_avg, na.rm=T)){
+  ratio_kriged_fuco$z[which(ratio_kriged_fuco$z > max(df_fuco$fuco_rat_avg, na.rm=T))] <- max(df_fuco$fuco_rat_avg, na.rm=T)
+}
+if(min(ratio_kriged_fuco$z, na.rm=T) < min(df_fuco$fuco_rat_avg, na.rm=T)){
+  ratio_kriged_fuco$z[which(ratio_kriged_fuco$z < min(df_fuco$fuco_rat_avg, na.rm=T))] <- min(df_fuco$fuco_rat_avg, na.rm=T)
+}
+
+### color and contour breaks FUCO
+breaks_fuco <- pretty(df_fuco$fuco_rat_avg, n=10)
+breaks_fuco <- seq(0, 0.6, by=.05) ### use for fixed breaks.
+chl_col <- colorRampPalette(c('honeydew2','darkseagreen3','forestgreen','darkslategrey'))
+cols_fuco <- chl_col(length(breaks_fuco)-1)
+
+
+dir4 <- "//data//map//"
+path_map = paste0(root,dir4)
+setwd(path_map)
+
+
+file <-
+    paste0('MBON_pigm_',
+           pig,
+           '_winter_',
+           format(Sys.time(), "%y%m%d_%H%M%S") ,
+           '.png')
+
+png(file, height = 11, width = 4, units = 'in', res=300)
+
+### FUCO ###
+
+par(mfrow=c(3,1),mar=c(4.5,4,2,1),oma=c(4,1,4,1))
+
+imagePlot(ratio_kriged_fuco$x,
+          ratio_kriged_fuco$y,
+          ratio_kriged_fuco$z,
+          col=cols_fuco,breaks=breaks_fuco,asp=1,
+          xlab='',ylab='',las=1,
+          xlim=xlims_fuco,ylim=ylims_fuco,
+          nlevel=length(cols_fuco),legend.width=1,legend.mar=3)
+contour(ratio_kriged_fuco$x,
+        ratio_kriged_fuco$y,
+        ratio_kriged_fuco$z,
+        levels=breaks_fuco,add=T)
+image(ratio_SE_fuco,add=T,breaks=quantile(ratio_SE_fuco$z,c(1,1),na.rm=T),col='white')
+image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
+# plot(FL,col='gray70',add=T)
+plot(world2,col='gray70',add=T)
+contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
+points(df_fuco$lon,df_fuco$lat,pch=20,col='yellow')
+mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
+mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
+mtext('Fucoxanthin:TChla: Winter',adj=1,cex=.75)
 ```
