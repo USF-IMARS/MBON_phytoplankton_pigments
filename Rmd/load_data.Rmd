@@ -66,9 +66,9 @@ dir <- "//data//raw//"
 file.pig <-
   fs::dir_ls(path = paste0(root,dir),
              recurse = TRUE,
-             regexp = "\\.xlsx$") %>%
+             # included ^[^~]* to not match ~, means that a file is opened
+             regexp = "^[^~]*\\.xlsx$") %>% 
     str_sort()
-
 ```
 
 
