@@ -66,11 +66,10 @@ dir <- "//data//raw//"
 file.pig <-
   fs::dir_ls(path = paste0(root,dir),
              recurse = TRUE,
-             regexp = "\\.xlsx$") %>%
+             # included ^[^~]* to not match ~, means that a file is opened
+             regexp = "^[^~]*\\.xlsx$") %>% 
     str_sort()
-
 ```
-
 
 # HPLC data is loaded and cleanup
 Cleans name for tidying, renames some, creates date_time column, replace -9999 to
@@ -93,7 +92,8 @@ df <-
     
 
     mutate(
-        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
+        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S", 
+                                        tz = "utc")),
         date_time_utc = ymd_hms(
             paste(
                 year_of_sample,
@@ -121,7 +121,8 @@ df2 <-
     ) %>%
     
     mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
+                                     tz = "utc")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
@@ -152,7 +153,8 @@ df3 <-
     
 
     mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
+                                     tz = "utc")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
@@ -187,7 +189,8 @@ df4 <-
     
 
     mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
+                                     tz = "utc")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
@@ -212,7 +215,8 @@ df5 <-
            lat = latitude) %>%
     
     mutate(
-        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
+        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S",
+                                         tz = "utc")),
         date_time_utc = ymd_hms(
             paste(
                 year_of_sample,
@@ -379,7 +383,7 @@ df_all <- df_all %>%
 
 ```
 
-```{r}
+```{r save-combined-data}
 
 dir2     <- "//data//processed//"
 path_out <-  paste0(root,dir2)
