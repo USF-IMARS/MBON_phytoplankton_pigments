@@ -71,7 +71,6 @@ file.pig <-
     str_sort()
 ```
 
-
 # HPLC data is loaded and cleanup
 Cleans name for tidying, renames some, creates date_time column, replace -9999 to
 NA, -8888 to 0 (is LOD), corrects formatting issues,
@@ -93,7 +92,8 @@ df <-
     
 
     mutate(
-        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
+        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S", 
+                                        tz = "utc")),
         date_time_utc = ymd_hms(
             paste(
                 year_of_sample,
@@ -121,7 +121,8 @@ df2 <-
     ) %>%
     
     mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
+                                     tz = "utc")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
@@ -152,7 +153,8 @@ df3 <-
     
 
     mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
+                                     tz = "utc")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
@@ -187,7 +189,8 @@ df4 <-
     
 
     mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S")),
+        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
+                                     tz = "utc")),
         date_time_utc = ymd_hms(paste(year, month, day, time),
                                 tz = "utc"),
         .before = lon
@@ -212,7 +215,8 @@ df5 <-
            lat = latitude) %>%
     
     mutate(
-        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S")),
+        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S",
+                                         tz = "utc")),
         date_time_utc = ymd_hms(
             paste(
                 year_of_sample,
