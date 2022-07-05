@@ -508,7 +508,7 @@ usethis::edit_r_profile()
 
 # when running, seems like we have to source it, then set the options to it
 source("~/.rprofile")
-options(noaakey = "CCwMqVFUvGBxevnbnPVrFGjxRBidqnSH")
+options(noaakey = noaakey)
 
 # test that it works
 ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
