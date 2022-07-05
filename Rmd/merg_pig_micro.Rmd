@@ -32,7 +32,6 @@ df_pig <-
             as_date(date_time_utc) == "2018-01-08",
         ymd_hms("2018-01-09 00:52:00")
     ))
-
 ```
 
 ```{r microscopy}
@@ -82,7 +81,6 @@ df_micro <-
 rm(micro_path)
 ```
 
-
 ```{r create-index}
 # create columns for surface and depth
 sm_mic <- 
@@ -103,6 +101,7 @@ sm_pig <-
     select(sample, date_time_utc,  station, depth) %>%
     # filters duplicates at same depth
     distinct(station, date_time_utc, depth, .keep_all = T) %>%
+
     group_by(station, date_time_utc) %>%
     mutate(depth_id = case_when(
         n() > 1 & depth  == min(depth) ~ "SUR",
@@ -137,5 +136,3 @@ df_pig_filt <-
 
 rm(df_micro, df_pig, indx_match)
 ```
-
-

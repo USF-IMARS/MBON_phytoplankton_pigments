@@ -150,22 +150,22 @@ plot.pig.3 <- function(.var, .title){
          y = expression(paste("Concentration (mg  ", m^-3, ")")))
 }
 
-# boxplot function without geom_line
-plot.pig.3 <- function(.var, .title){
-    ggplot(cmtx_avgs, aes_string(x="season", y= .var)) +
-    geom_boxplot() +
-    theme_bw() +
-    ylim(0,0.125) +
-    geom_jitter(width = 0.4, size=1, aes(color = year)) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    labs(title = paste("Concentration per Season of", .title),
-         x = "Season",
-         y = expression(paste("Concentration (mg  ", m^-3, ")")))
-}
+# # boxplot function without geom_line
+# plot.pig.3 <- function(.var, .title){
+#     ggplot(cmtx_avgs, aes_string(x="season", y= .var)) +
+#     geom_boxplot() +
+#     theme_bw() +
+#     ylim(0,0.125) +
+#     geom_jitter(width = 0.4, size=1, aes(color = year)) +
+#     scale_colour_gradient2(
+#         low = "red",
+#         mid = "blue",
+#         high = "green",
+#         midpoint = 2018.5) +
+#     labs(title = paste("Concentration per Season of", .title),
+#          x = "Season",
+#          y = expression(paste("Concentration (mg  ", m^-3, ")")))
+# }
 
 # ---- box plots ----
 p2 <- list()
@@ -177,16 +177,54 @@ for (i  in seq(phyto_name)) {
 ```
 
 ```{r ANOVA}
-#ANOVA test
-summary(aov(diat2 ~ season, data=cmtx_avgs))
-
-#Dunn test with Bonferroni correction
-chloro_dunn <- dunn_test(cmtx_avgs, chloro ~ season, p.adjust.method = "bonferroni")
-crypto_dunn <- dunn_test(cmtx_avgs, crypto ~ season, p.adjust.method = "bonferroni")
-cyano4_dunn <- dunn_test(cmtx_avgs, cyano4 ~ season, p.adjust.method = "bonferroni")
-dino_dunn <- dunn_test(cmtx_avgs, dino ~ season, p.adjust.method = "bonferroni")
-hapt6_dunn <- dunn_test(cmtx_avgs, hapt6 ~ season, p.adjust.method = "bonferroni")
-hapt8_dunn <- dunn_test(cmtx_avgs, hapt8 ~ season, p.adjust.method = "bonferroni")
-pras_dunn <- dunn_test(cmtx_avgs, pras ~ season, p.adjust.method = "bonferroni")
+# #ANOVA test
+# summary(aov(diat2 ~ season, data=cmtx_avgs))
+# 
+# #Dunn test with Bonferroni correction
+# chloro_dunn <- dunn_test(cmtx_avgs, chloro ~ season, p.adjust.method = "bonferroni")
+# crypto_dunn <- dunn_test(cmtx_avgs, crypto ~ season, p.adjust.method = "bonferroni")
+# cyano4_dunn <- dunn_test(cmtx_avgs, cyano4 ~ season, p.adjust.method = "bonferroni")
+# dino_dunn <- dunn_test(cmtx_avgs, dino ~ season, p.adjust.method = "bonferroni")
+# hapt6_dunn <- dunn_test(cmtx_avgs, hapt6 ~ season, p.adjust.method = "bonferroni")
+# hapt8_dunn <- dunn_test(cmtx_avgs, hapt8 ~ season, p.adjust.method = "bonferroni")
+# pras_dunn <- dunn_test(cmtx_avgs, pras ~ season, p.adjust.method = "bonferroni")
 
 ```
+
+```{r kruskal-and-dunn}
+cmtx_longer <- cmtx_avgs %>% 
+    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "value")
+
+cmtx_kruskal <- cmtx_longer %>% 
+    group_by(func_type) %>% 
+    kruskal_test(value ~ season)
+
+cmtx_dunn <- cmtx_longer %>%
+    filter(!(func_type %in% c("cyano2", "diat1"))) %>% 
+    group_by(func_type) %>%
+    dunn_test(value ~ season, p.adjust.method = "bonferroni")
+
+```
+
+```{r grouping-microscopy-taxa}
+taxa_df <- readxl::read_xlsx(
+    path = paste0(path_in,"Sample overview 7_29_20_FWRI.xlsx"),
+    sheet = 3,
+    range = "A2:A240") %>% 
+    na.omit()
+colnames(taxa_df) <- c("taxa")
+taxa_df$taxa <- gsub("Pseudo_nitzschia", "Pseudonitzschia", taxa_df$taxa)
+
+temp <- as.data.frame(stringr::str_split_fixed(taxa_df$taxa, "_", 2))
+colnames(temp) <- c("genus", "species")
+
+taxa_df <- taxa_df %>% 
+    bind_cols(temp)
+
+library(algaeClassify)
+data("mfgTraits")
+taxa_mg <- left_join(taxa_df, mfgTraits, by = c("genus")) %>% 
+    distinct(genus, .keep_all = T)
+
+```
+
