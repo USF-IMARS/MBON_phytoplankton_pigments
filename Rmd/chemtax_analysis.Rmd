@@ -215,12 +215,16 @@ taxa_df <- readxl::read_xlsx(
 colnames(taxa_df) <- c("taxa")
 taxa_df$taxa <- gsub("Pseudo_nitzschia", "Pseudonitzschia", taxa_df$taxa)
 
-taxa_df <- as.data.frame(stringr::str_split_fixed(taxa_df$taxa, "_", 2))
-colnames(taxa_df) <- c("genus", "species")
+temp <- as.data.frame(stringr::str_split_fixed(taxa_df$taxa, "_", 2))
+colnames(temp) <- c("genus", "species")
+
+taxa_df <- taxa_df %>% 
+    bind_cols(temp)
 
 library(algaeClassify)
 data("mfgTraits")
-taxa_df <- full_join(taxa_df, mfgTraits, by = c("genus"))
+taxa_mg <- left_join(taxa_df, mfgTraits, by = c("genus")) %>% 
+    distinct(genus, .keep_all = T)
 
 ```
 
