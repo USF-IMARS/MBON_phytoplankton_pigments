@@ -151,16 +151,36 @@ colnames(temp) <- c("genus", "species")
 
 taxa_df <- taxa_df %>% 
     bind_cols(temp) %>%
-    filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton")))
+    filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton", "Foraminifera")))
+                           # "Cyanobacteria", "Hermesinum")))
 
-taxa_id <- obistools::match_taxa(unique(taxa_df$genus)) %>%
-    mutate(idnum = gsub("urn:lsid:marinespecies.org:taxname:", "", taxa_id$scientificNameID)) 
+taxa_id <- taxa_df %>% 
+    distinct(genus) %$% 
+    obistools::match_taxa(genus, ask = T)  %>%
+    dplyr::mutate(idnum = gsub("urn:lsid:marinespecies.org:taxname:", "", scientificNameID)) %>% 
+    distinct(idnum) %>% 
+    as_tibble() %>% 
+    tidyr::drop_na()
 
-genus_info <- robis::taxon(unique(as.numeric(taxa_id$idnum)))
+taxa_nt_mt <- bind_cols(taxa_df%>% 
+    distinct(genus), taxa_id) %>% 
+    filter(is.na(scientificName)) %>% 
+    select(1)
 
-# library(algaeClassify)
-# data("mfgTraits")
-# taxa_mg <- left_join(taxa_df, mfgTraits, by = c("genus")) %>% 
-#     distinct(genus, .keep_all = T)
+df <- list()
+ 
+for (i in 1:nrow(taxa_id)) {
+    temp <- robis::taxon(taxa_id[i,])
+    df[[i]] <- temp
+}
+
+taxa_info <- map_dfr(df, ~as_data_frame(.)) %>%
+    mutate(func_type <- case_when(class == "Bacillariophyceae" ~ "d"))
+```
+
+categorize taxa into functional types and make a list of genera/taxa for each functional type
+make new columns in df_micro_filt for each functional type through summing the columns that contribute to that functional type
+```{r}
 
 ```
+
