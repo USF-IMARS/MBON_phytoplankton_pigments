@@ -503,12 +503,15 @@ path_in = paste0(root,dir3)
 # wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
 
 # will need to go to https://www.ncdc.noaa.gov/cdo-web/token to get token
-# then paste into .rprofile using below code, should NOT be in this directory
-usethis::edit_r_profile()
+# then paste into .Rprofile using below code, should be ignored in .gitignore
+usethis::edit_r_profile(scope = "project")
 
-# when running, seems like we have to source it, then set the options to it
-source("~/.rprofile")
-options(noaakey = noaakey)
+# when running, we have to source it, 
+source(here::here(".Rprofile"))
+
+# then set the options to it
+# DO NOT paste the raw key here - use above 
+options(noaakey = noaakey) 
 
 # test that it works
 ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
