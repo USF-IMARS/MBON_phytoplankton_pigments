@@ -205,26 +205,3 @@ cmtx_dunn <- cmtx_longer %>%
     dunn_test(value ~ season, p.adjust.method = "bonferroni")
 
 ```
-
-```{r grouping-microscopy-taxa}
-taxa_df <- readxl::read_xlsx(
-    path = paste0(path_in,"Sample overview 7_29_20_FWRI.xlsx"),
-    sheet = 3,
-    range = "A2:A240") %>% 
-    na.omit()
-colnames(taxa_df) <- c("taxa")
-taxa_df$taxa <- gsub("Pseudo_nitzschia", "Pseudonitzschia", taxa_df$taxa)
-
-temp <- as.data.frame(stringr::str_split_fixed(taxa_df$taxa, "_", 2))
-colnames(temp) <- c("genus", "species")
-
-taxa_df <- taxa_df %>% 
-    bind_cols(temp)
-
-library(algaeClassify)
-data("mfgTraits")
-taxa_mg <- left_join(taxa_df, mfgTraits, by = c("genus")) %>% 
-    distinct(genus, .keep_all = T)
-
-```
-

@@ -136,3 +136,31 @@ df_pig_filt <-
 
 rm(df_micro, df_pig, indx_match)
 ```
+
+```{r grouping-microscopy-taxa}
+taxa_df <- readxl::read_xlsx(
+    path = paste0(path_in,"Sample overview 7_29_20_FWRI.xlsx"),
+    sheet = 3,
+    range = "A2:A240") %>% 
+    na.omit()
+colnames(taxa_df) <- c("taxa")
+taxa_df$taxa <- gsub("Pseudo_nitzschia", "Pseudonitzschia", taxa_df$taxa)
+
+temp <- as.data.frame(stringr::str_split_fixed(taxa_df$taxa, "_", 2))
+colnames(temp) <- c("genus", "species")
+
+taxa_df <- taxa_df %>% 
+    bind_cols(temp) %>%
+    filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton")))
+
+taxa_id <- obistools::match_taxa(unique(taxa_df$genus)) %>%
+    mutate(idnum = gsub("urn:lsid:marinespecies.org:taxname:", "", taxa_id$scientificNameID)) 
+
+genus_info <- robis::taxon(unique(as.numeric(taxa_id$idnum)))
+
+# library(algaeClassify)
+# data("mfgTraits")
+# taxa_mg <- left_join(taxa_df, mfgTraits, by = c("genus")) %>% 
+#     distinct(genus, .keep_all = T)
+
+```
