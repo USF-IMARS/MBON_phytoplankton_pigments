@@ -21,6 +21,9 @@ library("magrittr")
 
 
 root <- rprojroot::find_rstudio_root_file()
+
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
 ```
 
 ```{r}
@@ -151,21 +154,25 @@ colnames(temp) <- c("genus", "species")
 
 taxa_df <- taxa_df %>% 
     bind_cols(temp) %>%
-    filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton", "Foraminifera")))
-                           # "Cyanobacteria", "Hermesinum")))
+    filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton", "Foraminifera",
+                          )))
 
-taxa_id <- taxa_df %>% 
+taxa_id_all <- taxa_df %>% 
     distinct(genus) %$% 
     obistools::match_taxa(genus, ask = T)  %>%
     dplyr::mutate(idnum = gsub("urn:lsid:marinespecies.org:taxname:", "", scientificNameID)) %>% 
-    distinct(idnum) %>% 
-    as_tibble() %>% 
-    tidyr::drop_na()
+    # distinct(idnum) %>% 
+    as_tibble()
+    # tidyr::drop_na()
 
 taxa_nt_mt <- bind_cols(taxa_df%>% 
-    distinct(genus), taxa_id) %>% 
+    distinct(genus), taxa_id_all) %>% 
     filter(is.na(scientificName)) %>% 
     select(1)
+
+taxa_id <- taxa_id_all %>% 
+    distinct(idnum) %>% 
+    tidyr::drop_na()
 
 df <- list()
  
@@ -174,13 +181,29 @@ for (i in 1:nrow(taxa_id)) {
     df[[i]] <- temp
 }
 
-taxa_info <- map_dfr(df, ~as_data_frame(.)) %>%
-    mutate(func_type <- case_when(class == "Bacillariophyceae" ~ "d"))
+taxa_info <- map_dfr(df, ~as_data_frame(.))
 ```
 
 categorize taxa into functional types and make a list of genera/taxa for each functional type
 make new columns in df_micro_filt for each functional type through summing the columns that contribute to that functional type
 ```{r}
-
+df_class <- taxa_df %>%
+    full_join(taxa_info, by = "genus") %>%
+    mutate(func_type = case_when(class == "Bacillariophyceae" ~ "diat",
+                                  class == "Dinophyceae" ~ "dino",
+                                  class == "Cyanophyceae" ~ "cyano",
+                                  class == "Chlorophyceae" ~ "chloro",
+                                  class == "Cryptophyceae" ~ "crypto",
+                                  class == "Pyramimonadophyceae" ~ "pras",
+                                  genus == "Chlorophyte" ~ "chloro",
+                                  genus == "Coccolithophorid" ~ "hapt",
+                                  genus %in% c("Dinocyst", "Dinoflagellate",
+                                               "Warnowioid", "Gymnodinoid",
+                                               "Scrippsielloid") ~ "dino",
+                                  genus %in% c("Microdiatoms", "Nanodiatoms",
+                                               "Nitzschioid", "Naviculoid") ~ "diat",
+                                  TRUE ~ "other"
+                                  )) %>% 
+    drop_na(taxa)
 ```
 
