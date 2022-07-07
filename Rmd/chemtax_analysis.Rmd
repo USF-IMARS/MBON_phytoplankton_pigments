@@ -24,7 +24,8 @@ path_in = paste0(root,dir3)
 file.chem <-
   fs::dir_ls(path = paste0(root,dir3),
              recurse = TRUE,
-             regexp = "\\.xls$")
+             regexp = "\\.xls$") %>% 
+    str_sort()
 ```
 
 
