@@ -155,6 +155,7 @@ colnames(temp) <- c("genus", "species")
 taxa_df <- taxa_df %>% 
     bind_cols(temp) %>%
     filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton", "Foraminifera",
+                          "Globigerinidae", "Nauplii"
                           )))
 
 taxa_id_all <- taxa_df %>% 
@@ -199,11 +200,46 @@ df_class <- taxa_df %>%
                                   genus == "Coccolithophorid" ~ "hapt",
                                   genus %in% c("Dinocyst", "Dinoflagellate",
                                                "Warnowioid", "Gymnodinoid",
-                                               "Scrippsielloid") ~ "dino",
+                                               "Scrippsielloid", "Polykrikoid"
+                                               ) ~ "dino",
                                   genus %in% c("Microdiatoms", "Nanodiatoms",
-                                               "Nitzschioid", "Naviculoid") ~ "diat",
+                                               "Nitzschioid", "Naviculoid", 
+                                               "Diatom", "Pleurosigmataceae"
+                                               ) ~ "diat",
+                                 genus == "Cryptomonad" ~ "crypto",
+                                 genus %in% c("Cyanobacteria", "Johannebaptista") ~ "cyano",
                                   TRUE ~ "other"
                                   )) %>% 
     drop_na(taxa)
+
+df_class$taxa <- tolower(df_class$taxa)
+
+micro_longer <- df_micro_filt %>%
+    pivot_longer(cols = achnanthes_sp:zooplankton, names_to = "taxa", values_to = "count") %>% 
+    left_join(df_class, by = "taxa")
+
+diat_sum <- sum(filter(micro_longer, func_type == "diat")$count)
+sum_func_type <- function(name, idx) {
+    temp <- filter(micro_longer, func_type == name & indx == idx) 
+    ct <- sum(temp$count)
+    return(ct)
+}
+
+
+df_type_counts <- micro_longer %>% 
+    group_by(indx) %>%
+    summarize(diat = sum_func_type("diat", indx),
+              chloro = sum_func_type("chloro", indx),
+              crypto = sum_func_type("crypto", indx),
+              dino = sum_func_type("dino", indx),
+              cyano = sum_func_type("cyano", indx),
+              prasin = sum_func_type("pras", indx),
+              hapt = sum_func_type("hapt", indx),
+              other = sum_func_type("other", indx)
+    ) 
+
+df_pig_filt2 <- df_pig_filt %>% 
+    left_join(cmtx_avgs, by=c("sample"="sample_id")) %>%
+    filter(name_of_water_body =="Florida Keys")
 ```
 
