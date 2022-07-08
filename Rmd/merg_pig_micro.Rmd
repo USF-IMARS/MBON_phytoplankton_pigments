@@ -281,6 +281,9 @@ cmtx_micro <- conv_facts %>%
 ```
 
 ```{r cmtx-vs-micro-plots}
+relation <- lm(cmtx_conc_cyano~micro_conc_cyano, cmtx_micro)
+print(summary(relation))
+
 ggplot(cmtx_micro, aes(x=cmtx_conc_cyano, y=micro_conc_cyano)) +
     geom_point() +
     labs(title="Cyano")
