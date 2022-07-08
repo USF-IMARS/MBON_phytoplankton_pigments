@@ -118,7 +118,7 @@ ggplot() +
 ```
 
 ```{r}
-cmtx_avgs <- readxl::read_xls(
+cmtx_avgs_raw <- readxl::read_xls(
     file.chem[5],
     sheet=1,
     .name_repair = janitor::make_clean_names
@@ -128,7 +128,7 @@ meta_data <- dplyr::select(.data=pig_dat,
                             hplc_gsfc_id:filter_storage_before_shipment_to_gfsc, 
                             comments, season) %>%
     filter(name_of_water_body == "Florida Keys")
-cmtx_avgs <- full_join(meta_data, cmtx_avgs, by=c("sample" = "sample_id")) %>%
+cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %>%
     mutate(season= forcats::fct_relevel(season, "W", "Sp", "Su", "F"))
 ```
 
