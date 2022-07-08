@@ -17,6 +17,7 @@ library("forcats")
 library("lubridate")
 library("glue")
 library("fs")
+library("blandr")
 library("magrittr")
 
 
@@ -164,25 +165,16 @@ taxa_df <- taxa_df %>%
            species = stringr::str_split(taxa, "_", 2, simplify = T)[,2]) %>% 
     filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton", "Foraminifera",
                           "Globigerinidae", "Nauplii", "Choanoflagellate"
-                          ))) 
+                          )))
 
 taxa_id_all <- taxa_df  %>% 
     distinct(genus) %$% 
     obistools::match_taxa(genus, ask = T)  %>%
     dplyr::mutate(idnum = gsub("urn:lsid:marinespecies.org:taxname:", "", scientificNameID)) %>% 
-    # distinct(idnum) %>% 
     as_tibble()
-    # tidyr::drop_na()
 
-# taxa_id_all <- taxa_df %>% 
-#     distinct(genus) %$% 
-#     obistools::match_taxa(genus, ask = T)  %>%
-#     dplyr::mutate(idnum = gsub("urn:lsid:marinespecies.org:taxname:", "", scientificNameID)) %>% 
-#     # distinct(idnum) %>% 
-#     as_tibble()
-#     # tidyr::drop_na()
-
-taxa_nt_mt <- bind_cols(taxa_df, taxa_id_all) %>% 
+taxa_nt_mt <- bind_cols(taxa_df%>% 
+    distinct(genus), taxa_id_all) %>% 
     filter(is.na(scientificName)) %>% 
     select(1)
 
@@ -286,12 +278,40 @@ cmtx_micro <- conv_facts %>%
     # multiply conversion factors by microscopy counts to get T chla of counted functional type
     mutate(micro_conc = micro_count * avg_cf) %>% 
     pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(cmtx_conc, micro_conc))
+```
 
+```{r cmtx-vs-micro-plots}
+ggplot(cmtx_micro, aes(x=cmtx_conc_cyano, y=micro_conc_cyano)) +
+    geom_point() +
+    labs(title="Cyano")
+ggplot(cmtx_micro, aes(x=cmtx_conc_crypto, y=micro_conc_crypto)) +
+    geom_point() +
+    labs(title="Crypto")
+ggplot(cmtx_micro, aes(x=cmtx_conc_chloro, y=micro_conc_chloro)) +
+    geom_point() +
+    labs(title="Chloro")
+ggplot(cmtx_micro, aes(x=cmtx_conc_pras, y=micro_conc_pras)) +
+    geom_point() +
+    labs(title="Pras")
+ggplot(cmtx_micro, aes(x=cmtx_conc_hapt, y=micro_conc_hapt)) +
+    geom_point() +
+    labs(title="Hapt")
+ggplot(cmtx_micro, aes(x=cmtx_conc_dino, y=micro_conc_dino)) +
+    geom_point() +
+    labs(title="Dino")
 ggplot(cmtx_micro, aes(x=cmtx_conc_diat, y=micro_conc_diat)) +
-    geom_point()
+    geom_point() +
+    labs(title="Diat")
 
-# left_join by functional type to add avg conversion factors to data frame
-# multiply conversion factors by counts to get converted counts
+```
+```{r Bland-Altman}
+blandr.draw(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano)
+blandr.draw(cmtx_micro$cmtx_conc_crypto, cmtx_micro$micro_conc_crypto)
+blandr.draw(cmtx_micro$cmtx_conc_chloro, cmtx_micro$micro_conc_chloro)
+blandr.draw(cmtx_micro$cmtx_conc_pras, cmtx_micro$micro_conc_pras)
+blandr.draw(cmtx_micro$cmtx_conc_hapt, cmtx_micro$micro_conc_hapt)
+blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino)
+blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat)
 
 ```
 
