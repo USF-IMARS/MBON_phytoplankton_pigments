@@ -281,40 +281,54 @@ cmtx_micro <- conv_facts %>%
 ```
 
 ```{r cmtx-vs-micro-plots}
-relation <- lm(cmtx_conc_cyano~micro_conc_cyano, cmtx_micro)
+relation <- lm(cmtx_conc_diat~micro_conc_diat, cmtx_micro)
 print(summary(relation))
 
 ggplot(cmtx_micro, aes(x=cmtx_conc_cyano, y=micro_conc_cyano)) +
     geom_point() +
+    geom_smooth(method = "lm", se=FALSE)+
     labs(title="Cyano")
 ggplot(cmtx_micro, aes(x=cmtx_conc_crypto, y=micro_conc_crypto)) +
     geom_point() +
+    geom_smooth(method = "lm", se=FALSE)+
     labs(title="Crypto")
 ggplot(cmtx_micro, aes(x=cmtx_conc_chloro, y=micro_conc_chloro)) +
     geom_point() +
+    geom_smooth(method = "lm", se=FALSE)+
     labs(title="Chloro")
 ggplot(cmtx_micro, aes(x=cmtx_conc_pras, y=micro_conc_pras)) +
     geom_point() +
+    geom_smooth(method = "lm", se=FALSE)+
     labs(title="Pras")
 ggplot(cmtx_micro, aes(x=cmtx_conc_hapt, y=micro_conc_hapt)) +
     geom_point() +
+    geom_smooth(method = "lm", se=FALSE)+
     labs(title="Hapt")
 ggplot(cmtx_micro, aes(x=cmtx_conc_dino, y=micro_conc_dino)) +
     geom_point() +
+    geom_smooth(method = "lm", se=FALSE)+
     labs(title="Dino")
 ggplot(cmtx_micro, aes(x=cmtx_conc_diat, y=micro_conc_diat)) +
     geom_point() +
+    geom_smooth(method = "lm", se=FALSE)+
     labs(title="Diat")
 
 ```
 ```{r Bland-Altman}
-blandr.draw(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano)
-blandr.draw(cmtx_micro$cmtx_conc_crypto, cmtx_micro$micro_conc_crypto)
-blandr.draw(cmtx_micro$cmtx_conc_chloro, cmtx_micro$micro_conc_chloro)
-blandr.draw(cmtx_micro$cmtx_conc_pras, cmtx_micro$micro_conc_pras)
-blandr.draw(cmtx_micro$cmtx_conc_hapt, cmtx_micro$micro_conc_hapt)
-blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino)
-blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat)
+blandr.draw(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano) +
+    labs(title = "Cyanobacteria")
+blandr.draw(cmtx_micro$cmtx_conc_crypto, cmtx_micro$micro_conc_crypto) +
+    labs(title = "Cryptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_chloro, cmtx_micro$micro_conc_chloro) +
+    labs(title = "Chlorophytes")
+blandr.draw(cmtx_micro$cmtx_conc_pras, cmtx_micro$micro_conc_pras)+
+    labs(title = "Prasinophytes")
+blandr.draw(cmtx_micro$cmtx_conc_hapt, cmtx_micro$micro_conc_hapt) +
+    labs(title = "Haptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino) +
+    labs(title = "Dinoflagellates")
+blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat) +
+    labs(title = "Diatoms")
 
 ```
 
