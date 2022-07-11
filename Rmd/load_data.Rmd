@@ -525,9 +525,23 @@ ncdc(locationid = "ZIP:33050", startdate = '2010-03-01', enddate = '2010-05-31',
 out <- ghcnd(stationid = "USW00012873", date_min = "2010-01-01", add_units = T) %>%
     filter(year >= 2016 & year <= 2021)
 alldat <- ghcnd_splitvars(out)
-awnd_df <- as.data.frame(alldat$awnd)
+awnd_df <- as.data.frame(alldat$awnd) %>% 
+    separate(col= "date", into = c("year", "month", "day"), sep = "-", remove = F)
 
-ggplot(awnd_df, aes(x=date, y=awnd)) +
+wsf5_df <- as.data.frame(alldat$wsf5) %>% 
+    separate(col= "date", into = c("year", "month", "day"), sep = "-", remove = F)
+
+#average wind speeds (AWND) and fastest 5-second wind speeds (WSF5) are in tenths of meters per second
+ggplot(filter(awnd_df, year == 2017), aes(x=date, y=awnd)) +
     geom_point()
+
+
+#plotting wind speeds during Hurricane Irma
+ggplot(filter(awnd_df, year == 2017 & month == '09'), aes(x=date, y=awnd)) +
+    geom_point()
+
+ggplot(filter(wsf5_df, year == 2017 & month == '09'), aes(x=date, y=wsf5)) +
+    geom_point()
+
 
 ```
