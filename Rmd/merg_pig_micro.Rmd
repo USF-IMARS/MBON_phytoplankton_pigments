@@ -330,5 +330,7 @@ blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino) +
 blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat) +
     labs(title = "Diatoms")
 
+blandr.output.text(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano)
+
 ```
 
