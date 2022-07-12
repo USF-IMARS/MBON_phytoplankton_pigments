@@ -278,59 +278,59 @@ cmtx_micro <- conv_facts %>%
     # multiply conversion factors by microscopy counts to get T chla of counted functional type
     mutate(micro_conc = micro_count * avg_cf) %>% 
     pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(cmtx_conc, micro_conc))
+
+cmtx_micro_log <- conv_facts %>% 
+    left_join(cf_avgs, by = "func_type") %>%
+    # multiply conversion factors by microscopy counts to get T chla of counted functional type
+    mutate(micro_conc = micro_count * avg_cf, log_mic_conc = log(micro_conc + 1), log_cmtx_conc = log(cmtx_conc + 1)) %>% 
+    select(indx, func_type, log_mic_conc, log_cmtx_conc) %>% 
+    pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(log_cmtx_conc, log_mic_conc))
 ```
 
 ```{r cmtx-vs-micro-plots}
 relation <- lm(cmtx_conc_diat~micro_conc_diat, cmtx_micro)
 print(summary(relation))
 
-ggplot(cmtx_micro, aes(x=cmtx_conc_cyano, y=micro_conc_cyano)) +
-    geom_point() +
-    geom_smooth(method = "lm", se=FALSE)+
-    labs(title="Cyano")
-ggplot(cmtx_micro, aes(x=cmtx_conc_crypto, y=micro_conc_crypto)) +
-    geom_point() +
-    geom_smooth(method = "lm", se=FALSE)+
-    labs(title="Crypto")
-ggplot(cmtx_micro, aes(x=cmtx_conc_chloro, y=micro_conc_chloro)) +
-    geom_point() +
-    geom_smooth(method = "lm", se=FALSE)+
-    labs(title="Chloro")
-ggplot(cmtx_micro, aes(x=cmtx_conc_pras, y=micro_conc_pras)) +
-    geom_point() +
-    geom_smooth(method = "lm", se=FALSE)+
-    labs(title="Pras")
-ggplot(cmtx_micro, aes(x=cmtx_conc_hapt, y=micro_conc_hapt)) +
-    geom_point() +
-    geom_smooth(method = "lm", se=FALSE)+
-    labs(title="Hapt")
-ggplot(cmtx_micro, aes(x=cmtx_conc_dino, y=micro_conc_dino)) +
-    geom_point() +
-    geom_smooth(method = "lm", se=FALSE)+
-    labs(title="Dino")
-ggplot(cmtx_micro, aes(x=cmtx_conc_diat, y=micro_conc_diat)) +
-    geom_point() +
-    geom_smooth(method = "lm", se=FALSE)+
-    labs(title="Diat")
+plot_micro_cmtx <- function(.data, .func_type) {
+    ggplot(.data, aes_string(paste0("cmtx_conc_",.func_type), paste0("micro_conc_",.func_type))) +
+        geom_point(aes(color = "indx")) +
+        geom_smooth(method = "lm", se = F) +
+        geom_abline(slope = 1, intercept = 0) +
+        labs(title = .func_type)
+}
+
+plot_micro_cmtx(cmtx_micro, "cyano")
+plot_micro_cmtx(cmtx_micro, "crypto")
+plot_micro_cmtx(cmtx_micro, "chloro")
+plot_micro_cmtx(cmtx_micro, "pras")
+plot_micro_cmtx(cmtx_micro, "hapt")
+plot_micro_cmtx(cmtx_micro, "dino")
+plot_micro_cmtx(cmtx_micro, "diat") 
 
 ```
 ```{r Bland-Altman}
-blandr.draw(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano) +
-    labs(title = "Cyanobacteria")
-blandr.draw(cmtx_micro$cmtx_conc_crypto, cmtx_micro$micro_conc_crypto) +
-    labs(title = "Cryptophytes")
-blandr.draw(cmtx_micro$cmtx_conc_chloro, cmtx_micro$micro_conc_chloro) +
-    labs(title = "Chlorophytes")
-blandr.draw(cmtx_micro$cmtx_conc_pras, cmtx_micro$micro_conc_pras)+
-    labs(title = "Prasinophytes")
-blandr.draw(cmtx_micro$cmtx_conc_hapt, cmtx_micro$micro_conc_hapt) +
-    labs(title = "Haptophytes")
-blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino) +
-    labs(title = "Dinoflagellates")
-blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat) +
-    labs(title = "Diatoms")
+
+# ggplot(cmtx_micro, aes_string(x="cmtx_conc_cyano", y="micro_conc_cyano")) +
+#     blandr.draw()
+
+blandr.draw(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano, plotTitle = "Cyanobacteria")
+blandr.draw(cmtx_micro$cmtx_conc_crypto, cmtx_micro$micro_conc_crypto, plotTitle = "Cryptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_chloro, cmtx_micro$micro_conc_chloro, plotTitle = "Chlorophytes")
+blandr.draw(cmtx_micro$cmtx_conc_pras, cmtx_micro$micro_conc_pras, plotTitle = "Prasinophytes")
+blandr.draw(cmtx_micro$cmtx_conc_hapt, cmtx_micro$micro_conc_hapt, plotTitle = "Haptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino, plotTitle = "Dinoflagellates")
+blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat, plotTitle = "Diatoms")
 
 blandr.output.text(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano)
 
+cyano_stat <- blandr.statistics(cmtx_micro_log$log_cmtx_conc_din, cmtx_micro_log$log_mic_conc_dino)
+# cyano_stat <- blandr.statistics(micro_conc_cyano ~ cmtx_conc_cyano, data = cmtx_micro)
+# blandr::blandr.plot.normality(cyano_stat)
+hist(cyano_stat$differences)
+
+cyano_dif <- as.data.frame(cyano_stat$differences)
+
+cyano_dif %>% 
+    shapiro_test(cyano_stat$differences)
 ```
 

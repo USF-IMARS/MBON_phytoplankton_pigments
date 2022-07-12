@@ -9,13 +9,20 @@ output: html_document
 library("dplyr")
 library("ggplot2")
 library("tidyverse")
-library(huxtable)
+library("huxtable")
+library("magrittr")
+library("gt")
+library("cowplot")
 
 root <- rprojroot::find_rstudio_root_file()
 dir2 <- "//data//processed//"
 path_out = paste0(root,dir2)
 pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv")) %>% 
-    mutate(season = factor(season, levels = c("W", "Sp", "Su", "F")))
+    mutate(season = case_when(season == "W" ~ "Winter",
+                                  season == "Sp" ~ "Spring",
+                                  season == "Su" ~ "Summer",
+                                  season == "F" ~ "Fall"),
+           season = factor(season, levels = c("Winter", "Spring", "Summer", "Fall")))
 
 
 
@@ -79,7 +86,7 @@ ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
 ```
 
 
-```{r size-fractionation}
+```{r size-fractionation-boxplots}
 ggplot(pig_dat, aes(x=season, y=micro, color=name_of_water_body)) +
     geom_boxplot() +
     ylim(0,5)
@@ -91,47 +98,153 @@ ggplot(pig_dat, aes(x=season, y=nano, color=name_of_water_body)) +
 ggplot(pig_dat, aes(x=season, y=pico, color=name_of_water_body)) +
     geom_boxplot() +
     ylim(0,1.5)
+```
 
+```{r size-fractionation-stacked-bar}
 pig_dat %>% 
-    group_by(season) %>% 
-    summarise(avg_f_micro = mean(f_micro), sd_f_micro = sd(f_micro), 
-              avg_f_nano = mean(f_nano), sd_f_nano = sd(f_nano),
-              avg_f_pico = mean(f_pico), sd_f_pico = sd(f_pico)) %>% 
-    colnames(c("Season", "f"))
+    filter(name_of_water_body == "Florida Keys") %>% 
+    pivot_longer(cols = f_micro:f_pico, names_to = "size_category", values_to = "fraction") %>% 
+    ggplot(aes(fill = size_category, y=fraction, x=station))+ 
+    geom_bar(position="fill", stat="identity") +
+    facet_wrap(~season) +
+    ggthemes::theme_tufte() + 
+    theme(plot.background = element_rect(fill = "white", colour = "white")) +
+    labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Size Class") +
+    scale_fill_discrete(labels=c(expression(italic("f")["micro"]),
+                                 expression(italic("f")["nano"]),
+                                 expression(italic("f")["pico"])))
+
+save_plot(filename = paste0(root,"/data/plots/size_fract_type_bar", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
+    
+
+```
+
+```{r size-fractionation-table}
+fract_dat <- pig_dat %>%
+    pivot_longer(cols = f_micro:f_pico, names_to = "size_category", values_to = "fraction") %>% 
+    group_by(season, size_category) %>% 
+    summarise(avg_f = mean(fraction), sd_f = sd(fraction)) %>% 
+    mutate(
+        across(is.numeric, round, 2)
+    ) 
+
+fract_dat %>% 
+    dplyr::transmute(
+        season = season,
+        size_category = size_category,
+        f = glue::glue("{avg_f}\u00B1{sd_f}"),
+    ) %>% 
+    pivot_wider(names_from = "size_category", values_from = "f") %>% 
+    gt(
+        rowname_col = "season",
+        groupname_col = NULL
+    ) %>% 
+    cols_label(
+        f_micro = md("**<span>&#402;</span><sub>micro</sub>**"),
+        f_nano = md("**<span>&#402;</span><sub>nano</sub>**"),
+        f_pico = md("**<span>&#402;</span><sub>pico</sub>**")) %>% 
+    tab_options(
+        table_body.hlines.width = 0,
+        table_body.vlines.width = 0,
+        stub.border.width = 0
+    ) %>%
+    opt_table_font("serif") %>% 
+    gtsave(filename = paste0(root,"/data/plots/fract_table", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".html"))
+    
 ```
 
 ```{r plotting-chemtax-data}
 cmtx_longer <- cmtx_avgs %>% 
-    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc")
-
-ggplot(cmtx_longer, aes(fill = func_type, y=conc, x=hplc_gsfc_id))+ 
+    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc") %>% 
+    mutate(season = case_when(season == "W" ~ "Winter",
+                                  season == "Sp" ~ "Spring",
+                                  season == "Su" ~ "Summer",
+                                  season == "F" ~ "Fall"),
+           season = factor(season, levels = c("Winter", "Spring", "Summer", "Fall")))
+    
+ggplot(cmtx_longer, aes(fill = func_type, color = func_type, y=conc, x=station))+ 
     geom_bar(position="fill", stat="identity") +
-    facet_grid(.~season)
+    facet_wrap(~season) +
+    ggthemes::theme_tufte() + 
+    theme(plot.background = element_rect(fill = "white", colour = "white")) +
+    labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
+         color = "Phytoplankton Functional Type")
+
+save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
+    
 
 
 ```
 
 ```{r photoprotective-index}
 pigm_pi <- pig_dat %>% 
-    #PPC in spreadsheets and PPC in Lee et al 2022 are calculated differently. Which should I use?
-    mutate(pi = ppc/tot_chl_a)
+    mutate(pi_seabass = ppc/tot_chl_a,
+           ppc_lee = allo + diadino +viola + zea + alpha_beta_car,
+           pi_lee = ppc_lee/tot_chl_a)
 
-ggplot(pigm_pi, aes(x=season, y=pi, fill = season)) +
+# with Seabass calculation for PPC
+ggplot(pigm_pi, aes(x=season, y=pi_seabass, fill = season)) +
     geom_boxplot() +
     theme_classic() +
     theme(legend.position = "none", text=element_text(family="serif", size=12)) +
     labs(y = "Photoprotection Index (PI)", x= "Season")
-
+save_plot(filename = paste0(root,"/data/plots/pi_bar", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
 
 ggplot(pigm_pi, aes(x=psc, y=ppc, shape = season, color=season)) +
-    geom_point() +
+    geom_point(size =4, alpha = 0.8) +
     geom_abline(slope=1, intercept=0) +
     theme_classic() +
-    labs(y= "PPCs", x="PSCs")+
-    theme(text=element_text(family="serif")) +
+    labs(y= "PPCs", x="PSCs", color = "Season", shape = "Season")+
+    theme(text=element_text(family="serif", size= 20),
+          legend.position = c(0.8,0.8)) +
     scale_y_continuous(expand = c(0,0)) +
     scale_x_continuous(expand = c(0,0))
+save_plot(filename = paste0(root,"/data/plots/psc_vs_ppc", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
     
+
+# # with Lee et al. calculation for PPC
+# ggplot(pigm_pi, aes(x=season, y=pi_lee, fill = season)) +
+#     geom_boxplot() +
+#     theme_classic() +
+#     theme(legend.position = "none", text=element_text(family="serif", size=12)) +
+#     labs(y = "Photoprotection Index (PI)", x= "Season")
+
+# ggplot(pigm_pi, aes(x=psc, y=ppc_lee, shape = season, color=season)) +
+#     geom_point(size =4, alpha = 0.5) +
+#     geom_abline(slope=1, intercept=0) +
+#     theme_classic() +
+#     labs(y= "PPCs", x="PSCs", color = "Season", shape = "Season")+
+#     theme(text=element_text(family="serif", size= 20),
+#           legend.position = c(0.8,0.8)) +
+#     scale_y_continuous(expand = c(0,0)) +
+#     scale_x_continuous(expand = c(0,0))
+#     
 ```
 
 
