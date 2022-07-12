@@ -9,11 +9,16 @@ output: html_document
 library("dplyr")
 library("ggplot2")
 library("tidyverse")
+library(huxtable)
 
 root <- rprojroot::find_rstudio_root_file()
 dir2 <- "//data//processed//"
 path_out = paste0(root,dir2)
-pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv")) %>% 
+    mutate(season = factor(season, levels = c("W", "Sp", "Su", "F")))
+
+
+
 ```
 
 ```{r concentration vs time}
@@ -74,7 +79,7 @@ ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
 ```
 
 
-```{r size fractionation}
+```{r size-fractionation}
 ggplot(pig_dat, aes(x=season, y=micro, color=name_of_water_body)) +
     geom_boxplot() +
     ylim(0,5)
@@ -86,4 +91,47 @@ ggplot(pig_dat, aes(x=season, y=nano, color=name_of_water_body)) +
 ggplot(pig_dat, aes(x=season, y=pico, color=name_of_water_body)) +
     geom_boxplot() +
     ylim(0,1.5)
+
+pig_dat %>% 
+    group_by(season) %>% 
+    summarise(avg_f_micro = mean(f_micro), sd_f_micro = sd(f_micro), 
+              avg_f_nano = mean(f_nano), sd_f_nano = sd(f_nano),
+              avg_f_pico = mean(f_pico), sd_f_pico = sd(f_pico)) %>% 
+    colnames(c("Season", "f"))
 ```
+
+```{r plotting-chemtax-data}
+cmtx_longer <- cmtx_avgs %>% 
+    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc")
+
+ggplot(cmtx_longer, aes(fill = func_type, y=conc, x=hplc_gsfc_id))+ 
+    geom_bar(position="fill", stat="identity") +
+    facet_grid(.~season)
+
+
+```
+
+```{r photoprotective-index}
+pigm_pi <- pig_dat %>% 
+    #PPC in spreadsheets and PPC in Lee et al 2022 are calculated differently. Which should I use?
+    mutate(pi = ppc/tot_chl_a)
+
+ggplot(pigm_pi, aes(x=season, y=pi, fill = season)) +
+    geom_boxplot() +
+    theme_classic() +
+    theme(legend.position = "none", text=element_text(family="serif", size=12)) +
+    labs(y = "Photoprotection Index (PI)", x= "Season")
+
+
+ggplot(pigm_pi, aes(x=psc, y=ppc, shape = season, color=season)) +
+    geom_point() +
+    geom_abline(slope=1, intercept=0) +
+    theme_classic() +
+    labs(y= "PPCs", x="PSCs")+
+    theme(text=element_text(family="serif")) +
+    scale_y_continuous(expand = c(0,0)) +
+    scale_x_continuous(expand = c(0,0))
+    
+```
+
+
