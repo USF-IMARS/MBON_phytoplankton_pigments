@@ -47,20 +47,17 @@ pig_long <- pig_dat %>%
     pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
                  values_to = "value") %>%
     dplyr::select(season, pigment, value)
- pig_hist <- lapply(unique(pig_long$pigment), function(i) {
+
+pig_hist <- lapply(unique(pig_long$pigment), function(i) {
   ggplot(pig_long[pig_long$pigment==i,], aes(value, fill = season)) +
     geom_histogram(position = "dodge") +
     labs(title=i) +
     scale_x_continuous(trans='log10')
 })
- pig_hist
+
+pig_hist
  
-log_pig_stat %>% 
-    filter(pigment == "allo") %>% 
-    ggplot(aes(x=))
- 
-ggplot(aes())
- 
+
 #chemtax histograms
 cmtx_longer2 %>% 
     filter(func_type == "chloro" & conc < 0.2) %>% 

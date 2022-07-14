@@ -22,7 +22,8 @@ library("magrittr")
 library("ggplot2")
 library("sf")
 library("metR")
-library(dplyr)
+library("tidyr")
+library("dplyr")
 
 # fixes issue with reading file?
 sf::sf_use_s2(FALSE)
@@ -414,10 +415,9 @@ map_pigment <- function(.pig, .long_file, .season) {
     cols_pigm <- chl_col(length(breaks_pigm)-1)
     root <- rprojroot::find_rstudio_root_file()
     dir5 <- "//data//plots//"
-    path_map = paste0(root,dir4)
-    setwd(path_map)
+    path_map = paste0(root,dir5)
     file <-
-    paste0('MBON_pigm_',
+    paste0(pathmap,'MBON_pigm_',
            .pig,
            .season,
            format(Sys.time(), "%y%m%d_%H%M%S") ,
@@ -444,12 +444,16 @@ contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
 points(df_pigm$lon,df_pigm$lat,pch=20,col='yellow')
 mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
 mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
-mtext(paste(.pig,':TChla: Winter'),adj=1,cex=.75)
+mtext(paste(.pig,':TChla:',.season),adj=1,cex=.75)
 
 }
 
 
 map_pigment("fuco", pig_dat_longer, "Winter")
+map_pigment("fuco", pig_dat_longer, "Summer")
+map_pigment("fuco", pig_dat_longer, "Spring")
+map_pigment("fuco", pig_dat_longer, "Fall")
+
 
 
 ```
