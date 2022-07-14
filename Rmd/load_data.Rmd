@@ -355,10 +355,10 @@ autumn <- c("Sep", "Nov", "Oct")
 df_all <- mutate(
     df_all,
     season = case_when(
-        month %in% winter ~ "W",
-        month %in% spring ~ "Sp",
-        month %in% summer ~ "Su",
-        month %in% autumn ~ "F"
+        month %in% winter ~ "Winter",
+        month %in% spring ~ "Spring",
+        month %in% summer ~ "Summer",
+        month %in% autumn ~ "Fall"
     )
 )
 
@@ -405,14 +405,14 @@ log_pig <- pig_dat %>%
     mutate_at(.vars = vars(tot_chl_a:dp), .funs = (log = log10))
 
 log_pig_stat <- log_pig %>%
-    group_by(season) %>%
-    summarise_at(vars(tot_chl_a:dp),
-                 list(
-                     log_avg = mean,
-                     log_sd = sd,
-                     log_var = var
-                 ),
-                 na.rm = TRUE)
+    pivot_longer(tot_chl_a:dp, names_to = "pigment", values_to = "log_conc") %>% 
+    filter(!is.na(log_conc)) %>% 
+    group_by(season, pigment) %>% 
+    summarise(log_avg=mean(log_conc), log_sd=sd(log_conc), log_var = var(log_conc)) %>% 
+    transmute(pigment = pigment,
+              avg = 10^log_avg - 1,
+              sd = 10^log_sd - 1,
+              var = 10^log_var - 1)
 
 readr::write_csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
 readr::write_csv(log_pig_stat, paste0(path_out, "log_pig_summary_stat.csv"))
@@ -484,10 +484,10 @@ cluster_groups  <- merge(clust, clust_num_df, by = "row.names")
 #filter for Florida Keys and cluster by seasons
 chemtax_seasons <- pig_dat %>%
     filter(name_of_water_body == "Florida Keys") %>%
-    mutate(cluster_code = case_when(season == "W" ~ 1,
-                                    season == "Sp" ~ 2, 
-                                    season == "Su" ~ 3,
-                                    season == "F" ~ 4)) %>%
+    mutate(cluster_code = case_when(season == "Winter" ~ 1,
+                                    season == "Spring" ~ 2, 
+                                    season == "Summer" ~ 3,
+                                    season == "Fall" ~ 4)) %>%
     dplyr::select(hplc_gsfc_id, cluster_code, sample, chl_c3, chl_c1c2, perid, but_fuco,
            fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
 

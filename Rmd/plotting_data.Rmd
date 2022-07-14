@@ -13,19 +13,11 @@ library("huxtable")
 library("magrittr")
 library("gt")
 library("cowplot")
-
 root <- rprojroot::find_rstudio_root_file()
 dir2 <- "//data//processed//"
 path_out = paste0(root,dir2)
 pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv")) %>% 
-    mutate(season = case_when(season == "W" ~ "Winter",
-                                  season == "Sp" ~ "Spring",
-                                  season == "Su" ~ "Summer",
-                                  season == "F" ~ "Fall"),
-           season = factor(season, levels = c("Winter", "Spring", "Summer", "Fall")))
-
-
-
+           mutate(season = factor(season, levels = c("Winter", "Spring", "Summer", "Fall")))
 ```
 
 ```{r concentration vs time}
@@ -38,8 +30,6 @@ ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
 ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
     geom_point(color = "red") +
     facet_wrap(~season)
-
-
 ```
 
 ```{r histogram}
@@ -53,17 +43,37 @@ ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
 #     # scale_x_continuous(limits = c(0,1)) +
 #     # scale_y_continuous(limits = c(0,500)) 
 #     # facet_wrap(~pigment)
-
 pig_long <- pig_dat %>%
     pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
                  values_to = "value") %>%
-    select(season, pigment, value)
+    dplyr::select(season, pigment, value)
  pig_hist <- lapply(unique(pig_long$pigment), function(i) {
   ggplot(pig_long[pig_long$pigment==i,], aes(value, fill = season)) +
     geom_histogram(position = "dodge") +
-    labs(title=i)
+    labs(title=i) +
+    scale_x_continuous(trans='log10')
 })
  pig_hist
+ 
+log_pig_stat %>% 
+    filter(pigment == "allo") %>% 
+    ggplot(aes(x=))
+ 
+ggplot(aes())
+ 
+#chemtax histograms
+cmtx_longer2 %>% 
+    filter(func_type == "chloro" & conc < 0.2) %>% 
+    ggplot(aes(conc)) +
+    geom_histogram(position = "dodge")  +
+    scale_x_continuous(trans = "log10") 
+
+cmtx_longer2 %>% 
+    filter(func_type == "chloro" & conc < 0.2) %>% 
+    ggplot(aes(conc)) +
+    geom_histogram(position = "dodge")
+ 
+ 
 ```
 
 ```{r violin, boxplot, jitter}
@@ -80,7 +90,6 @@ p2 <-ggplot(filter(pig_dat, month == "December"),
             aes(x=month, y=tot_chl_a)) +
     geom_jitter()
 p2
-
 ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
     geom_violin()     
 ```
@@ -90,11 +99,9 @@ ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
 ggplot(pig_dat, aes(x=season, y=micro, color=name_of_water_body)) +
     geom_boxplot() +
     ylim(0,5)
-
 ggplot(pig_dat, aes(x=season, y=nano, color=name_of_water_body)) +
     geom_boxplot() +
     ylim(0,0.5)
-
 ggplot(pig_dat, aes(x=season, y=pico, color=name_of_water_body)) +
     geom_boxplot() +
     ylim(0,1.5)
@@ -113,7 +120,6 @@ pig_dat %>%
     scale_fill_discrete(labels=c(expression(italic("f")["micro"]),
                                  expression(italic("f")["nano"]),
                                  expression(italic("f")["pico"])))
-
 save_plot(filename = paste0(root,"/data/plots/size_fract_type_bar", 
            format(Sys.time(), '_%Y%m%d_%H%M%S'),
            ".jpg"), 
@@ -122,7 +128,6 @@ save_plot(filename = paste0(root,"/data/plots/size_fract_type_bar",
           base_width = 10,
           dpi = 600, units = "in", device='png')
     
-
 ```
 
 ```{r size-fractionation-table}
@@ -133,7 +138,6 @@ fract_dat <- pig_dat %>%
     mutate(
         across(is.numeric, round, 2)
     ) 
-
 fract_dat %>% 
     dplyr::transmute(
         season = season,
@@ -162,22 +166,17 @@ fract_dat %>%
 ```
 
 ```{r plotting-chemtax-data}
-cmtx_longer <- cmtx_avgs %>% 
-    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc") %>% 
-    mutate(season = case_when(season == "W" ~ "Winter",
-                                  season == "Sp" ~ "Spring",
-                                  season == "Su" ~ "Summer",
-                                  season == "F" ~ "Fall"),
-           season = factor(season, levels = c("Winter", "Spring", "Summer", "Fall")))
+cmtx_longer2 <- cmtx_avgs %>% 
+    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc") %>%
+    filter(station != 60)
     
-ggplot(cmtx_longer, aes(fill = func_type, color = func_type, y=conc, x=station))+ 
+ggplot(cmtx_longer2, aes(fill = func_type, color = func_type, y=conc, x=station))+ 
     geom_bar(position="fill", stat="identity") +
     facet_wrap(~season) +
     ggthemes::theme_tufte() + 
     theme(plot.background = element_rect(fill = "white", colour = "white")) +
     labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type")
-
 save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar", 
            format(Sys.time(), '_%Y%m%d_%H%M%S'),
            ".jpg"), 
@@ -185,19 +184,38 @@ save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar",
           base_height = 6,
           base_width = 10,
           dpi = 600, units = "in", device='png')
+
+cmtx_avgs2 <- cmtx_avgs %>%
+    mutate(total_chl_a = chloro + crypto + cyano2 + cyano4 + diat1 + diat2 + dino + hapt6 + hapt8 + pras)
+
+ggplot(cmtx_avgs2, aes(x = lubridate::ymd_hms(date_time_utc), y=crypto/total_chl_a)) +
+    geom_point(aes(color = season)) +
+    geom_smooth(span = 0.3, se = F)
     
+    # geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))
+
+cmtx_longer2 %>% 
+    group_by(hplc_gsfc_id) %>% 
+    mutate(
+        total_chl_a = sum(conc)
+    ) %>% 
+    filter(func_type == "diat1" | func_type == "diat2") %>% 
+    ggplot(aes(x = lubridate::ymd_hms(date_time_utc), y = conc/total_chl_a, color = func_type)) +
+    # geom_smooth(se=F)
+    geom_line()
 
 
 ```
 
 ```{r photoprotective-index}
+str(pigm_pi)
 pigm_pi <- pig_dat %>% 
-    mutate(pi_seabass = ppc/tot_chl_a,
-           ppc_lee = allo + diadino +viola + zea + alpha_beta_car,
-           pi_lee = ppc_lee/tot_chl_a)
+    mutate(pi = ppc/tot_chl_a)
+ggplot(pigm_pi, aes(x = lubridate::ymd_hms(date_time_utc), y = pi, color = season)) +
+    geom_point()
 
 # with Seabass calculation for PPC
-ggplot(pigm_pi, aes(x=season, y=pi_seabass, fill = season)) +
+ggplot(pigm_pi, aes(x=season, y=pi, fill = season)) +
     geom_boxplot() +
     theme_classic() +
     theme(legend.position = "none", text=element_text(family="serif", size=12)) +
@@ -209,7 +227,6 @@ save_plot(filename = paste0(root,"/data/plots/pi_bar",
           base_height = 6,
           base_width = 10,
           dpi = 600, units = "in", device='png')
-
 ggplot(pigm_pi, aes(x=psc, y=ppc, shape = season, color=season)) +
     geom_point(size =4, alpha = 0.8) +
     geom_abline(slope=1, intercept=0) +
@@ -226,25 +243,16 @@ save_plot(filename = paste0(root,"/data/plots/psc_vs_ppc",
           base_height = 6,
           base_width = 10,
           dpi = 600, units = "in", device='png')
-    
 
-# # with Lee et al. calculation for PPC
-# ggplot(pigm_pi, aes(x=season, y=pi_lee, fill = season)) +
-#     geom_boxplot() +
-#     theme_classic() +
-#     theme(legend.position = "none", text=element_text(family="serif", size=12)) +
-#     labs(y = "Photoprotection Index (PI)", x= "Season")
+```
+```{r kruskal-dunn-pi}
+library(rstatix)
+pi_kruskal <- pigm_pi %>% 
+    kruskal_test(pi ~ season)
 
-# ggplot(pigm_pi, aes(x=psc, y=ppc_lee, shape = season, color=season)) +
-#     geom_point(size =4, alpha = 0.5) +
-#     geom_abline(slope=1, intercept=0) +
-#     theme_classic() +
-#     labs(y= "PPCs", x="PSCs", color = "Season", shape = "Season")+
-#     theme(text=element_text(family="serif", size= 20),
-#           legend.position = c(0.8,0.8)) +
-#     scale_y_continuous(expand = c(0,0)) +
-#     scale_x_continuous(expand = c(0,0))
-#     
+pi_dunn <- pigm_pi %>%
+    dunn_test(pi ~ season, p.adjust.method = "bonferroni")
+
 ```
 
 

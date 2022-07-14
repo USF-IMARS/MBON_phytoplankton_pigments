@@ -27,6 +27,8 @@ library(dplyr)
 # fixes issue with reading file?
 sf::sf_use_s2(FALSE)
 
+root <- rprojroot::find_rstudio_root_file()
+
 path <- paste0(root,"/data/map/")
 
 # Region of Interest Bounding Box    ------------- edit this
@@ -100,7 +102,7 @@ if (rlang::is_empty(coast)){
       rm(temp)
 }
 
-rm(root, coast)
+rm(coast)
 ```
 
 # ggplot way of mapping
@@ -255,9 +257,9 @@ save_plot(filename = paste0(path,"../plots/map",
 pig <- "fuco"
 fuco_data <- pig_dat %>%
     filter(
-        season == "W", name_of_water_body == "Florida Keys"
+        season == "Winter", name_of_water_body == "Florida Keys"
         ) %>%
-    select(
+    dplyr::select(
         hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
                   tot_chl_a, fuco
         ) %>%
@@ -357,4 +359,97 @@ points(df_fuco$lon,df_fuco$lat,pch=20,col='yellow')
 mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
 mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
 mtext('Fucoxanthin:TChla: Winter',adj=1,cex=.75)
+```
+
+```{r}
+pig_dat_longer <- pig_dat %>% 
+    pivot_longer(tot_chl_b:dp, names_to = "pigment", values_to = "conc")
+
+map_pigment <- function(.pig, .long_file, .season) {
+    pig_data <- .long_file %>%
+        filter(season == .season, name_of_water_body == "Florida Keys",
+               pigment == .pig
+        ) %>%
+        dplyr::select(
+        hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
+                  pigment, conc, tot_chl_a
+        ) %>%
+        group_by(hplc_gsfc_id) %>% 
+    mutate(ratio = conc/tot_chl_a, .after=conc)
+    
+    df_pigm <- pig_data %>% 
+        group_by(station) %>% 
+        summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
+        distinct(station, .keep_all = T) %>% 
+        ungroup()
+    #krigging
+    resolution <- .01
+    adj <- .1
+    ### krigging locations
+    df_pigm.loc <- cbind(lon=df_pigm$lon,lat=df_pigm$lat)
+    loc.grid_pigm <- list(lon=seq(min(df_pigm$lon, na.rm=T) - adj, max(df_pigm$lon, na.rm=T) + adj, resolution),
+                 lat=seq(min(df_pigm$lat, na.rm=T) - adj, max(df_pigm$lat, na.rm=T) + adj, resolution))
+    ### limits for plotting
+    xlims_pigm <- range(loc.grid_pigm$lon)
+    ylims_pigm <- range(loc.grid_pigm$lat)
+    
+    #pigment krig
+    my.krig_pigm <- spatialProcess(df_pigm.loc, df_pigm$ratio_avg)
+    ratio_kriged_pigm <- predictSurface(my.krig_pigm, loc.grid_pigm, extrap=F)
+    ratio_SE_pigm <- predictSurfaceSE(my.krig_pigm, loc.grid_pigm, extrap=F)
+    
+    ### ----------------- Pigment pigm ratio krig -----------------
+
+    ### corrects the krigged min and max to observed min and max
+    if(max(ratio_kriged_pigm$z, na.rm=T) > max(df_pigm$ratio_avg, na.rm=T)){
+        ratio_kriged_pigm$z[which(ratio_kriged_pigm$z > max(df_pigm$ratio_avg, na.rm=T))] <- max(df_pigm$ratio_avg, na.rm=T)
+    }
+    if(min(ratio_kriged_pigm$z, na.rm=T) < min(df_pigm$ratio_avg, na.rm=T)){
+        ratio_kriged_pigm$z[which(ratio_kriged_pigm$z < min(df_pigm$ratio_avg, na.rm=T))] <- min(df_pigm$ratio_avg, na.rm=T)
+    }
+    ### color and contour breaks pigm
+    breaks_pigm <- pretty(df_pigm$ratio_avg, n=10)
+    breaks_pigm <- seq(0, 0.6, by=.05) ### use for fixed breaks.
+    chl_col <- colorRampPalette(c('honeydew2','darkseagreen3','forestgreen','darkslategrey'))
+    cols_pigm <- chl_col(length(breaks_pigm)-1)
+    root <- rprojroot::find_rstudio_root_file()
+    dir5 <- "//data//plots//"
+    path_map = paste0(root,dir4)
+    setwd(path_map)
+    file <-
+    paste0('MBON_pigm_',
+           .pig,
+           .season,
+           format(Sys.time(), "%y%m%d_%H%M%S") ,
+           '.png')
+    png(file, height = 11, width = 4, units = 'in', res=300)
+    
+    par(mfrow=c(3,1),mar=c(4.5,4,2,1),oma=c(4,1,4,1))
+
+    imagePlot(ratio_kriged_pigm$x,
+              ratio_kriged_pigm$y,
+              ratio_kriged_pigm$z,
+              col=cols_pigm,breaks=breaks_pigm,asp=1,
+              xlab='',ylab='',las=1,
+              xlim=xlims_pigm,ylim=ylims_pigm,
+              nlevel=length(cols_pigm),legend.width=1,legend.mar=3)
+contour(ratio_kriged_pigm$x,
+        ratio_kriged_pigm$y,
+        ratio_kriged_pigm$z,
+        levels=breaks_pigm,add=T)
+image(ratio_SE_pigm,add=T,breaks=quantile(ratio_SE_pigm$z,c(1,1),na.rm=T),col='white')
+image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
+plot(world2,col='gray70',add=T)
+contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
+points(df_pigm$lon,df_pigm$lat,pch=20,col='yellow')
+mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
+mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
+mtext(paste(.pig,':TChla: Winter'),adj=1,cex=.75)
+
+}
+
+
+map_pigment("fuco", pig_dat_longer, "Winter")
+
+
 ```
