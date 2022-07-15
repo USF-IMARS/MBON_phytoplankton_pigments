@@ -24,7 +24,8 @@ path_in = paste0(root,dir3)
 file.chem <-
   fs::dir_ls(path = paste0(root,dir3),
              recurse = TRUE,
-             regexp = "\\.xls$")
+             regexp = "\\.xls$") %>% 
+    str_sort()
 ```
 
 
@@ -36,7 +37,7 @@ cmtx1 <-
         range = "D177:N178",
         .name_repair = janitor::make_clean_names
     ) %>%
-    mutate(cluster_code = 1, season = "W")
+    mutate(cluster_code = 1, season = "Winter")
 
 cmtx2 <-
     readxl::read_xls(
@@ -45,7 +46,7 @@ cmtx2 <-
         range = "D273:N274",
         .name_repair = janitor::make_clean_names
     ) %>%
-    mutate(cluster_code = 2, season = "Sp")
+    mutate(cluster_code = 2, season = "Spring")
 
 cmtx3 <-
     readxl::read_xls(
@@ -54,7 +55,7 @@ cmtx3 <-
         range = "D241:N242",
         .name_repair = janitor::make_clean_names
     ) %>%
-    mutate(cluster_code = 3, season = "Su")
+    mutate(cluster_code = 3, season = "Summer")
 
 cmtx4 <-
     readxl::read_xls(
@@ -63,12 +64,14 @@ cmtx4 <-
         range = "D305:N306",
         .name_repair = janitor::make_clean_names
     ) %>%
-    mutate(cluster_code = 4, season = "F")
+    mutate(cluster_code = 4, season = "Fall")
 
 cmtx_all <- full_join(cmtx1, cmtx2) %>%
     full_join(cmtx3) %>%
     full_join(cmtx4) %>%
-    mutate(season = forcats::fct_relevel(season, "W", "Sp", "Su", "F"))
+    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
+
+rm(cmtx1, cmtx2, cmtx3, cmtx4)
 ```
 
 ```{r plotting}
@@ -117,7 +120,7 @@ ggplot() +
 ```
 
 ```{r}
-cmtx_avgs <- readxl::read_xls(
+cmtx_avgs_raw <- readxl::read_xls(
     file.chem[5],
     sheet=1,
     .name_repair = janitor::make_clean_names
@@ -127,8 +130,8 @@ meta_data <- dplyr::select(.data=pig_dat,
                             hplc_gsfc_id:filter_storage_before_shipment_to_gfsc, 
                             comments, season) %>%
     filter(name_of_water_body == "Florida Keys")
-cmtx_avgs <- full_join(meta_data, cmtx_avgs, by=c("sample" = "sample_id")) %>%
-    mutate(season= forcats::fct_relevel(season, "W", "Sp", "Su", "F"))
+cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %>%
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
 ```
 
 ```{r boxplots}
@@ -144,7 +147,8 @@ plot.pig.3 <- function(.var, .title){
         mid = "blue",
         high = "green",
         midpoint = 2018.5) +
-    geom_line(cmtx_all, mapping=aes_string(x="season", y=.var, group=1)) +
+    # geom_line(cmtx_all, mapping=aes_string(x="season", y=.var, group=1)) +
+    # scale_y_continuous(trans = "log10") +
     labs(title = paste("Concentration per Season of", .title),
          x = "Season",
          y = expression(paste("Concentration (mg  ", m^-3, ")")))
@@ -205,26 +209,3 @@ cmtx_dunn <- cmtx_longer %>%
     dunn_test(value ~ season, p.adjust.method = "bonferroni")
 
 ```
-
-```{r grouping-microscopy-taxa}
-taxa_df <- readxl::read_xlsx(
-    path = paste0(path_in,"Sample overview 7_29_20_FWRI.xlsx"),
-    sheet = 3,
-    range = "A2:A240") %>% 
-    na.omit()
-colnames(taxa_df) <- c("taxa")
-taxa_df$taxa <- gsub("Pseudo_nitzschia", "Pseudonitzschia", taxa_df$taxa)
-
-temp <- as.data.frame(stringr::str_split_fixed(taxa_df$taxa, "_", 2))
-colnames(temp) <- c("genus", "species")
-
-taxa_df <- taxa_df %>% 
-    bind_cols(temp)
-
-library(algaeClassify)
-data("mfgTraits")
-taxa_mg <- left_join(taxa_df, mfgTraits, by = c("genus")) %>% 
-    distinct(genus, .keep_all = T)
-
-```
-

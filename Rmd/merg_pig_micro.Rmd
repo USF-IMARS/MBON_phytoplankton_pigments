@@ -17,10 +17,14 @@ library("forcats")
 library("lubridate")
 library("glue")
 library("fs")
+library("blandr")
 library("magrittr")
 
 
 root <- rprojroot::find_rstudio_root_file()
+
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
 ```
 
 ```{r}
@@ -136,3 +140,278 @@ df_pig_filt <-
 
 rm(df_micro, df_pig, indx_match)
 ```
+
+```{r grouping-microscopy-taxa}
+taxa_df <- readxl::read_xlsx(
+    path = paste0(path_in,"Sample overview 7_29_20_FWRI.xlsx"),
+    sheet = 3,
+    skip = 1
+    ) %>% 
+    na.omit() %>% 
+    rename(taxa = 1) 
+taxa_df$taxa <- gsub("Pseudo_nitzschia", "Pseudonitzschia", taxa_df$taxa)
+
+# temp <- 
+#     as.data.frame(stringr::str_split_fixed(taxa_df$taxa, "_", 2))
+# colnames(temp) <- c("genus", "species")
+# taxa_df <- taxa_df %>% 
+#     bind_cols(temp) %>%
+#     filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton", "Foraminifera",
+#                           "Globigerinidae", "Nauplii", "Choanoflagellate"
+#                           )))
+
+taxa_df <- taxa_df %>% 
+    mutate(genus = stringr::str_split(taxa, "_", 2, simplify = T)[,1],
+           species = stringr::str_split(taxa, "_", 2, simplify = T)[,2]) %>% 
+    filter(!(genus %in% c("Copepods", "Detritus", "Zooplankton", "Foraminifera",
+                          "Globigerinidae", "Nauplii", "Choanoflagellate"
+                          )))
+
+taxa_id_all <- taxa_df  %>% 
+    distinct(genus) %$% 
+    obistools::match_taxa(genus, ask = T)  %>%
+    dplyr::mutate(idnum = gsub("urn:lsid:marinespecies.org:taxname:", "", scientificNameID)) %>% 
+    as_tibble()
+
+taxa_nt_mt <- bind_cols(taxa_df%>% 
+    distinct(genus), taxa_id_all) %>% 
+    filter(is.na(scientificName)) %>% 
+    select(1)
+
+taxa_id <- taxa_id_all %>% 
+    distinct(idnum) %>% 
+    tidyr::drop_na()
+
+df <- list()
+ 
+for (i in 1:nrow(taxa_id)) {
+    temp <- robis::taxon(taxa_id[i,])
+    df[[i]] <- temp
+}
+
+taxa_info <- map_dfr(df, ~as_data_frame(.))
+    
+    
+```
+
+categorize taxa into functional types and make a list of genera/taxa for each functional type
+make new columns in df_micro_filt for each functional type through summing the columns that contribute to that functional type
+```{r}
+df_class <- taxa_df %>%
+    full_join(taxa_info, by = "genus") %>%
+    mutate(func_type = case_when(class == "Bacillariophyceae" ~ "diat",
+                                  class == "Dinophyceae" ~ "dino",
+                                  class == "Cyanophyceae" ~ "cyano",
+                                  class == "Chlorophyceae" ~ "chloro",
+                                  class == "Cryptophyceae" ~ "crypto",
+                                  class == "Pyramimonadophyceae" ~ "pras",
+                                  genus == "Chlorophyte" ~ "chloro",
+                                  genus == "Coccolithophorid" ~ "hapt",
+                                  genus %in% c("Dinocyst", "Dinoflagellate",
+                                               "Warnowioid", "Gymnodinoid",
+                                               "Scrippsielloid", "Polykrikoid"
+                                               ) ~ "dino",
+                                  genus %in% c("Microdiatoms", "Nanodiatoms",
+                                               "Nitzschioid", "Naviculoid", 
+                                               "Diatom", "Pleurosigmataceae",
+                                               "Pseudonitzschia"
+                                               ) ~ "diat",
+                                 genus == "Cryptomonad" ~ "crypto",
+                                 genus %in% c("Cyanobacteria", "Johannebaptista") ~ "cyano",
+                                 genus == "Picoplankton" ~ "cyano",
+                                 TRUE ~ "other"
+                                  ),
+           .before = 3) %>% 
+    drop_na(taxa) %>% 
+    mutate(taxa = str_to_lower(taxa))
+
+# column name into taxa 
+micro_longer <- df_micro_filt %>%
+    pivot_longer(cols = achnanthes_sp:zooplankton, names_to = "taxa", values_to = "count") %>% 
+    mutate( 
+        taxa = gsub("pseudo_nitzschia", "pseudonitzschia", taxa)
+        ) %>% 
+    left_join(df_class %>% select(taxa,func_type), by = "taxa")
+
+df_type_counts <- 
+    micro_longer %>%
+    group_by(indx, func_type) %>%
+    summarise(micro_count = sum(count)) 
+
+df_pig_filt2 <- df_pig_filt %>% 
+    left_join(cmtx_avgs_raw, by=c("sample"="sample_id")) %>%
+    filter(name_of_water_body =="Florida Keys") %>% 
+    #combine diat, cyano, hapt concentrations
+    mutate(diat = diat1+diat2,
+           cyano = cyano2+cyano4,
+           hapt = hapt6+hapt8) %>%
+    select(indx,cruise,station, depth, date_time_utc, lon, lat, 
+           chloro, crypto, dino, pras.y, diat, cyano, hapt) %>%
+    rename(pras=pras.y) %>%
+    pivot_longer(cols = chloro:hapt, names_to = "func_type", values_to = "cmtx_conc")
+```
+
+
+```{r}
+conv_facts <- df_pig_filt2 %>% 
+    #join the longer chemtax and microscopy data
+    left_join(df_type_counts, by =c("indx", "func_type")) %>%
+    #select desired columns
+    select(indx, func_type, cmtx_conc, micro_count) %>% 
+    filter(cmtx_conc >= 0 & micro_count >= 0)
+
+# cf_avgs1 <- cf_avgs
+cf_avgs <- conv_facts %>% 
+    #filter out rows where count or concentration == 0 
+    filter(cmtx_conc > 0 & micro_count > 0) %>%
+    #calculate conversion factors 
+    mutate(cf=cmtx_conc/micro_count) %>% 
+    # group by func_type
+    group_by(func_type) %>% 
+    # average the conversion factors
+    summarize(avg_cf = mean(cf))
+    # summarize(avg_cf = median(cf))
+
+cmtx_micro <- conv_facts %>% 
+    left_join(cf_avgs, by = "func_type") %>%
+    # multiply conversion factors by microscopy counts to get T chla of counted functional type
+    mutate(micro_conc = micro_count * avg_cf) %>% 
+    pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(cmtx_conc, micro_conc)) %>% 
+    filter(indx != "17-3" & indx != "3-35" & indx != "4-39")
+
+cmtx_micro_log <- conv_facts %>% 
+    left_join(cf_avgs, by = "func_type") %>%
+    # multiply conversion factors by microscopy counts to get T chla of counted functional type
+    mutate(micro_conc = micro_count * avg_cf, log_mic_conc = log(micro_conc + 1), log_cmtx_conc = log(cmtx_conc + 1)) %>% 
+    select(indx, func_type, log_mic_conc, log_cmtx_conc) %>% 
+    pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(log_cmtx_conc, log_mic_conc))
+
+```
+
+
+```{r looking-at-proportion-of-vague-classifications}
+view(micro_longer %>% 
+    filter(!(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
+                          "globigerinidae", "nauplii", "choanoflagellate",
+                         "strombidium_like", "vorticella_sp", "vorticella_spp"
+                          ))) %>% 
+    group_by(indx) %>% 
+    mutate(total = sum(count)) %>% 
+    filter(func_type == "other") %>% 
+    summarise(fraction_of_other = sum(count)/total) %>% 
+    dplyr::distinct(fraction_of_other))
+
+vague = c("ciliates", "flagellate_unidentified", "microflagellates", "nanoflagellates",
+          "nanoplankton", "other_plankton", "phytoplankton", "picoflagellates",
+          "picoplankton")
+view(micro_longer %>% 
+    filter(!(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
+                          "globigerinidae", "nauplii", "choanoflagellate",
+                         "strombidium_like", "vorticella_sp", "vorticella_spp"
+                          ))) %>% 
+    group_by(indx) %>% 
+    mutate(total = sum(count)) %>% 
+    filter(taxa %in% vague) %>% 
+    summarise(fraction_of_vague = sum(count)/total,
+              totals = sum(count)) %>% 
+    dplyr::distinct(fraction_of_vague,totals, fraction_of_vague))
+
+view(micro_longer %>%
+    filter(func_type == "other" | is.na(func_type),
+           !(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
+                          "globigerinidae", "nauplii", "choanoflagellate",
+                         "strombidium_like", "vorticella_sp", "vorticella_spp"
+                          ))) %>%
+    distinct(taxa))
+
+View(
+    micro_longer %>% 
+        filter(
+            !taxa %in% vague,
+            func_type == "other",
+            count > 0
+        )
+)
+micro_longer %>% 
+        filter(
+            !taxa %in% vague,
+            func_type == "other",
+            !taxa %in% c("pseudonitzschia_spp", "pseudonitzschia_sp"),
+            count > 0
+        ) %>% 
+    group_by(indx) %>% 
+    summarise(count = n())
+```
+
+```{r cmtx-vs-micro-plots}
+# relation <- lm(cmtx_conc_diat~micro_conc_diat, cmtx_micro)
+# print(summary(relation))
+# cmtx_micro <- conv_facts %>% 
+#     left_join(cf_avgs, by = "func_type") %>%
+#     # multiply conversion factors by microscopy counts to get T chla of counted functional type
+#     mutate(micro_conc = micro_count * avg_cf) %>%
+#     filter(micro_conc > 0 & cmtx_conc > 0) %>% 
+#     pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(cmtx_conc, micro_conc)) %>% 
+#     filter(indx != "17-3" & indx != "3-35" & indx != "4-39")
+
+
+plot_micro_cmtx <- function(.data, .func_type) {
+    ggplot(.data, aes_string(paste0("cmtx_conc_",.func_type), paste0("micro_conc_",.func_type))) +
+        geom_point(aes(color = "indx")) +
+        geom_smooth(method = "lm", se = F) +
+        geom_abline(slope = 1, intercept = 0) +
+        labs(title = .func_type)
+}
+
+plot_micro_cmtx(cmtx_micro, "cyano")
+plot_micro_cmtx(cmtx_micro, "crypto")
+plot_micro_cmtx(cmtx_micro, "chloro")
+plot_micro_cmtx(cmtx_micro, "pras")
+plot_micro_cmtx(cmtx_micro, "hapt")
+plot_micro_cmtx(cmtx_micro, "dino")
+plot_micro_cmtx(cmtx_micro, "diat") 
+
+ggplot(cmtx_micro, aes(x=cmtx_conc_dino, y=log(micro_conc_dino))) + 
+           geom_point()
+
+
+```
+```{r Bland-Altman}
+
+# ggplot(cmtx_micro, aes_string(x="cmtx_conc_cyano", y="micro_conc_cyano")) +
+#     blandr.draw()
+
+blandr.draw(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano, plotTitle = "Cyanobacteria")
+blandr.draw(cmtx_micro$cmtx_conc_crypto, cmtx_micro$micro_conc_crypto, plotTitle = "Cryptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_chloro, cmtx_micro$micro_conc_chloro, plotTitle = "Chlorophytes")
+blandr.draw(cmtx_micro$cmtx_conc_pras, cmtx_micro$micro_conc_pras, plotTitle = "Prasinophytes")
+blandr.draw(cmtx_micro$cmtx_conc_hapt, cmtx_micro$micro_conc_hapt, plotTitle = "Haptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino, plotTitle = "Dinoflagellates")
+blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat, plotTitle = "Diatoms")
+
+blandr.output.text(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano)
+
+cyano_stat <- blandr.statistics(cmtx_micro_log$log_cmtx_conc_din, cmtx_micro_log$log_mic_conc_dino)
+# cyano_stat <- blandr.statistics(micro_conc_cyano ~ cmtx_conc_cyano, data = cmtx_micro)
+# blandr::blandr.plot.normality(cyano_stat)
+hist(cyano_stat$differences)
+
+cyano_dif <- as.data.frame(cyano_stat$differences)
+
+cyano_dif %>% 
+    shapiro_test(cyano_stat$differences)
+```
+
+```{r}
+cmtx_micro2 <- cmtx_micro %>% filter(!indx == "28-7")
+
+
+blandr.draw(cmtx_micro2$cmtx_conc_cyano, cmtx_micro2$micro_conc_cyano, plotTitle = "Cyanobacteria")
+blandr.draw(cmtx_micro2$cmtx_conc_crypto, cmtx_micro2$micro_conc_crypto, plotTitle = "Cryptophytes")
+blandr.draw(cmtx_micro2$cmtx_conc_chloro, cmtx_micro2$micro_conc_chloro, plotTitle = "Chlorophytes")
+blandr.draw(cmtx_micro2$cmtx_conc_pras, cmtx_micro2$micro_conc_pras, plotTitle = "Prasinophytes")
+blandr.draw(cmtx_micro2$cmtx_conc_hapt, cmtx_micro2$micro_conc_hapt, plotTitle = "Haptophytes")
+blandr.draw(cmtx_micro2$cmtx_conc_dino, cmtx_micro2$micro_conc_dino, plotTitle = "Dinoflagellates")
+blandr.draw(cmtx_micro2$cmtx_conc_diat, cmtx_micro2$micro_conc_diat, plotTitle = "Diatoms")
+```
+
