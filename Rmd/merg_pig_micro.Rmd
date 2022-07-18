@@ -258,12 +258,19 @@ conv_facts <- df_pig_filt2 %>%
     left_join(df_type_counts, by =c("indx", "func_type")) %>%
     #select desired columns
     select(indx, func_type, cmtx_conc, micro_count) %>% 
-    filter(cmtx_conc >= 0 & micro_count >= 0)
+    filter(cmtx_conc >= 0 & micro_count >= 0) %>% 
+    filter(indx != "17-3" & indx != "3-35" & indx != "4-39")
+
+set.seed(122237)
+#generate subset of data to produce conversion factors
+indices <- as.vector(dplyr::distinct(conv_facts, indx))
+
+rand_indx <- sample(indices$indx, 17, replace = F)
 
 # cf_avgs1 <- cf_avgs
 cf_avgs <- conv_facts %>% 
     #filter out rows where count or concentration == 0 
-    filter(cmtx_conc > 0 & micro_count > 0) %>%
+    filter(indx %in% rand_indx, cmtx_conc > 0 & micro_count > 0) %>%
     #calculate conversion factors 
     mutate(cf=cmtx_conc/micro_count) %>% 
     # group by func_type
@@ -274,10 +281,10 @@ cf_avgs <- conv_facts %>%
 
 cmtx_micro <- conv_facts %>% 
     left_join(cf_avgs, by = "func_type") %>%
+    filter(!indx %in% rand_indx) %>% 
     # multiply conversion factors by microscopy counts to get T chla of counted functional type
     mutate(micro_conc = micro_count * avg_cf) %>% 
-    pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(cmtx_conc, micro_conc)) %>% 
-    filter(indx != "17-3" & indx != "3-35" & indx != "4-39")
+    pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(cmtx_conc, micro_conc))
 
 cmtx_micro_log <- conv_facts %>% 
     left_join(cf_avgs, by = "func_type") %>%
@@ -371,8 +378,6 @@ plot_micro_cmtx(cmtx_micro, "hapt")
 plot_micro_cmtx(cmtx_micro, "dino")
 plot_micro_cmtx(cmtx_micro, "diat") 
 
-ggplot(cmtx_micro, aes(x=cmtx_conc_dino, y=log(micro_conc_dino))) + 
-           geom_point()
 
 
 ```
@@ -403,15 +408,12 @@ cyano_dif %>%
 ```
 
 ```{r}
-cmtx_micro2 <- cmtx_micro %>% filter(!indx == "28-7")
-
-
-blandr.draw(cmtx_micro2$cmtx_conc_cyano, cmtx_micro2$micro_conc_cyano, plotTitle = "Cyanobacteria")
-blandr.draw(cmtx_micro2$cmtx_conc_crypto, cmtx_micro2$micro_conc_crypto, plotTitle = "Cryptophytes")
-blandr.draw(cmtx_micro2$cmtx_conc_chloro, cmtx_micro2$micro_conc_chloro, plotTitle = "Chlorophytes")
-blandr.draw(cmtx_micro2$cmtx_conc_pras, cmtx_micro2$micro_conc_pras, plotTitle = "Prasinophytes")
-blandr.draw(cmtx_micro2$cmtx_conc_hapt, cmtx_micro2$micro_conc_hapt, plotTitle = "Haptophytes")
-blandr.draw(cmtx_micro2$cmtx_conc_dino, cmtx_micro2$micro_conc_dino, plotTitle = "Dinoflagellates")
-blandr.draw(cmtx_micro2$cmtx_conc_diat, cmtx_micro2$micro_conc_diat, plotTitle = "Diatoms")
+blandr.draw(cmtx_micro$cmtx_conc_cyano, cmtx_micro$micro_conc_cyano, plotTitle = "Cyanobacteria")
+blandr.draw(cmtx_micro$cmtx_conc_crypto, cmtx_micro$micro_conc_crypto, plotTitle = "Cryptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_chloro, cmtx_micro$micro_conc_chloro, plotTitle = "Chlorophytes")
+blandr.draw(cmtx_micro$cmtx_conc_pras, cmtx_micro$micro_conc_pras, plotTitle = "Prasinophytes")
+blandr.draw(cmtx_micro$cmtx_conc_hapt, cmtx_micro$micro_conc_hapt, plotTitle = "Haptophytes")
+blandr.draw(cmtx_micro$cmtx_conc_dino, cmtx_micro$micro_conc_dino, plotTitle = "Dinoflagellates")
+blandr.draw(cmtx_micro$cmtx_conc_diat, cmtx_micro$micro_conc_diat, plotTitle = "Diatoms")
 ```
 

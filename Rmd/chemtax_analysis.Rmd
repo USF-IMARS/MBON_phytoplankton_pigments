@@ -209,3 +209,42 @@ cmtx_dunn <- cmtx_longer %>%
     dunn_test(value ~ season, p.adjust.method = "bonferroni")
 
 ```
+
+```{r station-seasonally-yearly-avgs}
+cmtx_stat <- cmtx_avgs %>% 
+    mutate(diat = diat1 + diat2,
+           cyano = cyano2 + cyano4,
+           hapt = hapt6 + hapt8,
+           total = chloro + crypto + diat + dino + hapt + pras + cyano
+           ) %>% 
+    group_by(year, season, station) %>% 
+    summarise_at(vars(chloro:hapt),
+                 list(avg = mean, sd = sd, var = var),
+                 na.rm = TRUE)
+options(scipen=999)
+
+cmtx_fract <- cmtx_avgs %>% 
+    mutate(diat = diat1 + diat2,
+           cyano = cyano2 + cyano4,
+           hapt = hapt6 + hapt8,
+           total = chloro + crypto + diat + dino + hapt + pras + cyano) %>% 
+    mutate(year = year,
+              season = season,
+              station = station,
+              frac_chloro = chloro/total,
+           frac_crypto = crypto/total,
+           frac_cyano = cyano/total,
+           frac_diat = diat/total,
+           frac_dino = dino/total,
+           frac_hapt = hapt/total,
+           frac_pras = pras/total)%>% 
+    select(hplc_gsfc_id:season, frac_chloro:frac_pras) %>% 
+    pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_")
+
+max_fract <-cmtx_fract %>%
+    group_by(hplc_gsfc_id) %>% 
+    summarise(max_frac = max(frac)) %>% 
+    left_join(cmtx_fract, by = c("max_frac" = "frac"))
+
+```
+

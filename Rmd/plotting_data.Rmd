@@ -27,6 +27,8 @@ ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
 ```
 
 ```{r scatter plots}
+
+#pigment concentration vs total chlorophyll a 
 ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
     geom_point(color = "red") +
     facet_wrap(~season)
@@ -43,6 +45,8 @@ ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
 #     # scale_x_continuous(limits = c(0,1)) +
 #     # scale_y_continuous(limits = c(0,500)) 
 #     # facet_wrap(~pigment)
+
+#histograms to look at pigment distributions
 pig_long <- pig_dat %>%
     pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
                  values_to = "value") %>%
@@ -166,14 +170,34 @@ fract_dat %>%
 cmtx_longer2 <- cmtx_avgs %>% 
     pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc") %>%
     filter(station != 60)
-    
+
+#chemtax stacked bar graph
 ggplot(cmtx_longer2, aes(fill = func_type, color = func_type, y=conc, x=station))+ 
     geom_bar(position="fill", stat="identity") +
     facet_wrap(~season) +
-    ggthemes::theme_tufte() + 
+    # ggthemes::theme_tufte() + 
     theme(plot.background = element_rect(fill = "white", colour = "white")) +
     labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type")
+
+#chemtax stacked bar graph with ratio to total chlorophyll a, organized by station
+cmtx_longer2 %>% 
+mutate(station = forcats::fct_reorder(station, lon))%>% 
+ggplot( aes(fill = func_type, color = func_type, y=conc, x=station)) +
+    geom_bar(position = "fill", stat = "identity") +
+    facet_grid(rows = vars(year), cols = vars(season)) +
+    labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
+         color = "Phytoplankton Functional Type")
+
+#chemtax stacked bar graph (not ratio), organized by station
+cmtx_longer2 %>% 
+mutate(station = forcats::fct_reorder(station, lon))%>% 
+ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
+    geom_bar(stat = "identity") +
+    facet_grid(rows = vars(year), cols = vars(season)) +
+    labs(x = "Station", y= "Concentration of Chlorophyll-a", fill = "Phytoplankton Functional Type",
+         color = "Phytoplankton Functional Type")
+
 save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar", 
            format(Sys.time(), '_%Y%m%d_%H%M%S'),
            ".jpg"), 
@@ -185,23 +209,24 @@ save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar",
 cmtx_avgs2 <- cmtx_avgs %>%
     mutate(total_chl_a = chloro + crypto + cyano2 + cyano4 + diat1 + diat2 + dino + hapt6 + hapt8 + pras)
 
-ggplot(cmtx_avgs2, aes(x = lubridate::ymd_hms(date_time_utc), y=crypto/total_chl_a)) +
+#point plot with smoothing line for 1 functional group, colored by season
+ggplot(cmtx_avgs2, aes(x = lubridate::ymd_hms(date_time_utc), y=dino/total_chl_a)) +
     geom_point(aes(color = season)) +
     geom_smooth(span = 0.3, se = F)
     
     # geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))
 
-cmtx_longer2 %>% 
-    group_by(hplc_gsfc_id) %>% 
+
+#point plot with smoothing line for all functional groups
+cmtx_longer2 %>%
+    group_by(hplc_gsfc_id) %>%
     mutate(
         total_chl_a = sum(conc)
-    ) %>% 
-    filter(func_type == "diat1" | func_type == "diat2") %>% 
+    ) %>%
+    filter(year < 2019) %>%
     ggplot(aes(x = lubridate::ymd_hms(date_time_utc), y = conc/total_chl_a, color = func_type)) +
-    # geom_smooth(se=F)
-    geom_line()
-
-
+    geom_smooth(se=F) +
+    geom_point()
 ```
 
 ```{r photoprotective-index}
