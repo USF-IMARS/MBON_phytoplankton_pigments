@@ -513,7 +513,7 @@ source(here::here(".Rprofile"))
 
 # then set the options to it
 # DO NOT paste the raw key here - use above 
-options(noaakey = noaa) 
+options(noaakey = noaakey) 
 
 # test that it works
 ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
