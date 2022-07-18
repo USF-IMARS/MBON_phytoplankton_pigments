@@ -513,7 +513,7 @@ source(here::here(".Rprofile"))
 
 # then set the options to it
 # DO NOT paste the raw key here - use above 
-options(noaakey = noaakey) 
+options(noaakey = noaa) 
 
 # test that it works
 ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
@@ -534,7 +534,7 @@ wsf5_df <- as.data.frame(alldat$wsf5) %>%
     separate(col= "date", into = c("year", "month", "day"), sep = "-", remove = F)
 
 #average wind speeds (AWND) and fastest 5-second wind speeds (WSF5) are in tenths of meters per second
-ggplot(filter(awnd_df, year == 2017), aes(x=date, y=awnd)) +
+ggplot(filter(awnd_df, year == 2016), aes(x=date, y=awnd)) +
     geom_point()
 
 
