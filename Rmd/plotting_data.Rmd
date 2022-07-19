@@ -13,6 +13,7 @@ library("huxtable")
 library("magrittr")
 library("gt")
 library("cowplot")
+library("ggthemes")
 root <- rprojroot::find_rstudio_root_file()
 dir2 <- "//data//processed//"
 path_out = paste0(root,dir2)
@@ -27,8 +28,6 @@ ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
 ```
 
 ```{r scatter plots}
-
-#pigment concentration vs total chlorophyll a 
 ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
     geom_point(color = "red") +
     facet_wrap(~season)
@@ -45,23 +44,24 @@ ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
 #     # scale_x_continuous(limits = c(0,1)) +
 #     # scale_y_continuous(limits = c(0,500)) 
 #     # facet_wrap(~pigment)
-
-#histograms to look at pigment distributions
 pig_long <- pig_dat %>%
     pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
                  values_to = "value") %>%
     dplyr::select(season, pigment, value)
-
-pig_hist <- lapply(unique(pig_long$pigment), function(i) {
+ pig_hist <- lapply(unique(pig_long$pigment), function(i) {
   ggplot(pig_long[pig_long$pigment==i,], aes(value, fill = season)) +
     geom_histogram(position = "dodge") +
     labs(title=i) +
     scale_x_continuous(trans='log10')
 })
-
-pig_hist
+ pig_hist
  
-
+log_pig_stat %>% 
+    filter(pigment == "allo") %>% 
+    ggplot(aes(x=))
+ 
+ggplot(aes())
+ 
 #chemtax histograms
 cmtx_longer2 %>% 
     filter(func_type == "chloro" & conc < 0.2) %>% 
@@ -167,9 +167,35 @@ fract_dat %>%
 ```
 
 ```{r plotting-chemtax-data}
+#season_year order vector
+seasonyr_order <- c("Spring 2016", "Summer 2016", "Fall 2016", "Winter 2016-2017", "Spring 2017", 
+                    "Summer 2017", "Fall 2017", "Winter 2017-2018", "Spring 2018",
+                    "Summer 2018", "Fall 2018", "Winter 2018-2019", "Spring 2019", 
+                    "Summer 2019", "Fall 2019", "Winter 2019-2020", "Spring 2020",
+                    "Summer 2020", "Fall 2020", "Winter 2020-2021", "Spring 2021")
+
 cmtx_longer2 <- cmtx_avgs %>% 
     pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc") %>%
-    filter(station != 60)
+    filter(station != 60) %>% 
+    mutate(season_year = case_when(season == "Fall"~ paste0(season," ",as.character(year)),
+                                   season == "Spring"~ paste0(season," ",as.character(year)),
+                                   season == "Summer" ~ paste0(season," ",as.character(year)),
+                                   month == "Jan" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
+                                   month == "Feb" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
+                                   month == "Dec" ~ paste0(season," ",as.character(year),"-",as.character(year + 1))),
+            season_year = factor(season_year, levels = seasonyr_order),                     
+           .after = season)
+
+new.row <- list(season_year="Summer 2016")
+cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row
+
+new.row2 <- list(season_year="Winter 2016-2017")
+cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row2
+
+new.row3 <- list(season_year="Spring 2020")
+cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row3
+
+rm(new.row3, new.row2, new.row)
 
 #chemtax stacked bar graph
 ggplot(cmtx_longer2, aes(fill = func_type, color = func_type, y=conc, x=station))+ 
@@ -180,23 +206,38 @@ ggplot(cmtx_longer2, aes(fill = func_type, color = func_type, y=conc, x=station)
     labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type")
 
+Tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933','#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
+
+
 #chemtax stacked bar graph with ratio to total chlorophyll a, organized by station
 cmtx_longer2 %>% 
 mutate(station = forcats::fct_reorder(station, lon))%>% 
-ggplot( aes(fill = func_type, color = func_type, y=conc, x=station)) +
+ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
     geom_bar(position = "fill", stat = "identity") +
-    facet_grid(rows = vars(year), cols = vars(season)) +
+    facet_wrap(~season_year, ncol = 4) +
+    theme_bw()+
+    theme(text=element_text(family="serif", size=12)) +
     labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
-         color = "Phytoplankton Functional Type")
+         color = "Phytoplankton Functional Type") +
+    scale_fill_manual(values = Tol_muted) +
+    scale_color_manual(values = Tol_muted)
+
 
 #chemtax stacked bar graph (not ratio), organized by station
 cmtx_longer2 %>% 
 mutate(station = forcats::fct_reorder(station, lon))%>% 
 ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
     geom_bar(stat = "identity") +
-    facet_grid(rows = vars(year), cols = vars(season)) +
-    labs(x = "Station", y= "Concentration of Chlorophyll-a", fill = "Phytoplankton Functional Type",
-         color = "Phytoplankton Functional Type")
+    facet_wrap(~season_year, ncol = 4) +
+    theme_bw()+
+    theme(text=element_text(family="serif", size=12)) +
+    labs(
+        x = "Station",
+        y= expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")),
+        fill = "Phytoplankton Functional Type",
+        color = "Phytoplankton Functional Type") +
+    scale_fill_manual(values = Tol_muted) +
+    scale_color_manual(values = Tol_muted)
 
 save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar", 
            format(Sys.time(), '_%Y%m%d_%H%M%S'),
@@ -205,18 +246,14 @@ save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar",
           base_height = 6,
           base_width = 10,
           dpi = 600, units = "in", device='png')
-
 cmtx_avgs2 <- cmtx_avgs %>%
     mutate(total_chl_a = chloro + crypto + cyano2 + cyano4 + diat1 + diat2 + dino + hapt6 + hapt8 + pras)
-
 #point plot with smoothing line for 1 functional group, colored by season
 ggplot(cmtx_avgs2, aes(x = lubridate::ymd_hms(date_time_utc), y=dino/total_chl_a)) +
     geom_point(aes(color = season)) +
     geom_smooth(span = 0.3, se = F)
     
     # geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))
-
-
 #point plot with smoothing line for all functional groups
 cmtx_longer2 %>%
     group_by(hplc_gsfc_id) %>%
@@ -227,6 +264,20 @@ cmtx_longer2 %>%
     ggplot(aes(x = lubridate::ymd_hms(date_time_utc), y = conc/total_chl_a, color = func_type)) +
     geom_smooth(se=F) +
     geom_point()
+
+# aov(dino ~ season+ as.factor(year) + season:as.factor(year), data = cmtx_avgs) %>% 
+#             summary()
+# lm(scale(crypto) ~ season+ (year), data = cmtx_avgs) %>% 
+#     summary
+
+#MANOVA test
+manova(cbind(cmtx_avgs$chloro, cmtx_avgs$crypto, cmtx_avgs$cyano2, cmtx_avgs$cyano4, 
+             cmtx_avgs$diat1, cmtx_avgs$diat2, cmtx_avgs$dino, cmtx_avgs$hapt6, 
+             cmtx_avgs$hapt8, cmtx_avgs$pras),
+       ~ season, data = cmtx_avgs) %>% 
+    summary()
+
+
 ```
 
 ```{r photoprotective-index}
@@ -270,11 +321,45 @@ save_plot(filename = paste0(root,"/data/plots/psc_vs_ppc",
 ```{r kruskal-dunn-pi}
 library(rstatix)
 pi_kruskal <- pigm_pi %>% 
-    kruskal_test(pi ~ season)
+    kruskal_test(pi ~ season+ year)
+
 
 pi_dunn <- pigm_pi %>%
     dunn_test(pi ~ season, p.adjust.method = "bonferroni")
 
 ```
 
-
+```{r station-seasonally-yearly-avgs}
+cmtx_stat <- cmtx_avgs %>% 
+    mutate(diat = diat1 + diat2,
+           cyano = cyano2 + cyano4,
+           hapt = hapt6 + hapt8,
+           total = chloro + crypto + diat + dino + hapt + pras + cyano
+           ) %>% 
+    group_by(year, season, station) %>% 
+    summarise_at(vars(chloro:hapt),
+                 list(avg = mean, sd = sd, var = var),
+                 na.rm = TRUE)
+options(scipen=999)
+cmtx_fract <- cmtx_avgs %>% 
+    mutate(diat = diat1 + diat2,
+           cyano = cyano2 + cyano4,
+           hapt = hapt6 + hapt8,
+           total = chloro + crypto + diat + dino + hapt + pras + cyano) %>% 
+    mutate(year = year,
+              season = season,
+              station = station,
+              frac_chloro = chloro/total,
+           frac_crypto = crypto/total,
+           frac_cyano = cyano/total,
+           frac_diat = diat/total,
+           frac_dino = dino/total,
+           frac_hapt = hapt/total,
+           frac_pras = pras/total)%>% 
+    select(hplc_gsfc_id:season, frac_chloro:frac_pras) %>% 
+    pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_")
+max_fract <-cmtx_fract %>%
+    group_by(hplc_gsfc_id) %>% 
+    summarise(max_frac = max(frac)) %>% 
+    left_join(cmtx_fract, by = c("max_frac" = "frac"))
+```
