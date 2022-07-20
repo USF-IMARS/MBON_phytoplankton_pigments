@@ -14,6 +14,7 @@ library("magrittr")
 library("gt")
 library("cowplot")
 library("ggthemes")
+library("vegan")
 root <- rprojroot::find_rstudio_root_file()
 dir2 <- "//data//processed//"
 path_out = paste0(root,dir2)
@@ -70,7 +71,7 @@ cmtx_longer2 %>%
     scale_x_continuous(trans = "log10") 
 
 cmtx_longer2 %>% 
-    filter(func_type == "chloro" & conc < 0.2) %>% 
+    filter(func_type == "cyano4" & conc < 0.2) %>% 
     ggplot(aes(conc)) +
     geom_histogram(position = "dodge")
  
@@ -186,13 +187,14 @@ cmtx_longer2 <- cmtx_avgs %>%
             season_year = factor(season_year, levels = seasonyr_order),                     
            .after = season)
 
-new.row <- list(season_year="Summer 2016")
+# added rows with the missing seasons so that the facet grid will have seasons by column
+new.row <- list(season_year="Summer 2016", station = "3")
 cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row
 
-new.row2 <- list(season_year="Winter 2016-2017")
+new.row2 <- list(season_year="Winter 2016-2017", station = "3")
 cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row2
 
-new.row3 <- list(season_year="Spring 2020")
+new.row3 <- list(season_year="Spring 2020", station = "3")
 cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row3
 
 rm(new.row3, new.row2, new.row)
@@ -221,11 +223,20 @@ ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
          color = "Phytoplankton Functional Type") +
     scale_fill_manual(values = Tol_muted) +
     scale_color_manual(values = Tol_muted)
+save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 8,
+          base_width = 15,
+          dpi = 600, units = "in", device='png')
 
+#chemtax stacked bar graph (not ratio), organized by statio
 
-#chemtax stacked bar graph (not ratio), organized by station
 cmtx_longer2 %>% 
-mutate(station = forcats::fct_reorder(station, lon))%>% 
+    mutate(station = forcats::fct_reorder(station, lon))%>% 
+    group_by(season_year, station, func_type) %>% 
+    summarize(conc = mean(conc)) %>% 
 ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
     geom_bar(stat = "identity") +
     facet_wrap(~season_year, ncol = 4) +
@@ -243,9 +254,12 @@ save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar",
            format(Sys.time(), '_%Y%m%d_%H%M%S'),
            ".jpg"), 
           plot = last_plot(),
-          base_height = 6,
-          base_width = 10,
+          base_height = 8,
+          base_width = 15,
           dpi = 600, units = "in", device='png')
+
+
+
 cmtx_avgs2 <- cmtx_avgs %>%
     mutate(total_chl_a = chloro + crypto + cyano2 + cyano4 + diat1 + diat2 + dino + hapt6 + hapt8 + pras)
 #point plot with smoothing line for 1 functional group, colored by season
@@ -270,10 +284,27 @@ cmtx_longer2 %>%
 # lm(scale(crypto) ~ season+ (year), data = cmtx_avgs) %>% 
 #     summary
 
+cmtx_kruskal2 <- cmtx_longer %>%
+    mutate(season_year = case_when(season == "Fall"~ paste0(season," ",as.character(year)),
+                                   season == "Spring"~ paste0(season," ",as.character(year)),
+                                   season == "Summer" ~ paste0(season," ",as.character(year)),
+                                   month == "Jan" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
+                                   month == "Feb" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
+                                   month == "Dec" ~ paste0(season," ",as.character(year),"-",as.character(year + 1))),
+            season_year = factor(season_year, levels = seasonyr_order),                     
+           .after = season) %>% 
+    group_by(func_type) %>% 
+    kruskal_test(value ~ season_year)
+
+cmtx_dunn2 <- cmtx_longer2 %>%
+    group_by(func_type) %>%
+    dunn_test(conc ~ season_year, p.adjust.method = "bonferroni")
+
+
 #MANOVA test
 manova(cbind(cmtx_avgs$chloro, cmtx_avgs$crypto, cmtx_avgs$cyano2, cmtx_avgs$cyano4, 
              cmtx_avgs$diat1, cmtx_avgs$diat2, cmtx_avgs$dino, cmtx_avgs$hapt6, 
-             cmtx_avgs$hapt8, cmtx_avgs$pras),
+             cmtx_avgs$hapt8, cmtx_avgs$pras)
        ~ season, data = cmtx_avgs) %>% 
     summary()
 
@@ -362,4 +393,30 @@ max_fract <-cmtx_fract %>%
     group_by(hplc_gsfc_id) %>% 
     summarise(max_frac = max(frac)) %>% 
     left_join(cmtx_fract, by = c("max_frac" = "frac"))
+```
+
+```{r lat-lon-table}
+lat_lon_dat <- pig_dat %>%
+    filter(name_of_water_body == "Florida Keys", station != "60") %>%
+    dplyr::select(station, lat, lon) %>% 
+    distinct(station, lat, lon)
+
+lat_lon_dat %>% 
+    gt(
+        rowname_col = "station",
+        groupname_col = NULL
+    ) %>% 
+    cols_label(
+        lat = md("Latitude (&deg;)"),
+        lon = md("Longitude (&deg;)")) %>% 
+    tab_options(
+        table_body.hlines.width = 0,
+        table_body.vlines.width = 0,
+        stub.border.width = 0
+    ) %>%
+    opt_table_font("serif") %>% 
+    gtsave(filename = paste0(root,"/data/plots/lat_lon_table", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".html"))
+    
 ```
