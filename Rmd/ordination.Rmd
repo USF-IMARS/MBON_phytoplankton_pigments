@@ -1,0 +1,118 @@
+---
+title: "Ordination"
+author: "Anna Finch"
+date: '2022-07-21'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library("dplyr")
+library("ggplot2")
+library("tidyverse")
+library("vegan")
+
+root <- rprojroot::find_rstudio_root_file()
+dir2     <- "//data//processed//"
+path_out <- paste0(root,dir2)
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
+
+pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+
+# Chemtax files
+file.chem <-
+  fs::dir_ls(path = paste0(root,dir3),
+             recurse = TRUE,
+             regexp = "\\.xls$") %>% 
+    str_sort()
+
+cmtx_avgs_raw <- readxl::read_xls(
+    file.chem[5],
+    sheet=1,
+    .name_repair = janitor::make_clean_names
+)
+
+meta_data <- dplyr::select(.data=pig_dat, 
+                            hplc_gsfc_id:filter_storage_before_shipment_to_gfsc, 
+                            comments, season) %>%
+    filter(name_of_water_body == "Florida Keys")
+cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %>%
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
+
+cmtx_avgs2 <- cmtx_avgs %>% 
+    rownames_to_column(var = "row_num") %>% 
+    unite("sample_code", row_num, season, remove = F)
+
+cmtx_data_matrix <- cmtx_avgs2 %>%
+    mutate(group = season) %>% 
+    select(group, chloro:pras) %>% 
+    column_to_rownames(var = "sample_code")
+#using this "sample_code" is probably not the best. It's essentially just using the season and row number
+#I only did it this way because the sample IDs and hplc_gsfc_ids have repeat values so I could not convert them to rownames, 
+# and I needed some way to color by season
+```
+
+```{r PCoA Euclidean}
+distance.matrix <- dist(scale(cmtx_data_matrix, 
+                              center = T, 
+                              scale = T),
+                        method = "euclidean") #I wasn't sure what method to use
+mds.cmtx <- cmdscale(distance.matrix, eig = T, x.ret = T)
+
+mds.var.per <- round(mds.cmtx$eig/sum(mds.cmtx$eig)*100, 1)
+
+mds.values <- mds.cmtx$points
+
+mds.data <- data.frame(Sample = rownames(mds.values),
+                       X=mds.values[,1],
+                       Y=mds.values[,2]) %>% 
+    separate(Sample, c("row_num", "season"))
+
+barplot(mds.var.per)
+
+mds.data %>% 
+    ggplot(aes(x=X, y=Y, color = season)) +
+    geom_point() +
+    theme_bw() +
+    labs(title = "MDS Plot Using Euclidean Distance",
+         x = paste("MDS1 - ", mds.var.per[1], "%", sep = ""),
+         y= paste("MDS1 - ", mds.var.per[2], "%", sep = ""))
+
+```
+
+```{r Bray-Curtis-Dissimilarity-Matrix}
+cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray") # dissimilarity matrix using bray-curtis distance indices on the varespec dataset native to vegan
+
+pcoa <- pco(cmtx_bray, negvals = "zero", dround = 0)
+
+plot(pcoa$vectors[,1], pcoa$vectors[,2], type = "p", xlab = "PCoA1", ylab = "PCoA2",
+ axes = TRUE, main = "PCoA (ecodist) on CHEMTAX data")
+
+text(pcoa$vectors[,1], pcoa$vectors[,2], labels(cmtx_bray), 
+ cex = 0.9, xpd = TRUE)
+
+
+pcoa.var.per <- round(pcoa$value/sum(pcoa$value)*100, 1)
+
+cmtx_val <-pcoa$vectors
+
+pcoa.data <- data.frame(Sample = rownames(cmtx_val),
+                       X=cmtx_val[,1],
+                       Y=cmtx_val[,2]) %>% 
+    separate(Sample, c("row_num", "season"))
+
+barplot(mds.var.per)
+
+ggplot(data=pcoa, aes(x=vectors[,1], y=vectors[,2], color=season)) +
+  geom_point() +
+  theme_bw() +
+  xlab(paste("MDS1 - ", mds.var.per[1], "%", sep="")) +
+  ylab(paste("MDS2 - ", mds.var.per[2], "%", sep="")) +
+  ggtitle("MDS plot using avg(logFC) as the distance") 
+
+pcoaVS$values # eigenvalue for each component. This is a measure of the variance explained by each dimension
+pcoaVS$vectors # eigenvectors. Each column contains the scores for that dimension.
+
+ggpca::ggPCoA(cmtx_data_matrix, p.value = T)
+
+```
