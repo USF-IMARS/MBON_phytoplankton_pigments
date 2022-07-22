@@ -358,7 +358,7 @@ df_all <- mutate(
         month %in% winter ~ "Winter",
         month %in% spring ~ "Spring",
         month %in% summer ~ "Summer",
-        month %in% autumn ~ "Fall"
+        month %in% autumn ~ "Autumn"
     )
 )
 
@@ -489,7 +489,7 @@ chemtax_seasons <- pig_dat %>%
     mutate(cluster_code = case_when(season == "Winter" ~ 1,
                                     season == "Spring" ~ 2, 
                                     season == "Summer" ~ 3,
-                                    season == "Fall" ~ 4)) %>%
+                                    season == "Autumn" ~ 4)) %>%
     dplyr::select(hplc_gsfc_id, cluster_code, sample, chl_c3, chl_c1c2, perid, but_fuco,
            fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
 
@@ -513,7 +513,7 @@ source(here::here(".Rprofile"))
 
 # then set the options to it
 # DO NOT paste the raw key here - use above 
-options(noaakey = noaa) 
+options(noaakey = noaa)
 
 # test that it works
 ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')

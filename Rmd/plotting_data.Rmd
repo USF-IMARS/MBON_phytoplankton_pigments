@@ -19,7 +19,7 @@ root <- rprojroot::find_rstudio_root_file()
 dir2 <- "//data//processed//"
 path_out = paste0(root,dir2)
 pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv")) %>% 
-           mutate(season = factor(season, levels = c("Winter", "Spring", "Summer", "Fall")))
+           mutate(season = factor(season, levels = c("Winter", "Spring", "Summer", "Autumn")))
 ```
 
 ```{r concentration vs time}
@@ -169,16 +169,16 @@ fract_dat %>%
 
 ```{r plotting-chemtax-data}
 #season_year order vector
-seasonyr_order <- c("Spring 2016", "Summer 2016", "Fall 2016", "Winter 2016-2017", "Spring 2017", 
-                    "Summer 2017", "Fall 2017", "Winter 2017-2018", "Spring 2018",
-                    "Summer 2018", "Fall 2018", "Winter 2018-2019", "Spring 2019", 
-                    "Summer 2019", "Fall 2019", "Winter 2019-2020", "Spring 2020",
-                    "Summer 2020", "Fall 2020", "Winter 2020-2021", "Spring 2021")
+seasonyr_order <- c("Spring 2016", "Summer 2016", "Autumn 2016", "Winter 2016-2017", "Spring 2017", 
+                    "Summer 2017", "Autumn 2017", "Winter 2017-2018", "Spring 2018",
+                    "Summer 2018", "Autumn 2018", "Winter 2018-2019", "Spring 2019", 
+                    "Summer 2019", "Autumn 2019", "Winter 2019-2020", "Spring 2020",
+                    "Summer 2020", "Autumn 2020", "Winter 2020-2021", "Spring 2021")
 
 cmtx_longer2 <- cmtx_avgs %>% 
     pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "conc") %>%
     filter(station != 60) %>% 
-    mutate(season_year = case_when(season == "Fall"~ paste0(season," ",as.character(year)),
+    mutate(season_year = case_when(season == "Autumn"~ paste0(season," ",as.character(year)),
                                    season == "Spring"~ paste0(season," ",as.character(year)),
                                    season == "Summer" ~ paste0(season," ",as.character(year)),
                                    month == "Jan" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
@@ -231,7 +231,7 @@ save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio",
           base_width = 15,
           dpi = 600, units = "in", device='png')
 
-#chemtax stacked bar graph (not ratio), organized by statio
+#chemtax stacked bar graph (not ratio), organized by station
 
 cmtx_longer2 %>% 
     mutate(station = forcats::fct_reorder(station, lon))%>% 
@@ -285,7 +285,7 @@ cmtx_longer2 %>%
 #     summary
 
 cmtx_kruskal2 <- cmtx_longer %>%
-    mutate(season_year = case_when(season == "Fall"~ paste0(season," ",as.character(year)),
+    mutate(season_year = case_when(season == "Autumn"~ paste0(season," ",as.character(year)),
                                    season == "Spring"~ paste0(season," ",as.character(year)),
                                    season == "Summer" ~ paste0(season," ",as.character(year)),
                                    month == "Jan" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),

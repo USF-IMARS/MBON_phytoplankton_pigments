@@ -64,12 +64,12 @@ cmtx4 <-
         range = "D305:N306",
         .name_repair = janitor::make_clean_names
     ) %>%
-    mutate(cluster_code = 4, season = "Fall")
+    mutate(cluster_code = 4, season = "Autumn")
 
 cmtx_all <- full_join(cmtx1, cmtx2) %>%
     full_join(cmtx3) %>%
     full_join(cmtx4) %>%
-    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
+    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 
 rm(cmtx1, cmtx2, cmtx3, cmtx4)
 ```
@@ -131,7 +131,7 @@ meta_data <- dplyr::select(.data=pig_dat,
                             comments, season) %>%
     filter(name_of_water_body == "Florida Keys")
 cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %>%
-    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 ```
 
 ```{r boxplots}

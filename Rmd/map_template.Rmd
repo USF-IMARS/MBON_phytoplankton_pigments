@@ -462,7 +462,7 @@ mtext(paste(.pig,':TChla:',.season),adj=1,cex=.75)
 map_pigment("fuco", pig_dat_longer, "Winter")
 map_pigment("fuco", pig_dat_longer, "Summer")
 map_pigment("fuco", pig_dat_longer, "Spring")
-map_pigment("fuco", pig_dat_longer, "Fall")
+map_pigment("fuco", pig_dat_longer, "Autumn")
 
 
 
@@ -556,7 +556,7 @@ map_phyto <- function(.phyto, .long_file, .season) {
 map_phyto("cyano4", cmtx_longer2, "Winter")
 map_phyto("fuco", cmtx_longer2, "Summer")
 map_phyto("fuco", cmtx_longer2, "Spring")
-map_phyto("fuco", cmtx_longer2, "Fall")
+map_phyto("fuco", cmtx_longer2, "Autumn")
 
 ```
 ```{r}
@@ -670,8 +670,8 @@ map_phyto <- function(.phyto, .long_file) {
     
     
     ###----------------- FALL -----------------------
-     phyto_fall_data <- .long_file %>%
-        filter(season == "Fall", name_of_water_body == "Florida Keys",
+     phyto_autumn_data <- .long_file %>%
+        filter(season == "Autumn", name_of_water_body == "Florida Keys",
                func_type == .phyto
         ) %>%
         dplyr::select(
@@ -681,38 +681,38 @@ map_phyto <- function(.phyto, .long_file) {
         group_by(hplc_gsfc_id) %>% 
     mutate(ratio = conc/tot_chl_a, .after=conc)
     
-    df_phyto_fall <- phyto_fall_data %>% 
+    df_phyto_autumn <- phyto_autumn_data %>% 
         group_by(station) %>% 
         summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
         distinct(station, .keep_all = T) %>% 
         ungroup()
     ### krigging locations
-    df_phyto_fall.loc <- cbind(lon=df_phyto_fall$lon,lat=df_phyto_fall$lat)
-    loc.grid_phyto_fall <- list(lon=seq(min(df_phyto_fall$lon, na.rm=T) - adj, max(df_phyto_fall$lon, na.rm=T) + adj, resolution),
-                 lat=seq(min(df_phyto_fall$lat, na.rm=T) - adj, max(df_phyto_fall$lat, na.rm=T) + adj, resolution))
+    df_phyto_autumn.loc <- cbind(lon=df_phyto_autumn$lon,lat=df_phyto_autumn$lat)
+    loc.grid_phyto_autumn <- list(lon=seq(min(df_phyto_autumn$lon, na.rm=T) - adj, max(df_phyto_autumn$lon, na.rm=T) + adj, resolution),
+                 lat=seq(min(df_phyto_autumn$lat, na.rm=T) - adj, max(df_phyto_autumn$lat, na.rm=T) + adj, resolution))
     ### limits for plotting
-    xlims_phyto_fall <- range(loc.grid_phyto_fall$lon)
-    ylims_phyto_fall <- range(loc.grid_phyto_fall$lat)
+    xlims_phyto_autumn <- range(loc.grid_phyto_autumn$lon)
+    ylims_phyto_autumn <- range(loc.grid_phyto_autumn$lat)
     
     #phyto krig
-    my.krig_phyto_fall <- spatialProcess(df_phyto_fall.loc, df_phyto_fall$ratio_avg)
-    ratio_kriged_phyto_fall <- predictSurface(my.krig_phyto_fall, loc.grid_phyto_fall, extrap=F)
-    ratio_SE_phyto_fall <- predictSurfaceSE(my.krig_phyto_fall, loc.grid_phyto_fall, extrap=F)
+    my.krig_phyto_autumn <- spatialProcess(df_phyto_autumn.loc, df_phyto_autumn$ratio_avg)
+    ratio_kriged_phyto_autumn <- predictSurface(my.krig_phyto_autumn, loc.grid_phyto_autumn, extrap=F)
+    ratio_SE_phyto_autumn <- predictSurfaceSE(my.krig_phyto_autumn, loc.grid_phyto_autumn, extrap=F)
     
-    ### ----------------- fall Phyto ratio krig -----------------
+    ### ----------------- autumn Phyto ratio krig -----------------
 
     ### corrects the krigged min and max to observed min and max
-    if(max(ratio_kriged_phyto_fall$z, na.rm=T) > max(df_phyto_fall$ratio_avg, na.rm=T)){
-        ratio_kriged_phyto_fall$z[which(ratio_kriged_phyto_fall$z > max(df_phyto_fall$ratio_avg, na.rm=T))] <- max(df_phyto_fall$ratio_avg, na.rm=T)
+    if(max(ratio_kriged_phyto_autumn$z, na.rm=T) > max(df_phyto_autumn$ratio_avg, na.rm=T)){
+        ratio_kriged_phyto_autumn$z[which(ratio_kriged_phyto_autumn$z > max(df_phyto_autumn$ratio_avg, na.rm=T))] <- max(df_phyto_autumn$ratio_avg, na.rm=T)
     }
-    if(min(ratio_kriged_phyto_fall$z, na.rm=T) < min(df_phyto_fall$ratio_avg, na.rm=T)){
-        ratio_kriged_phyto_fall$z[which(ratio_kriged_phyto_fall$z < min(df_phyto_fall$ratio_avg, na.rm=T))] <- min(df_phyto_fall$ratio_avg, na.rm=T)
+    if(min(ratio_kriged_phyto_autumn$z, na.rm=T) < min(df_phyto_autumn$ratio_avg, na.rm=T)){
+        ratio_kriged_phyto_autumn$z[which(ratio_kriged_phyto_autumn$z < min(df_phyto_autumn$ratio_avg, na.rm=T))] <- min(df_phyto_autumn$ratio_avg, na.rm=T)
     }
     
-    ### color and contour breaks phyto fall
-    breaks_phyto_fall <- pretty(df_phyto_fall$ratio_avg, n=10)
-    breaks_phyto_fall <- seq(0, 0.6, by=.05) ### use for fixed breaks.
-    cols_phyto_fall <- chl_col(length(breaks_phyto_fall)-1)
+    ### color and contour breaks phyto autumn
+    breaks_phyto_autumn <- pretty(df_phyto_autumn$ratio_avg, n=10)
+    breaks_phyto_autumn <- seq(0, 0.6, by=.05) ### use for fixed breaks.
+    cols_phyto_autumn <- chl_col(length(breaks_phyto_autumn)-1)
     
     
     ###----------------- WINTER -----------------------
@@ -816,25 +816,25 @@ map_phyto <- function(.phyto, .long_file) {
     mtext(paste(.phyto,':TChla:Summer'),adj=1,cex=.75)
     
     ###FALL
-    imagePlot(ratio_kriged_phyto_fall$x,
-              ratio_kriged_phyto_fall$y,
-              ratio_kriged_phyto_fall$z,
-              col=cols_phyto_fall,breaks=breaks_phyto_fall,asp=1,
+    imagePlot(ratio_kriged_phyto_autumn$x,
+              ratio_kriged_phyto_autumn$y,
+              ratio_kriged_phyto_autumn$z,
+              col=cols_phyto_autumn,breaks=breaks_phyto_autumn,asp=1,
               xlab='',ylab='',las=1,
-              xlim=xlims_phyto_fall,ylim=ylims_phyto_fall,
-              nlevel=length(cols_phyto_fall),legend.width=1,legend.mar=3)
-    contour(ratio_kriged_phyto_fall$x,
-            ratio_kriged_phyto_fall$y,
-            ratio_kriged_phyto_fall$z,
-            levels=breaks_phyto_fall,add=T)
-    image(ratio_SE_phyto_fall,add=T,breaks=quantile(ratio_SE_phyto_fall$z,c(1,1),na.rm=T),col='white')
+              xlim=xlims_phyto_autumn,ylim=ylims_phyto_autumn,
+              nlevel=length(cols_phyto_autumn),legend.width=1,legend.mar=3)
+    contour(ratio_kriged_phyto_autumn$x,
+            ratio_kriged_phyto_autumn$y,
+            ratio_kriged_phyto_autumn$z,
+            levels=breaks_phyto_autumn,add=T)
+    image(ratio_SE_phyto_autumn,add=T,breaks=quantile(ratio_SE_phyto_autumn$z,c(1,1),na.rm=T),col='white')
     image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
     plot(world2,col='gray70',add=T)
     contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
-    points(df_phyto_fall$lon,df_phyto_fall$lat,pch=20,col='yellow')
+    points(df_phyto_autumn$lon,df_phyto_autumn$lat,pch=20,col='yellow')
     mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
     mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
-    mtext(paste(.phyto,':TChla:Fall'),adj=1,cex=.75)
+    mtext(paste(.phyto,':TChla:Autumn'),adj=1,cex=.75)
     
     ###WINTER
     imagePlot(ratio_kriged_phyto_winter$x,
