@@ -44,8 +44,7 @@ cmtx_avgs2 <- cmtx_avgs %>%
     unite("sample_code", row_num, season, remove = F)
 
 cmtx_data_matrix <- cmtx_avgs2 %>%
-    mutate(group = season) %>% 
-    select(group, chloro:pras) %>% 
+    select(sample_code, chloro:pras) %>% 
     column_to_rownames(var = "sample_code")
 #using this "sample_code" is probably not the best. It's essentially just using the season and row number
 #I only did it this way because the sample IDs and hplc_gsfc_ids have repeat values so I could not convert them to rownames, 
@@ -113,6 +112,89 @@ ggplot(data=pcoa, aes(x=vectors[,1], y=vectors[,2], color=season)) +
 pcoaVS$values # eigenvalue for each component. This is a measure of the variance explained by each dimension
 pcoaVS$vectors # eigenvectors. Each column contains the scores for that dimension.
 
-ggpca::ggPCoA(cmtx_data_matrix, p.value = T)
+cmtx_data_matrix2 <- cmtx_avgs2 %>%
+    mutate(group = season) %>%
+    select(group, chloro:pras)
+ggpca::ggPCoA(cmtx_data_matrix2, p.value = T)
 
 ```
+```{r permanova}
+set.seed(1082002)
+all_test <- adonis2(cmtx_data_matrix ~ season, data = cmtx_avgs, method = "bray")
+
+### Pairwise
+pairwise_p <- numeric()
+
+#Spring vs. Summer
+sp_su <- cmtx_avgs %>% 
+    filter(season == "Spring" | season == "Summer")
+
+sp_su_dm <- sp_su %>%
+    select(chloro:pras)
+
+sp_su_test <- adonis2(sp_su_dm ~ season*station, data = sp_su, method = "bray")
+
+pairwise_p["sp_su"] <- sp_su_test[["Pr(>F)"]][1]
+
+#Spring vs. Winter
+sp_w <- cmtx_avgs %>% 
+    filter(season == "Spring" | season == "Winter")
+
+sp_w_dm <- sp_w %>%
+    select(chloro:pras)
+
+sp_w_test <- adonis2(sp_w_dm ~ season, data = sp_w, method = "bray")
+
+pairwise_p["sp_w"] <- sp_w_test[["Pr(>F)"]][1]
+
+#Spring vs. Autumn
+sp_a <- cmtx_avgs %>% 
+    filter(season == "Spring" | season == "Autumn")
+
+sp_a_dm <- sp_a %>%
+    select(chloro:pras)
+
+sp_a_test <- adonis2(sp_a_dm ~ season, data = sp_a, method = "bray")
+
+pairwise_p["sp_a"] <- sp_a_test[["Pr(>F)"]][1]
+
+
+#Summer vs. Autumn
+su_a <- cmtx_avgs %>% 
+    filter(season == "Summer" | season == "Autumn")
+
+su_a_dm <- su_a %>%
+    select(chloro:pras)
+
+su_a_test <- adonis2(su_a_dm ~ season, data = su_a, method = "bray")
+
+pairwise_p["su_a"] <- su_a_test[["Pr(>F)"]][1]
+
+#Summer vs. Winter
+su_w <- cmtx_avgs %>% 
+    filter(season == "Summer" | season == "Winter")
+
+su_w_dm <- su_w %>%
+    select(chloro:pras)
+
+su_w_test <- adonis2(su_w_dm ~ season, data = su_w, method = "bray")
+
+pairwise_p["su_w"] <- su_w_test[["Pr(>F)"]][1]
+
+#Winter vs. Autumn
+w_a <- cmtx_avgs %>% 
+    filter(season == "Winter" | season == "Autumn")
+
+w_a_dm <- w_a %>%
+    select(chloro:pras)
+
+w_a_test <- adonis2(w_a_dm ~ season, data = w_a, method = "bray")
+
+pairwise_p["w_a"] <- w_a_test[["Pr(>F)"]][1]
+
+##correct p-values
+
+p.adjust(pairwise_p, method = "holm")
+
+```
+
