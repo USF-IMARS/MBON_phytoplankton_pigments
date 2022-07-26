@@ -1,4 +1,11 @@
 # load rerddap to aquire data
+
+
+# to read in all data for ctds, should do something like:
+# map_dfr({var from fs::dir_ls}, ~read_csv({with some parameters}), .id = "station")
+
+# then filter depth < 4 m, do either avg or median for parameters of interest
+# then link them to HPLC data using cruise ID and stations number
 library("rerddap")
 mainDir <- rprojroot::find_rstudio_root_file()
 
