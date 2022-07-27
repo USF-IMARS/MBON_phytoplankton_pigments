@@ -94,6 +94,20 @@ p2 <-ggplot(filter(pig_dat, month == "December"),
 p2
 ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
     geom_violin()     
+
+chl_a_box <- pig_dat %>% 
+    filter(name_of_water_body == "Florida Keys") %>%
+    ggplot(aes(x=season, y=tot_chl_a))+
+    geom_boxplot() +
+    # geom_jitter(width = 0.1, size=0.5, alpha = 0.5) +
+    theme_classic() +
+    theme(text = element_text(size = 16)) +
+    # ggthemes::theme_tufte() +
+    scale_y_continuous(expand = c(0,0)) +
+    # facet_wrap(facet = ~name_of_water_body) +
+    labs(x = "Station",
+        y= expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
+    
 ```
 
 
