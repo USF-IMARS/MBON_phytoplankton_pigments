@@ -25,7 +25,7 @@ ctd_downloads <- function(IDS){
         
         ctd_data <- tabledap(out, url = eurl(), store = disk())
         
-        write.csv(ctd_data ,paste(root,"data/raw/ctd/",IDS,"/",
+        write.csv(ctd_data ,paste(root,"data//raw//ctd//",IDS,"/",
                                   results$info$dataset_id[j], ".csv", sep=""))
         
     }
