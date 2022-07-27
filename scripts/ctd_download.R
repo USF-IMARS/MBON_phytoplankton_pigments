@@ -11,11 +11,10 @@ mainDir <- rprojroot::find_rstudio_root_file()
 database <- "https://gcoos5.geos.tamu.edu/erddap/"
 Sys.setenv(RERDDAP_DEFAULT_URL = database)
 
-
 # -----------------------------------------------------------------------------
 # function to query and download CTD data from each cruise
 ctd_downloads <- function(IDS){
-    results <- (ed_search_adv(query = IDS))
+    results <- ed_search_adv(query = IDS)
     
     print(results)
     
@@ -25,8 +24,8 @@ ctd_downloads <- function(IDS){
         
         ctd_data <- tabledap(out, url = eurl(), store = disk())
         
-        write.csv(ctd_data ,paste(root,"data/raw/ctd/",IDS,"/",
-                                  results$info$dataset_id[j], ".csv", sep=""))
+        write.csv(ctd_data ,paste0(root,"//data//raw//ctd//",IDS,"/",
+                                  results$info$dataset_id[j], ".csv"))
         
     }
 }
