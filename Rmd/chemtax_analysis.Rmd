@@ -139,7 +139,8 @@ cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %
 plot.pig.3 <- function(.var, .title){
     ggplot() +
     geom_boxplot(cmtx_avgs, mapping = aes_string(x="season", y= .var)) +
-    theme_bw() +
+    theme_classic() +
+    theme(text = element_text(size = 16)) +
     ylim(0,0.125) +
     geom_jitter(cmtx_avgs, mapping = aes_string(x="season", y= .var, color="year"), width = 0.4, size=1) +
     scale_colour_gradient2(
@@ -177,6 +178,11 @@ for (i  in seq(phyto_name)) {
     p2[[sym(phyto_shrt[i])]] <- plot.pig.3(phyto_shrt[i], phyto_name[i])
     
 }
+
+cmtx_longer %>% 
+    ggplot(aes(x=season, y = value)) +
+    geom_boxplot() +
+    facet_wrap(facet =~ func_type, scales = "free_y")
 
 ```
 
