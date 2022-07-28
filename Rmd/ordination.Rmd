@@ -194,7 +194,7 @@ pairwise_p["w_a"] <- w_a_test[["Pr(>F)"]][1]
 
 ##correct p-values
 
-p.adjust(pairwise_p, method = "holm")
+p.adjust(pairwise_p, method = "bonferroni")
 
 ```
 
