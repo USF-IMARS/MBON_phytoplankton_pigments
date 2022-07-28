@@ -19,13 +19,18 @@ ctd_downloads <- function(IDS){
     print(results)
     
     for (j in 1:length(results$info$dataset_id)){
+        filename <- results$info$dataset_id[j]
+        file_path <- paste0(mainDir,"/data/raw/ctd/",IDS,"/",filename,".csv")
         
-        out <- info(results$info$dataset_id[j])
+        if (isTRUE(fs::file_exists(file_path))) {
+            next
+        }
+        
+        out <- info(filename)
         
         ctd_data <- tabledap(out, url = eurl(), store = disk())
 
-        write.csv(ctd_data ,paste0(root,"//data//raw//ctd//",IDS,"/",
-                                  results$info$dataset_id[j], ".csv"))
+        write.csv(ctd_data ,file_path)
         
     }
 }
@@ -56,3 +61,5 @@ for (i in 1:length(cruiseID)){
     print("-----------------------------------------")
 }
 
+
+IDS = cruiseID[1]
