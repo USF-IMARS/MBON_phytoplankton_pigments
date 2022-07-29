@@ -1,9 +1,6 @@
-# to read in all data for ctds, should do something like:
-# map_dfr({var from fs::dir_ls}, ~read_csv({with some parameters}), .id = "station")
-
-# then filter depth < 4 m, do either avg or median for parameters of interest
-# then link them to HPLC data using cruise ID and stations number
+library("purrr")
 library("rerddap")
+library("dplyr")
 mainDir <- rprojroot::find_rstudio_root_file()
 
 # -----------------------------------------------------------------------------
@@ -29,7 +26,7 @@ ctd_downloads <- function(IDS){
         out <- info(filename)
         
         ctd_data <- tabledap(out, url = eurl(), store = disk())
-
+        
         write.csv(ctd_data ,file_path)
         
     }
@@ -38,9 +35,9 @@ ctd_downloads <- function(IDS){
 # -----------------------------------------------------------------------------
 # list of cruises to search for
 cruiseID <- c("WS16074", "WS16130", "WS16263", "WS16319", "WS17086", "WS17170", 
-              "WS17282", "WS18008", "SV18067", "WS18120", "SV18173", "WS18218",
+              "WS17282", "WS18008", "SAV1803", "WS18120", "SAV18173", "WS18218",
               "WS18285", "WS18351", "WS19028", "WS19119", "WS19210", "WS19266",
-              "WS19322", "WS20006", "WS20230", "WS20278", "WS20342", "WS21032",
+              "WS19322", "WS20006", "WS20231", "WS20278", "WS20342", "WS21032",
               "WS21093")
 
 # -----------------------------------------------------------------------------
@@ -61,5 +58,65 @@ for (i in 1:length(cruiseID)){
     print("-----------------------------------------")
 }
 
+# -----------------------------------------------------------------------------
 
-IDS = cruiseID[1]
+data_dir <- paste0(mainDir,"/data/raw/ctd/")
+file.ctd <- 
+    fs::dir_ls(data_dir,
+               recurse = TRUE,
+               regexp = "\\.csv$") %>% 
+    stringr::str_sort()
+
+
+ctd_dat <- map_dfr(file.ctd, readr::read_csv, .id = "station")
+
+ctd_dat2 <-ctd_dat %>% 
+    mutate(station = as.numeric(station)) %>% 
+    filter(depth <= 5) %>% 
+    select(station, time, latitude, longitude, sea_water_pressure, 
+           sea_water_temperature, oxygen_saturation, dissolved_oxygen,
+           photosynthetically_available_radiation, depth, sea_water_salinity)
+
+file_names <- gsub( "H:/My Drive/MBON_phytoplankton_pigments/data/raw/ctd/", "", file.ctd)
+cruises <- gsub("/.*", "", file_names)
+stations <- gsub(".*stn", "", file_names)
+stations <- gsub(".*STN", "", stations)
+stations <- gsub(".*STA", "", stations)
+stations <- gsub(".*Stn", "", stations)
+stations <- gsub(".*Sta", "", stations)
+stations <- gsub(".csv", "", stations)
+stations <- gsub("SAV1803/Savannah_SAV1803_SAV1803_", "", stations)
+stations <-gsub("_", "", stations)
+
+View(as.data.frame(stations))
+ctd_dat_summary <- ctd_dat2 %>% 
+    group_by(station) %>% 
+    summarize(temp = mean(sea_water_temperature), o_sat = mean(oxygen_saturation), do = mean(dissolved_oxygen),
+       par = mean(photosynthetically_available_radiation), sal= mean(sea_water_salinity)) %>% 
+    cbind(cruises) %>% 
+    cbind(stations) %>% 
+    mutate(stations = case_when(stations %in% c("21LK", "21LKb") ~ "LK",
+                                stations %in% c("215", "215B", "215v2") ~ "21.5",
+                                stations == "012" ~ "12",
+                                stations %in% c("018") ~ "18",
+                                stations == "WSb" ~ "WS",
+                                stations %in% c("MRredo", "MRv2", "MRa") ~ "MR",
+                                stations %in% c("010") ~ "10",
+                                stations %in% c("07", "007") ~ "7",
+                                stations == "016" ~ "16", 
+                                stations == "060" ~"60",
+                                stations =="003" ~ "3",
+                                stations == "24real" ~ "24",
+                                TRUE ~ stations
+                                ),
+           cruises = case_when(cruises == "SAV18173" ~ "SV18173",
+                               cruises == "SAV1803" ~ "SV18067",
+                               cruises == "WS20231" ~ "WS20230",
+                               TRUE ~ cruises))
+
+env_cmtx <- cmtx_avgs %>% 
+    mutate(cruise_code = substr(sample, 1, 7)) %>% 
+    left_join(ctd_dat_summary, by = c("cruise_code" = "cruises", "station" = "stations")) %>% 
+    mutate_all(~ifelse(is.nan(.), NA, .)) 
+
+write.csv(env_cmtx, file = paste0(mainDir, "//data//processed//cmtx_env_data_for_cca.csv"))

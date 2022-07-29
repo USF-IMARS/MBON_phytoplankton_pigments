@@ -10,6 +10,7 @@ library("dplyr")
 library("ggplot2")
 library("tidyverse")
 library("vegan")
+library("ggvegan")
 
 root <- rprojroot::find_rstudio_root_file()
 dir2     <- "//data//processed//"
@@ -18,6 +19,7 @@ dir3 <- "//data//raw//"
 path_in = paste0(root,dir3)
 
 pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+cmtx_env <- read.csv(paste0(path_out, "cmtx_env_data_for_cca.csv"))
 
 # Chemtax files
 file.chem <-
@@ -118,6 +120,7 @@ cmtx_data_matrix2 <- cmtx_avgs2 %>%
 ggpca::ggPCoA(cmtx_data_matrix2, p.value = T)
 
 ```
+
 ```{r permanova}
 set.seed(1082002)
 all_test <- adonis2(cmtx_data_matrix ~ season, data = cmtx_avgs, method = "bray")
@@ -195,6 +198,17 @@ pairwise_p["w_a"] <- w_a_test[["Pr(>F)"]][1]
 ##correct p-values
 
 p.adjust(pairwise_p, method = "bonferroni")
+
+```
+
+```{r cca}
+cca_matrix <- env_cmtx %>% 
+    select(chloro:pras)
+
+cmtx_cca <- cca(cca_matrix ~ temp + o_sat + do + par + sal, data = env_cmtx, na.action = na.exclude)
+plot(cmtx_cca)
+autoplot(cmtx_cca, axes = c(6, 7))
+summary(cmtx_cca)
 
 ```
 
