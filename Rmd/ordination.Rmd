@@ -18,28 +18,12 @@ path_out <- paste0(root,dir2)
 dir3 <- "//data//raw//"
 path_in = paste0(root,dir3)
 
-pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
-cmtx_env <- read.csv(paste0(path_out, "cmtx_env_data_for_cca.csv"))
+# pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv"))
 
 # Chemtax files
-file.chem <-
-  fs::dir_ls(path = paste0(root,dir3),
-             recurse = TRUE,
-             regexp = "\\.xls$") %>% 
-    str_sort()
-
-cmtx_avgs_raw <- readxl::read_xls(
-    file.chem[5],
-    sheet=1,
-    .name_repair = janitor::make_clean_names
-)
-
-meta_data <- dplyr::select(.data=pig_dat, 
-                            hplc_gsfc_id:filter_storage_before_shipment_to_gfsc, 
-                            comments, season) %>%
-    filter(name_of_water_body == "Florida Keys")
-cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %>%
-    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
+cmtx_avgs <- read_csv(paste0(path_out,"chemtax_with_metadata.csv")) %>%
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 
 cmtx_avgs2 <- cmtx_avgs %>% 
     rownames_to_column(var = "row_num") %>% 
@@ -51,34 +35,6 @@ cmtx_data_matrix <- cmtx_avgs2 %>%
 #using this "sample_code" is probably not the best. It's essentially just using the season and row number
 #I only did it this way because the sample IDs and hplc_gsfc_ids have repeat values so I could not convert them to rownames, 
 # and I needed some way to color by season
-```
-
-```{r PCoA Euclidean}
-distance.matrix <- dist(scale(cmtx_data_matrix, 
-                              center = T, 
-                              scale = T),
-                        method = "euclidean") #I wasn't sure what method to use
-mds.cmtx <- cmdscale(distance.matrix, eig = T, x.ret = T)
-
-mds.var.per <- round(mds.cmtx$eig/sum(mds.cmtx$eig)*100, 1)
-
-mds.values <- mds.cmtx$points
-
-mds.data <- data.frame(Sample = rownames(mds.values),
-                       X=mds.values[,1],
-                       Y=mds.values[,2]) %>% 
-    separate(Sample, c("row_num", "season"))
-
-barplot(mds.var.per)
-
-mds.data %>% 
-    ggplot(aes(x=X, y=Y, color = season)) +
-    geom_point() +
-    theme_bw() +
-    labs(title = "MDS Plot Using Euclidean Distance",
-         x = paste("MDS1 - ", mds.var.per[1], "%", sep = ""),
-         y= paste("MDS1 - ", mds.var.per[2], "%", sep = ""))
-
 ```
 
 ```{r Bray-Curtis-Dissimilarity-Matrix}
@@ -202,13 +158,151 @@ p.adjust(pairwise_p, method = "bonferroni")
 ```
 
 ```{r cca}
+library(ggord)
+library(magrittr)
+library("GGally")
 cca_matrix <- env_cmtx %>% 
     select(chloro:pras)
 
-cmtx_cca <- cca(cca_matrix ~ temp + o_sat + do + par + sal, data = env_cmtx, na.action = na.exclude)
-plot(cmtx_cca)
-autoplot(cmtx_cca, axes = c(6, 7))
-summary(cmtx_cca)
+cmtx_cca <- cca(cca_matrix ~ temp +sal + par, data = env_cmtx, na.action = na.omit,
+                scaling = 1)
 
+summary(cmtx_cca, scaling = 1)
+
+
+plot(cmtx_cca)
+autoplot(cmtx_cca, axes = c(1,2)) +
+    theme_classic() 
+
+ggord(cmtx_cca, size = 1.5, grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
+      ellipse = F, ptslab = T, addsize = 4, ylim = c(-6.25, 6.25), xlim = c(-5, 5))
+
+ggplot(env_cmtx)+
+    geom_boxplot(aes(y=par)) +
+    facet_wrap(facet=~season)
+
+env_cmtx %>% 
+    select(-c(cruise_code, indx, cruise.y)) %>% 
+    ggpairs(columns = 27:41, ggplot2::aes(color=season)) 
+
+
+library(ggordiplots)
+gg_ordiplot(cmtx_cca, env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
+            scaling = 1)
+```
+
+```{r}
+neword <- function(ord_in, grp_in = NULL, axes = c("1", "2"), ...) 
+{
+axes <- paste0("CCA", axes)
+    obs <- data.frame(ord_in$CCA$wa[, axes])
+    obs$Groups <- grp_in
+    addpts <- data.frame(ord_in$CCA$v[, axes])
+    constr <- data.frame(ord_in$CCA$biplot[, axes])
+    exp_var <- summary(ord_in, scaling = 1)$concont$importance[2, axes]
+    axes <- paste0(axes, " (", round(100 * exp_var, 2), "%)")
+    names(obs)[1:2] <- axes
+    ggord:::ggord.default(obs, vecs = constr, axes, addpts = addpts, 
+        ...)
+}
+
+neword(cmtx_cca)
+```
+
+```{r}
+function (ord, groups, scaling = 1, choices = c(1, 2), kind = c("sd", 
+    "se", "ehull"), conf = NULL, show.groups = "all", ellipse = TRUE, 
+    label = FALSE, hull = FALSE, spiders = FALSE, pt.size = 3, 
+    plot = TRUE) 
+{
+    groups <- as.factor(groups)
+    if (show.groups[1] == "all") {
+        show.groups <- as.vector(levels(groups))
+    }
+    df_ord <- vegan::scores(ord, display = "sites", scaling = scaling, 
+        choices = choices)
+    axis.labels <- ord_labels(ord)[choices]
+    df_ord <- data.frame(x = df_ord[, 1], y = df_ord[, 2], Group = groups)
+    df_mean.ord <- aggregate(df_ord[, 1:2], by = list(df_ord$Group), 
+        mean)
+    colnames(df_mean.ord) <- c("Group", "x", "y")
+    df_mean.ord <- df_mean.ord[df_mean.ord$Group %in% show.groups, 
+        ]
+    if (is.null(conf)) {
+        rslt <- vegan::ordiellipse(ord, groups = groups, display = "sites", 
+            scaling = scaling, choices = choices, kind = kind, 
+            show.groups = show.groups, draw = "none", label = label)
+    }
+    else {
+        rslt <- vegan::ordiellipse(ord, groups = groups, display = "sites", 
+            scaling = scaling, choices = choices, kind = kind, 
+            show.groups = show.groups, draw = "none", conf = conf, 
+            label = label)
+    }
+    df_ellipse <- data.frame()
+    for (g in show.groups) {
+        df_ellipse <- rbind(df_ellipse, cbind(as.data.frame(with(df_ord[df_ord$Group == 
+            g, ], vegan:::veganCovEllipse(rslt[[g]]$cov, rslt[[g]]$center, 
+            rslt[[g]]$scale))), Group = g))
+    }
+    colnames(df_ellipse) <- c("x", "y", "Group")
+    df_ellipse <- df_ellipse[, c(3, 1, 2)]
+    rslt.hull <- vegan::ordihull(ord, groups = groups, scaling = scaling, 
+        choices = choices, show.groups = show.groups, draw = "none")
+    df_hull <- data.frame()
+    df_temp <- data.frame()
+    for (g in show.groups) {
+        x <- rslt.hull[[g]][, 1]
+        y <- rslt.hull[[g]][, 2]
+        Group <- rep(g, length(x))
+        df_temp <- data.frame(Group = Group, x = x, y = y)
+        df_hull <- rbind(df_hull, df_temp)
+    }
+    df_spiders <- df_ord
+    df_spiders$cntr.x <- NA
+    df_spiders$cntr.y <- NA
+    for (g in show.groups) {
+        df_spiders[which(df_spiders$Group == g), 4:5] <- df_mean.ord[which(df_mean.ord == 
+            g), 2:3]
+    }
+    df_spiders <- df_spiders[, c(3, 4, 5, 1, 2)]
+    df_spiders <- df_spiders[order(df_spiders$Group), ]
+    df_spiders <- df_spiders[df_spiders$Group %in% show.groups, 
+        ]
+    xlab <- axis.labels[1]
+    ylab <- axis.labels[2]
+    plt <- ggplot2::ggplot() + geom_point(data = df_ord, aes(x = x, 
+        y = y, color = Group), size = pt.size) + xlab(xlab) + 
+        ylab(ylab)
+    if (ellipse == TRUE) {
+        plt <- plt + geom_path(data = df_ellipse, aes(x = x, 
+            y = y, color = Group), show.legend = FALSE)
+    }
+    if (label == TRUE) {
+        plt <- plt + geom_text(data = df_mean.ord, aes(x = x, 
+            y = y, label = Group, color = Group), show.legend = FALSE)
+    }
+    if (hull == TRUE) {
+        plt <- plt + geom_path(data = df_hull, aes(x = x, y = y, 
+            color = Group), show.legend = FALSE)
+    }
+    if (spiders == TRUE) {
+        plt <- plt + geom_segment(data = df_spiders, aes(x = cntr.x, 
+            xend = x, y = cntr.y, yend = y, color = Group), show.legend = FALSE)
+    }
+    plt <- plt + coord_fixed(ratio = 1)
+    if (plot) {
+        print(plt)
+    }
+    invisible(list(df_ord = df_ord, df_mean.ord = df_mean.ord, 
+        df_ellipse = df_ellipse, df_hull = df_hull, df_spiders = df_spiders, 
+        plot = plt))
+}
+
+cca_new <- vegan::scores(cmtx_cca, display = "sites", scaling = 1, 
+        choices = c(1, 2))
+
+ggord(cca_new, size = 1.5, grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
+      ellipse = F, ptslab = T, addsize = 4, ylim = c(-6.25, 6.25), xlim = c(-5, 5))
 ```
 
