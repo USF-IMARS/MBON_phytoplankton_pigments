@@ -3,6 +3,6 @@
 .RData
 .Ruserdata
 .Rprofile
-
+.RDataTmp
 data/
 **/.DS_Store
