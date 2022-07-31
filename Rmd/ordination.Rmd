@@ -11,6 +11,10 @@ library("ggplot2")
 library("tidyverse")
 library("vegan")
 library("ggvegan")
+library("magrittr")
+library(ggord)
+library("GGally")
+library(cowplot)
 
 root <- rprojroot::find_rstudio_root_file()
 dir2     <- "//data//processed//"
@@ -19,7 +23,8 @@ dir3 <- "//data//raw//"
 path_in = paste0(root,dir3)
 
 # pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
-env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv"))
+env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv")) %>% 
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 
 # Chemtax files
 cmtx_avgs <- read_csv(paste0(path_out,"chemtax_with_metadata.csv")) %>%
@@ -38,44 +43,118 @@ cmtx_data_matrix <- cmtx_avgs2 %>%
 ```
 
 ```{r Bray-Curtis-Dissimilarity-Matrix}
-cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray") # dissimilarity matrix using bray-curtis distance indices on the varespec dataset native to vegan
+library(ecodist)
+library(ggords)
+# cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray")
+# 
+# cmtx_pcoa <- cmdscale(cmtx_bray, eig = TRUE)
+# 
+# ggords::ggpcoa(cmtx_pcoa, cmtx_data_matrix, )
+#     
+# 
+# 
+# pcoa <- pco(cmtx_bray, negvals = "zero", dround = 0)
+# 
+# plot(pcoa$vectors[,1], pcoa$vectors[,2], type = "p", xlab = "PCoA1", ylab = "PCoA2",
+#  axes = TRUE, main = "PCoA on CHEMTAX data")
+# 
+# text(pcoa$vectors[,1], pcoa$vectors[,2], labels(cmtx_bray), 
+#  cex = 0.9, xpd = TRUE)
+# 
+# 
+# pcoa.var.per <- round(pcoa$value/sum(pcoa$value)*100, 1)
+# 
+# cmtx_val <-pcoa$vectors
+# 
+# pcoa.data <- data.frame(Sample = rownames(cmtx_val),
+#                        X=cmtx_val[,1],
+#                        Y=cmtx_val[,2]) %>% 
+#     separate(Sample, c("row_num", "season"))
+# 
+# barplot(mds.var.per)
+# 
+# ggplot(data=pcoa, aes(x=vectors[,1], y=vectors[,2], color=season)) +
+#   geom_point() +
+#   theme_bw() +
+#   xlab(paste("MDS1 - ", mds.var.per[1], "%", sep="")) +
+#   ylab(paste("MDS2 - ", mds.var.per[2], "%", sep="")) +
+#   ggtitle("MDS plot using avg(logFC) as the distance") 
+# 
+# pcoaVS$values # eigenvalue for each component. This is a measure of the variance explained by each dimension
+# pcoaVS$vectors # eigenvectors. Each column contains the scores for that dimension.
 
-pcoa <- pco(cmtx_bray, negvals = "zero", dround = 0)
+# cmtx_data_matrix2 <- cmtx_avgs2 %>%
+#     mutate(group = season) %>%
+#     select(group, chloro:pras)
+# ggpca::ggPCoA(cmtx_data_matrix2) +
+#     theme_classic() +
+#     theme(text=element_text(family="serif", size=20))
 
-plot(pcoa$vectors[,1], pcoa$vectors[,2], type = "p", xlab = "PCoA1", ylab = "PCoA2",
- axes = TRUE, main = "PCoA (ecodist) on CHEMTAX data")
+```
 
-text(pcoa$vectors[,1], pcoa$vectors[,2], labels(cmtx_bray), 
- cex = 0.9, xpd = TRUE)
+```{r}
+ggPCoA2 <- function(data, pc = 12,
+                   level = 0.68){
+  dis <- vegan::vegdist(data[, -1], method = "bray")
+  pcoa <- ape::pcoa(dis, correction = "none", rn = NULL)
+  eig <- round(100*pcoa$values[1:3, 2], 2)
+  site <- pcoa$vectors[, 1:3]
+  if(all(rownames(site) == rownames(data))){
+    pca.data <- data.frame(group = data$group, site)
+    colnames(pca.data)[2:4] <- paste0("PCoA", 1:3)
+  }
+  label <- data.frame(min = apply(pca.data[, 2:4], 2, min),
+                      max = apply(pca.data[, 2:4], 2, max))
+  label$mean <- (label$min + label$max)/2
+  if (pc == 12) {
+    x <- "PCoA1"
+    y <- "PCoA2"
+    x.posi <- label[1, 3]
+    y.posi <- label[2, 2]
+    x.lab <- paste0(x, ": ", eig[1], "%")
+    y.lab <- paste0(y, ": ", eig[2], "%")
+  }else if (pc == 13) {
+    x <- "PCoA1"
+    y <- "PCoA3"
+    x.posi <- label[1, 3]
+    y.posi <- label[3, 2]
+    x.lab <- paste0(x, ": ", eig[1], "%")
+    y.lab <- paste0(y, ": ", eig[3], "%")
+  }else if (pc == 23) {
+    x <- "PCoA2"
+    y <- "PCoA3"
+    x.posi <- label[2, 3]
+    y.posi <- label[3, 2]
+    x.lab <- paste0(x, ": ", eig[2], "%")
+    y.lab <- paste0(y, ": ", eig[3], "%")
+  }
+  p <- ggplot(data = pca.data,
+              aes_string(x = x, y = y, color = "group")) +
+    geom_point(aes(color = group),
+               size = 3, alpha = 1) +
+    xlab(x.lab) + ylab(y.lab)
+  p <- p + theme_classic() +
+      theme(text=element_text(family="serif", size=20),
+               legend.position = c(0.1, 0.85)) +
+      scale_color_discrete(name = "Season")
+  return(p)
+}
 
-
-pcoa.var.per <- round(pcoa$value/sum(pcoa$value)*100, 1)
-
-cmtx_val <-pcoa$vectors
-
-pcoa.data <- data.frame(Sample = rownames(cmtx_val),
-                       X=cmtx_val[,1],
-                       Y=cmtx_val[,2]) %>% 
-    separate(Sample, c("row_num", "season"))
-
-barplot(mds.var.per)
-
-ggplot(data=pcoa, aes(x=vectors[,1], y=vectors[,2], color=season)) +
-  geom_point() +
-  theme_bw() +
-  xlab(paste("MDS1 - ", mds.var.per[1], "%", sep="")) +
-  ylab(paste("MDS2 - ", mds.var.per[2], "%", sep="")) +
-  ggtitle("MDS plot using avg(logFC) as the distance") 
-
-pcoaVS$values # eigenvalue for each component. This is a measure of the variance explained by each dimension
-pcoaVS$vectors # eigenvectors. Each column contains the scores for that dimension.
 
 cmtx_data_matrix2 <- cmtx_avgs2 %>%
     mutate(group = season) %>%
     select(group, chloro:pras)
-ggpca::ggPCoA(cmtx_data_matrix2, p.value = T)
+ggPCoA2(cmtx_data_matrix2)
 
+save_plot(filename = paste0(root,"/data/plots/pcoa", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
 ```
+
 
 ```{r permanova}
 set.seed(1082002)
@@ -158,24 +237,35 @@ p.adjust(pairwise_p, method = "bonferroni")
 ```
 
 ```{r cca}
-library(ggord)
-library(magrittr)
-library("GGally")
+
+extrafont::font_import()
 cca_matrix <- env_cmtx %>% 
     select(chloro:pras)
 
-cmtx_cca <- cca(cca_matrix ~ temp +sal + par, data = env_cmtx, na.action = na.omit,
-                scaling = 1)
+cmtx_cca <- cca(cca_matrix ~ temp +sal + par, data = env_cmtx, na.action = na.omit)
 
-summary(cmtx_cca, scaling = 1)
+# summary(cmtx_cca, scaling = 1)
 
 
-plot(cmtx_cca)
-autoplot(cmtx_cca, axes = c(1,2)) +
-    theme_classic() 
-
-ggord(cmtx_cca, size = 1.5, grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
-      ellipse = F, ptslab = T, addsize = 4, ylim = c(-6.25, 6.25), xlim = c(-5, 5))
+plot(cmtx_cca, scaling = 1)
+# autoplot(cmtx_cca, axes = c(1,2)) +
+#     theme_classic() 
+new.lab <- list(temp = "Temp", sal = "Sal", par = "PAR")
+Tol_muted2 <- c('#88CCEE', '#44AA99', '#117733', '#332288')
+ggord(cmtx_cca, size = 4, grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
+      ellipse = F, ptslab = T, addsize = 6, ylim = c(-6.25, 6.25), xlim = c(-4, 5),
+      repel = T, txt = 6, vec_lab = new.lab, grp_title = "Season"
+      ) +
+    scale_color_discrete(breaks=c('Winter', 'Spring', 'Summer', 'Autumn'), name = "Season") +
+    theme_classic()+
+    theme(text=element_text(family="serif", size=20), legend.position = c(0.15, 0.9))
+save_plot(filename = paste0(root,"/data/plots/cca", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 10,
+          base_width = 8,
+          dpi = 600, units = "in", device='png')
 
 ggplot(env_cmtx)+
     geom_boxplot(aes(y=par)) +
@@ -305,4 +395,3 @@ cca_new <- vegan::scores(cmtx_cca, display = "sites", scaling = 1,
 ggord(cca_new, size = 1.5, grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
       ellipse = F, ptslab = T, addsize = 4, ylim = c(-6.25, 6.25), xlim = c(-5, 5))
 ```
-

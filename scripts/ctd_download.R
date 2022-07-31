@@ -117,7 +117,7 @@ ctd_dat_summary <- ctd_dat2 %>%
                                TRUE ~ cruises))
 
 env_cmtx <- cmtx_avgs %>% 
-    mutate(cruise_code = substr(sample, 1, 7)) %>% 
+    mutate(cruise_code = substr(sample, 1, 7), season = as.character(season)) %>% 
     left_join(ctd_dat_summary, by = c("cruise_code" = "cruises", "station" = "station")) %>% 
     mutate_all(~ifelse(is.nan(.), NA, .)) 
 
