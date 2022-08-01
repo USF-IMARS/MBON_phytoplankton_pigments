@@ -34,10 +34,10 @@ path <- paste0(root,"/data/map/")
 
 # Region of Interest Bounding Box    ------------- edit this
 # Change the spatial extent
-exnt <- c(xmin = -82.5, # West
+exnt <- c(xmin = -82, # West
           xmax = -79.75, # East
           ymin = 24,# South
-          ymax = 26   # North 
+          ymax = 25.5   # North 
         )
 
 # inset extent (i.e. smaller map on top of zoomed in map)

@@ -142,7 +142,7 @@ plot.pig.3 <- function(.var, .title){
     ggplot() +
     geom_boxplot(cmtx_avgs, mapping = aes_string(x="season", y= .var)) +
     theme_classic() +
-    theme(text = element_text(size = 16)) +
+    theme(text = element_text(size = 12)) +
     ylim(0,0.125) +
     geom_jitter(cmtx_avgs, mapping = aes_string(x="season", y= .var, color="year"), width = 0.4, size=1) +
     scale_colour_gradient2(
@@ -182,9 +182,23 @@ for (i  in seq(phyto_name)) {
 }
 
 cmtx_longer %>% 
-    ggplot(aes(x=season, y = value)) +
+    ggplot(aes(x=season, y = value, fill = season)) +
     geom_boxplot() +
-    facet_wrap(facet =~ func_type, scales = "free_y")
+    facet_wrap(facet =~ func_type, scales = "free_y") +
+    theme_classic() +
+    theme(text = element_text(family = "serif", size = 18),
+          axis.text = element_text(size = 10),
+          legend.position = "none") +
+    labs(x = "Season",
+         y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
+
+save_plot(filename = paste0(root,"/data/plots/cmtx_boxplots", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
 
 ```
 
@@ -225,7 +239,8 @@ cmtx_stat <- cmtx_avgs %>%
            hapt = hapt6 + hapt8,
            total = chloro + crypto + diat + dino + hapt + pras + cyano
            ) %>% 
-    group_by(year, season, station) %>% 
+    # group_by(year, season, station) %>% 
+    group_by(season) %>% 
     summarise_at(vars(chloro:hapt),
                  list(avg = mean, sd = sd, var = var),
                  na.rm = TRUE)
@@ -246,13 +261,54 @@ cmtx_fract <- cmtx_avgs %>%
            frac_dino = dino/total,
            frac_hapt = hapt/total,
            frac_pras = pras/total)%>% 
-    select(hplc_gsfc_id:season, frac_chloro:frac_pras) %>% 
-    pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_")
+    select(hplc_gsfc_id:season, frac_chloro:frac_pras) # %>% 
+    # pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_")
+
+view(cmtx_fract %>% 
+         group_by(season) %>% 
+         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)))
+view(cmtx_fract %>% 
+         mutate(station = forcats::fct_reorder(station, lon)) %>% 
+         group_by(station) %>% 
+         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)))
+
+
+
 
 max_fract <-cmtx_fract %>%
     group_by(hplc_gsfc_id) %>% 
     summarise(max_frac = max(frac)) %>% 
     left_join(cmtx_fract, by = c("max_frac" = "frac"))
+
+cmtx_fract %>% 
+         group_by(season) %>% 
+         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)) %>% 
+    gt(
+        rowname_col = NULL,
+        groupname_col = NULL
+    ) %>% 
+    cols_label(
+        frac_chloro_avg = "Chloro",
+        frac_crypto_avg = "Crypto",
+        frac_cyano_avg = "Cyano",
+        frac_diat_avg = "Diat",
+        frac_dino_avg = "Dino",
+        frac_hapt_avg = "Hapt",
+        frac_pras_avg = "Pras") %>% 
+    tab_options(
+        table_body.hlines.width = 0,
+        table_body.vlines.width = 0,
+        stub.border.width = 0
+    ) %>%
+    # fmt_number(columns = starts_with("frac"), decimals = 4) %>% 
+    fmt_percent(columns = starts_with("frac"), decimals = 0) %>% 
+    tab_spanner(label = "Average Fraction",
+                columns = frac_chloro_avg:frac_pras_avg) %>% 
+    tab_stubhead("Season") %>% 
+    opt_table_font("serif") %>% 
+    gtsave(filename = paste0(root,"/data/plots/community_fractions", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".html"))
 
 ```
 
