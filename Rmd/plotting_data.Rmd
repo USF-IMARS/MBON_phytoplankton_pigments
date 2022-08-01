@@ -96,17 +96,26 @@ ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
     geom_violin()     
 
 chl_a_box <- pig_dat %>% 
-    filter(name_of_water_body == "Florida Keys") %>%
+    filter(name_of_water_body == "Florida Keys", tot_chl_a < 4) %>%
     ggplot(aes(x=season, y=tot_chl_a))+
-    geom_boxplot() +
+    geom_boxplot(outlier.shape = NA) +
+    stat_summary(fun.y=mean, geom="point", shape=20, size=8) +
     # geom_jitter(width = 0.1, size=0.5, alpha = 0.5) +
     theme_classic() +
-    theme(text = element_text(size = 16)) +
+    theme(text = element_text(size = 24, family = "serif")) +
     # ggthemes::theme_tufte() +
-    scale_y_continuous(expand = c(0,0)) +
+    scale_y_continuous(expand = c(0,0), limits = c(0, 0.7)) +
     # facet_wrap(facet = ~name_of_water_body) +
     labs(x = "Station",
         y= expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
+
+save_plot(filename = paste0(root,"/data/plots/chla", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 8,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
     
 ```
 
@@ -183,10 +192,10 @@ fract_dat %>%
 
 ```{r plotting-chemtax-data}
 #season_year order vector
-seasonyr_order <- c("Spring 2016", "Summer 2016", "Autumn 2016", "Winter 2016-2017", "Spring 2017", 
+seasonyr_order <- c("Spring 2016", "Summer 2016 (No Data)", "Autumn 2016", "Winter 2016-2017 (No Data)", "Spring 2017", 
                     "Summer 2017", "Autumn 2017", "Winter 2017-2018", "Spring 2018",
                     "Summer 2018", "Autumn 2018", "Winter 2018-2019", "Spring 2019", 
-                    "Summer 2019", "Autumn 2019", "Winter 2019-2020", "Spring 2020",
+                    "Summer 2019", "Autumn 2019", "Winter 2019-2020", "Spring 2020 (No Data)",
                     "Summer 2020", "Autumn 2020", "Winter 2020-2021", "Spring 2021")
 
 cmtx_longer2 <- cmtx_avgs %>% 
@@ -202,13 +211,13 @@ cmtx_longer2 <- cmtx_avgs %>%
            .after = season)
 
 # added rows with the missing seasons so that the facet grid will have seasons by column
-new.row <- list(season_year="Summer 2016", station = "3")
+new.row <- list(season_year="Summer 2016 (No Data)", station = "3")
 cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row
 
-new.row2 <- list(season_year="Winter 2016-2017", station = "3")
+new.row2 <- list(season_year="Winter 2016-2017 (No Data)", station = "3")
 cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row2
 
-new.row3 <- list(season_year="Spring 2020", station = "3")
+new.row3 <- list(season_year="Spring 2020 (No Data)", station = "3")
 cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row3
 
 rm(new.row3, new.row2, new.row)
@@ -231,8 +240,11 @@ mutate(station = forcats::fct_reorder(station, lon))%>%
 ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
     geom_bar(position = "fill", stat = "identity") +
     facet_wrap(~season_year, ncol = 4) +
-    theme_bw()+
-    theme(text=element_text(family="serif", size=12)) +
+    theme_classic() +
+    theme(text=element_text(family="serif", size = 16),
+          axis.title=element_text(size=18),
+          legend.position = c(0.6, 0.05),
+          legend.direction = "horizontal") +
     labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type") +
     scale_fill_manual(values = Tol_muted) +

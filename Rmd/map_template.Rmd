@@ -34,10 +34,10 @@ path <- paste0(root,"/data/map/")
 
 # Region of Interest Bounding Box    ------------- edit this
 # Change the spatial extent
-exnt <- c(xmin = -82.5, # West
+exnt <- c(xmin = -82, # West
           xmax = -79.75, # East
-          ymin = 24,# South
-          ymax = 26   # North 
+          ymin = 24.25,# South
+          ymax = 25.75   # North 
         )
 
 # inset extent (i.e. smaller map on top of zoomed in map)
@@ -160,14 +160,14 @@ stn.map <- ggplot() +
              # alpha = 0.5,
              stroke = 1.5,
              show.legend = FALSE) +
-    geom_text(data = lat_lon_dat, 
-              aes(x = lon, y = lat, label = station),
-              vjust = -0.5,
-              hjust = -0.0001,
-              size = 5) +
+    # geom_text(data = lat_lon_dat, 
+    #           aes(x = lon, y = lat, label = station),
+    #           vjust = -0.5,
+    #           hjust = -0.0001,
+    #           size = 5) +
   scale_shape_manual(values = c(24,25,21))+
   scale_x_continuous(expand = c(0,0)) + 
-  scale_y_continuous(expand = c(0,0), breaks = seq(30.5,32,0.5)) +
+  scale_y_continuous(expand = c(0,0)) +
   coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
   labs(
     x = "",
@@ -186,6 +186,14 @@ stn.map <- ggplot() +
         )
 
 stn.map
+
+cowplot::save_plot(filename = paste0(root,"/data/plots/station_map", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 12,
+          base_width = 12,
+          dpi = 600, units = "in", device='png')
 # plotly::ggplotly(
 #     ggplot() +
 #   geom_point(data = pig_dat,

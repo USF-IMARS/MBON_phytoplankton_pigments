@@ -128,10 +128,10 @@ ggPCoA2 <- function(data, pc = 12,
     x.lab <- paste0(x, ": ", eig[2], "%")
     y.lab <- paste0(y, ": ", eig[3], "%")
   }
-  p <- ggplot(data = pca.data,
-              aes_string(x = x, y = y, color = "group")) +
-    geom_point(aes(color = group),
-               size = 3, alpha = 1) +
+  p <-ggplot(data = pca.data, aes_string(x = x, y = y, color = "group")) + 
+        geom_point(aes(color = group), size = 1.5, 
+            alpha = 1) + stat_ellipse(level = level, linetype = 3, 
+        geom = "polygon", alpha = 0.02, aes(fill = group), show.legend = FALSE) + 
     xlab(x.lab) + ylab(y.lab)
   p <- p + theme_classic() +
       theme(text=element_text(family="serif", size=20),
