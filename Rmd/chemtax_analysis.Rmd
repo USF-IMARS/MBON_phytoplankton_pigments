@@ -183,6 +183,7 @@ for (i  in seq(phyto_name)) {
 
 #PFTs with larger scales 
 cmtx_longer %>% 
+
     filter(!func_type %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>% 
     ggplot(aes(x=season, y = value, fill = season)) +
     geom_boxplot(outlier.shape = NA) +
@@ -224,7 +225,6 @@ save_plot(filename = paste0(root,"/data/plots/cmtx_boxplots_large",
           base_height = 12,
           base_width = 7,
           dpi = 600, units = "in", device='png')
-
 
 ```
 
