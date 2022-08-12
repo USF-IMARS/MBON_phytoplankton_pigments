@@ -106,7 +106,7 @@ chl_a_box <- pig_dat %>%
     # ggthemes::theme_tufte() +
     scale_y_continuous(expand = c(0,0), limits = c(0, 0.7)) +
     # facet_wrap(facet = ~name_of_water_body) +
-    labs(x = "Station",
+    labs(x = "Season",
         y= expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
 
 save_plot(filename = paste0(root,"/data/plots/chla", 
@@ -222,6 +222,8 @@ cmtx_longer2[nrow(cmtx_longer2) + 1, names(new.row)] <- new.row3
 
 rm(new.row3, new.row2, new.row)
 
+
+
 #chemtax stacked bar graph
 ggplot(cmtx_longer2, aes(fill = func_type, color = func_type, y=conc, x=station))+ 
     geom_bar(position="fill", stat="identity") +
@@ -292,6 +294,28 @@ cmtx_avgs2 <- cmtx_avgs %>%
 ggplot(cmtx_avgs2, aes(x = lubridate::ymd_hms(date_time_utc), y=dino/total_chl_a)) +
     geom_point(aes(color = season)) +
     geom_smooth(span = 0.3, se = F)
+
+
+#time series for diatom at specific station
+cmtx_longer3 <- cmtx_avgs %>% 
+    filter(station == "10" | station == "WS" | station == "16") %>% 
+    mutate(diat = diat1 + diat2,
+           cyano = cyano2 + cyano4,
+           hapt = hapt6 + hapt8) %>% 
+    subset(select = -c(diat1, diat2, cyano2, cyano4, hapt6, hapt8)) %>% 
+    pivot_longer(cols = (chloro:hapt), names_to = "func_type", values_to = "conc") %>% 
+    group_by(station,func_type, date_time_utc) %>% 
+    summarize(avg_conc = mean(conc), .keep = c(season = season)) %>% 
+    distinct()
+
+#station 16
+cmtx_longer3 %>% 
+    filter(func_type %in% c("diat", "cyano")) %>% 
+ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = avg_conc, color = func_type, fill = func_type))+
+    geom_point() +
+    geom_line() +
+    facet_wrap(facets = station)
+    
     
     # geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))
 #point plot with smoothing line for all functional groups
@@ -303,7 +327,8 @@ cmtx_longer2 %>%
     filter(year < 2019) %>%
     ggplot(aes(x = lubridate::ymd_hms(date_time_utc), y = conc/total_chl_a, color = func_type)) +
     geom_smooth(se=F) +
-    geom_point()
+    geom_point() +
+    geom_line()
 
 # aov(dino ~ season+ as.factor(year) + season:as.factor(year), data = cmtx_avgs) %>% 
 #             summary()
@@ -321,6 +346,8 @@ cmtx_kruskal2 <- cmtx_longer %>%
            .after = season) %>% 
     group_by(func_type) %>% 
     kruskal_test(value ~ season_year)
+
+
 
 cmtx_dunn2 <- cmtx_longer2 %>%
     group_by(func_type) %>%
