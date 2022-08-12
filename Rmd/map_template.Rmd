@@ -46,6 +46,13 @@ exnt2 <-  c(-90, # West
             20,  # South
             35   # North
             ) 
+
+exnt3 <- c(xmin = -82,
+           xmax = -80.5,
+           ymin = 24.3,
+           ymax = 25
+)
+           
 names(exnt2) <- names(exnt)
 ```
 
@@ -138,16 +145,17 @@ bathy <- raster::raster(paste0(path,"etopo1.nc")) %>%
 
 ```{r plots, fig.height=6, fig.width=10}
 lat_lon_dat <- pig_dat %>%
-    filter(name_of_water_body == "Florida Keys", station != "60") %>%
+    # filter(name_of_water_body == "Florida Keys", station != "60") %>%
+    filter(name_of_water_body == "Florida Keys", station %in% c("WS", "10", "16")) %>% 
     dplyr::select(station, lat, lon) %>% 
     distinct(station, lat, lon)
 
 stn.map <- ggplot() +
-  geom_contour2(data = bathy, 
-                aes(x = x, y = y, z = -Altitude), 
-                col = "grey40",
-                breaks = c(100, 40, 25, 10, 0)
-                ) +
+  # geom_contour2(data = bathy, 
+  #               aes(x = x, y = y, z = -Altitude), 
+  #               col = "grey40",
+  #               breaks = c(100, 40, 25, 10, 0)
+  #               ) +
   geom_sf(data = world2) +
   # geom_point(data = pig_dat,
     geom_point(data = lat_lon_dat,
@@ -160,15 +168,14 @@ stn.map <- ggplot() +
              # alpha = 0.5,
              stroke = 1.5,
              show.legend = FALSE) +
-    # geom_text(data = lat_lon_dat, 
-    #           aes(x = lon, y = lat, label = station),
-    #           vjust = -0.5,
-    #           hjust = -0.0001,
-    #           size = 5) +
+    geom_text(data = lat_lon_dat,
+              aes(x = lon, y = lat, label = station),
+              size = 10,
+              nudge_y = -0.05) +
   scale_shape_manual(values = c(24,25,21))+
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0)) +
-  coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
+  coord_sf(xlim = exnt3[1:2], ylim = exnt3[3:4]) +
   labs(
     x = "",
     y = "",
@@ -194,7 +201,7 @@ cowplot::save_plot(filename = paste0(root,"/data/plots/station_map",
           base_height = 12,
           base_width = 12,
           dpi = 600, units = "in", device='png')
-# plotly::ggplotly(
+s# plotly::ggplotly(
 #     ggplot() +
 #   geom_point(data = pig_dat,
 #              aes(
