@@ -15,6 +15,7 @@ library("magrittr")
 library(ggord)
 library("GGally")
 library(cowplot)
+library("ggfortify")
 
 root <- rprojroot::find_rstudio_root_file()
 dir2     <- "//data//processed//"
@@ -33,6 +34,9 @@ cmtx_avgs <- read_csv(paste0(path_out,"chemtax_with_metadata.csv")) %>%
 cmtx_avgs2 <- cmtx_avgs %>% 
     rownames_to_column(var = "row_num") %>% 
     unite("sample_code", row_num, season, remove = F)
+
+ggplot(data = env_cmtx, aes(y = sal, x = season)) +
+    geom_path()
 
 cmtx_data_matrix <- cmtx_avgs2 %>%
     select(sample_code, chloro:pras) %>% 
@@ -95,7 +99,7 @@ library(ggords)
 ```{r}
 ggPCoA2 <- function(data, pc = 12,
                    level = 0.68){
-  dis <- vegan::vegdist(data[, -1], method = "bray")
+  dis <- vegan::vegdist(data[, -1], method = "bray", na.rm = TRUE)
   pcoa <- ape::pcoa(dis, correction = "none", rn = NULL)
   eig <- round(100*pcoa$values[1:3, 2], 2)
   site <- pcoa$vectors[, 1:3]
@@ -153,6 +157,32 @@ save_plot(filename = paste0(root,"/data/plots/pcoa",
           base_height = 6,
           base_width = 10,
           dpi = 600, units = "in", device='png')
+
+
+env_data_matrix <- env_cmtx %>% 
+    # mutate(group = season) %>% 
+    select(temp, par, sal, season) %>% 
+    na.omit()
+
+env_pca <- prcomp(env_data_matrix[1:3], scale. = TRUE)
+ggplot2::autoplot(env_pca, data = env_data_matrix, colour = "season") +
+    theme_classic() +
+    theme(text=element_text(family="serif", size=20),
+               legend.position = c(0.8, 0.85)) +
+    scale_colour_discrete(name = "Season")
+
+save_plot(filename = paste0(root,"/data/plots/pca", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
+    
+
+set.seed(1082002)
+all_test <- adonis2(env_data_matrix[1:3] ~ season, data = env_data_matrix, method = "bray")
+
 ```
 
 
