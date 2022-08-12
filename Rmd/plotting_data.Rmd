@@ -296,7 +296,7 @@ ggplot(cmtx_avgs2, aes(x = lubridate::ymd_hms(date_time_utc), y=dino/total_chl_a
     geom_smooth(span = 0.3, se = F)
 
 
-#time series for diatom at specific station
+#time series for diatom at specific stations
 cmtx_longer3 <- cmtx_avgs %>% 
     filter(station == "10" | station == "WS" | station == "16") %>% 
     mutate(diat = diat1 + diat2,
@@ -314,7 +314,7 @@ cmtx_longer3 %>%
 ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = avg_conc, color = func_type, fill = func_type))+
     geom_point() +
     geom_line() +
-    facet_wrap(facets = station)
+    facet_wrap(facets = "station")
     
     
     # geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))

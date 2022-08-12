@@ -286,12 +286,12 @@ cmtx_fract <- cmtx_avgs %>%
            frac_dino = dino/total,
            frac_hapt = hapt/total,
            frac_pras = pras/total)%>% 
-    select(hplc_gsfc_id:season, frac_chloro:frac_pras)  %>% 
-    pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_")
+    select(hplc_gsfc_id:season, frac_chloro:frac_pras)
 
 
 
 cmtx_fract %>% 
+    pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_") %>% 
     filter(func_type %in% c("diat", "cyano")) %>% 
     filter(station %in% c("WS", "10", "16")) %>% 
 ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = frac, color = func_type, fill = func_type))+
@@ -303,7 +303,7 @@ ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = frac, color = func_type, fil
           axis.text = element_text(size = 30),
           legend.position = c(0.5, 0.8))+
     labs(color = "Functional Type", fill = "Functional Type", 
-         x = "Date and Time", y = "Proportion to total Chlorophyll-a")
+         x = "", y = "Proportion to Total Chl-a")
 
 cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_bloom",
            ".jpg"), 
@@ -344,7 +344,7 @@ cmtx_fract2 <- cmtx_fract %>%
           axis.title=element_text(size=40),
           legend.position = "bottom",
           legend.direction = "horizontal") +
-    labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
+    labs(x = "Season", y= "Proportion to Total Chl-a", fill = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type") +
     scale_fill_manual(values = Tol_muted) +
     scale_color_manual(values = Tol_muted)
