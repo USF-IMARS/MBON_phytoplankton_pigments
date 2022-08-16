@@ -1,0 +1,77 @@
+---
+title: "Seascapes"
+author: "Anna Finch"
+date: "8/15/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("raster")
+library("dplyr")
+library("tibble")
+library("tidyr")
+library("readr")
+library("purrr")
+library("stringr")
+library("ggplot2")
+library("sp")
+library("rgdal")
+library("maptools")
+library("rgeos")
+
+
+
+
+
+root <- rprojroot::find_rstudio_root_file()
+
+dirsea <- "/data/raw/seascapes/"
+seasc.path = paste0(root, dirsea)
+unzip(paste0(seasc.path, "fknms_global_monthly.zip"), exdir = seasc.path)
+
+
+dir2 <- "//data//processed//"
+path_out <-  paste0(root,dir2)
+cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
+
+```
+
+```{r}
+mth_yr_list <- substr(cmtx_avgs[,'date_time_utc'], 1, 7) %>% 
+    unique()
+
+mth_yr_list <- lapply(X = mth_yr_list, FUN = function(mth_yr_list) gsub(pattern = "-", replacement = ".", x = mth_yr_list, fixed = TRUE))
+
+mth_yr_list <- do.call(c, mth_yr_list)
+
+mth_yr_df <- as.data.frame(mth_yr_list)
+
+file.seascapes <-
+  fs::dir_ls(path =seasc.path,
+             # included ^[^~]* to not match ~, means that a file is opened
+             regexp = "^[^~]*\\.tif$") %>% 
+    str_sort()
+
+month_yr_seascapes <- lapply(X = file.seascapes, FUN = function(file.seascapes) gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = file.seascapes))
+month_yr_seascapes <- lapply(X = month_yr_seascapes, FUN = function(month_yr_seascapes) gsub(pattern = ".15.tif", replacement = "", x = month_yr_seascapes))
+month_yr_seascapes <- do.call(c, month_yr_seascapes)
+
+file.seascapes2 <- as.data.frame(cbind(file.seascapes, month_yr_seascapes))
+
+seascapes_match <- left_join(mth_yr_df, file.seascapes2, by = c("mth_yr_list" = "month_yr_seascapes")) %>% 
+    na.omit()
+
+file.sea <- seascapes_match$file.seascapes %>% 
+    str_sort()
+
+```
+
+```{r}
+sea1 <- raster(file.sea[1])
+
+
+
+
+```
+
