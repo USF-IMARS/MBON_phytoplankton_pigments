@@ -38,40 +38,121 @@ cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
 ```
 
 ```{r}
-mth_yr_list <- substr(cmtx_avgs[,'date_time_utc'], 1, 7) %>% 
-    unique()
+# #make list of cruises by year and month in format "YYYY.MM" to match
+# #how the seascapes .tif files are named
+# mth_yr_list <- substr(cmtx_avgs[,'date_time_utc'], 1, 7) %>% 
+#     unique()
+# mth_yr_list <- lapply(X = mth_yr_list, FUN = function(mth_yr_list) gsub(pattern = "-", replacement = ".", x = mth_yr_list, fixed = TRUE))
+# mth_yr_list <- do.call(c, mth_yr_list)
+# mth_yr_df <- as.data.frame(mth_yr_list)
 
-mth_yr_list <- lapply(X = mth_yr_list, FUN = function(mth_yr_list) gsub(pattern = "-", replacement = ".", x = mth_yr_list, fixed = TRUE))
+# making new column in df with year and month in format "YYYY.MM"
+cmtx_sea <- cmtx_avgs %>% 
+    mutate(yr_mth = substring(cmtx_avgs$date_time_utc, 1, 7),
+           yr_mth = gsub(pattern = "-", replacement = ".", x = yr_mth))
+mth_yr_df <- base::as.data.frame(unique(cmtx_sea$yr_mth)) %>% 
+    rename("yr_mth" = "unique(cmtx_sea$yr_mth)")
 
-mth_yr_list <- do.call(c, mth_yr_list)
-
-mth_yr_df <- as.data.frame(mth_yr_list)
-
+#making df one column is the file names and the other column is the year and
+#month for the file in format "YYYY.MM" to match with the other list
 file.seascapes <-
   fs::dir_ls(path =seasc.path,
              # included ^[^~]* to not match ~, means that a file is opened
              regexp = "^[^~]*\\.tif$") %>% 
-    str_sort()
+    as.data.frame() %>% 
+    mutate(yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = .),
+           yr_mth = gsub(pattern = ".15.tif", replacement = "", x = yr_mth))
+ 
+##old method
+# file.seascapes <-
+#   fs::dir_ls(path =seasc.path,
+#              # included ^[^~]* to not match ~, means that a file is opened
+#              regexp = "^[^~]*\\.tif$") %>% 
+#     str_sort() 
+# month_yr_seascapes <- lapply(X = file.seascapes, FUN = function(file.seascapes) gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = file.seascapes))
+# month_yr_seascapes <- lapply(X = month_yr_seascapes, FUN = function(month_yr_seascapes) gsub(pattern = ".15.tif", replacement = "", x = month_yr_seascapes))
+# month_yr_seascapes <- do.call(c, month_yr_seascapes)
+# file.seascapes2 <- as.data.frame(cbind(file.seascapes, month_yr_seascapes))
 
-month_yr_seascapes <- lapply(X = file.seascapes, FUN = function(file.seascapes) gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = file.seascapes))
-month_yr_seascapes <- lapply(X = month_yr_seascapes, FUN = function(month_yr_seascapes) gsub(pattern = ".15.tif", replacement = "", x = month_yr_seascapes))
-month_yr_seascapes <- do.call(c, month_yr_seascapes)
-
-file.seascapes2 <- as.data.frame(cbind(file.seascapes, month_yr_seascapes))
-
-seascapes_match <- left_join(mth_yr_df, file.seascapes2, by = c("mth_yr_list" = "month_yr_seascapes")) %>% 
+#selecting the file names that correspond to the year and month combos that the 
+#cruises had
+seascapes_match <- left_join(mth_yr_df,
+                             file.seascapes,
+                             by = c("yr_mth")) %>%
     na.omit()
-
-file.sea <- seascapes_match$file.seascapes %>% 
+file.sea <- seascapes_match$. %>% 
     str_sort()
 
 ```
 
 ```{r}
-sea1 <- raster(file.sea[1])
+sea1 <- raster(file.sea[1]) %>% 
+    tabularaster::as_tibble(xy = T) %>% 
+    drop_na(cellvalue)
+
+coord_df <- cmtx_avgs %>% 
+    distinct(station, .keep_all = T) %>% 
+    select(lon, lat)
+
+coord <- coord_df %>% 
+    sp::SpatialPointsDataFrame(coords = cbind(coord$lon,coord$lat), 
+                           proj4string = CRS(SRS_string = "EPSG:4326")) # %>% 
+    # spTransform(CRS("+proj=tmerc +lat_0=0 +lon_0=27 +k=1 +x_0=500000 +y_0=0 +ellps=GRS80 +units=m +no_defs")) 
+
+df <- list()
+
+temp_dist <- geosphere::distGeo(
+    p1 = sea1[,3:4],
+    p2 = coord[i,]
+) 
+
+sea1 %>% mutate(distance = temp_dist) %>% 
+    filter(temp_dist < 12000)
 
 
 
+# x_bar = exp(sum( (1/distance) * log(cellvalue)) / sum(1/distance))
+
+df[i] <- x_bar
+
+
+seascape_list <- list()
+for (i in 1:length(coord)) {
+    temp_dist <- geosphere::distGeo(
+    p1 = sea1[,3:4],
+    p2 = coord[i,]
+    )
+    temp_df <- sea1 %>% mutate(dist = as.numeric(temp_dist)) %>% 
+    filter(temp_dist < 12000) 
+    x_bar = (exp(sum( (1/temp_df$dist) * log(temp_df$cellvalue)) / sum(1/temp_df$dist)) )
+
+    seascape_list[i] <- x_bar
+}
+# 0.001611039
+# 0.0001969852
+plot(raster(file.sea[1]))
+unique(temp_df$cellvalue)
+hist(temp_df$cellvalue)
+seascape_list
+temp_df %>% 
+    mutate(new_d = dist) %>% 
+    group_by(cellvalue) %>% 
+    summarise(sum1 = sum(1/new_d)/n()) %>% 
+    mutate(prop = sum1 / sum(sum1)*100)
+# class21 = x_bar$class21/ sum(x_bar)
+temp_df %>% 
+    mutate(new_d = dist) %>% 
+    arrange(new_d)
+
+view(temp_df)
+```
+
+```{r function-to-extract-seascapes-at-each-station-for-one-cruise}
+
+extract_seascapes <- function(filename) {
+    
+}
 
 ```
+
 
