@@ -106,16 +106,6 @@ temp_dist <- geosphere::distGeo(
     p2 = coord[i,]
 ) 
 
-sea1 %>% mutate(distance = temp_dist) %>% 
-    filter(temp_dist < 12000)
-
-
-
-# x_bar = exp(sum( (1/distance) * log(cellvalue)) / sum(1/distance))
-
-df[i] <- x_bar
-
-
 seascape_list <- list()
 for (i in 1:length(coord)) {
     temp_dist <- geosphere::distGeo(
@@ -123,36 +113,116 @@ for (i in 1:length(coord)) {
     p2 = coord[i,]
     )
     temp_df <- sea1 %>% mutate(dist = as.numeric(temp_dist)) %>% 
-    filter(temp_dist < 12000) 
-    x_bar = (exp(sum( (1/temp_df$dist) * log(temp_df$cellvalue)) / sum(1/temp_df$dist)) )
+        filter(temp_dist < 12000) %>% 
+        group_by(cellvalue) %>% 
+        summarise(sum1 = sum(1/dist)/n()) %>% 
+        mutate(prob = sum1 / sum(sum1))
+    greatest_prob <- filter(temp_df, prob == max(prob))
+    
+    if(nrow(greatest_prob) == 0){
+        seascape_list[i] <- NA
+    }
+    else {seascape_list[i] <- greatest_prob$cellvalue
+    }
+    
+    # seascape_list[i] <- greatest_prob$cellvalue
 
-    seascape_list[i] <- x_bar
+    # x_bar = (exp(sum( (1/temp_df$dist) * log(temp_df$cellvalue)) / sum(1/temp_df$dist)) )
+    # 
+    # seascape_list[i] <- x_bar
 }
-# 0.001611039
-# 0.0001969852
-plot(raster(file.sea[1]))
-unique(temp_df$cellvalue)
-hist(temp_df$cellvalue)
-seascape_list
-temp_df %>% 
-    mutate(new_d = dist) %>% 
-    group_by(cellvalue) %>% 
-    summarise(sum1 = sum(1/new_d)/n()) %>% 
-    mutate(prop = sum1 / sum(sum1)*100)
-# class21 = x_bar$class21/ sum(x_bar)
-temp_df %>% 
-    mutate(new_d = dist) %>% 
-    arrange(new_d)
 
-view(temp_df)
+
+# plot(raster(file.sea[1]))
+unique(temp_df$cellvalue)
+# hist(temp_df$cellvalue)
+seascape_list
+# temp_df %>% 
+#     mutate(new_d = dist) %>% 
+#     group_by(cellvalue) %>% 
+#     summarise(sum1 = sum(1/new_d)/n()) %>% 
+#     mutate(prop = sum1 / sum(sum1)*100)
+
+
+# i = 10, 12
+
+sea1 %>% mutate(dist = as.numeric(temp_dist)) %>% 
+        filter(temp_dist < 12000) %>% 
+    arrange(dist)
+
+
+
 ```
 
 ```{r function-to-extract-seascapes-at-each-station-for-one-cruise}
 
-extract_seascapes <- function(filename) {
+extract_seascapes <- function(filename, df) {
+    sea <- raster(filename) %>%
+        tabularaster::as_tibble(xy = T) %>%
+        drop_na(cellvalue)
     
+    coord_df <- df %>%
+        distinct(station, .keep_all = T) %>%
+        select(lon, lat)
+
+    coord <- coord_df %>%
+        sp::SpatialPointsDataFrame(coords = cbind(coord$lon,coord$lat),
+                               proj4string = CRS(SRS_string = "EPSG:4326"))
+
+    seascape_list <- list()
+    for (i in 1:length(coord)) {
+        temp_dist <- geosphere::distGeo(
+        p1 = sea1[,3:4],
+        p2 = coord[i,]
+        )
+        temp_df <- sea1 %>% mutate(dist = as.numeric(temp_dist)) %>%
+            filter(temp_dist < 12000) %>%
+            group_by(cellvalue) %>%
+            summarise(sum1 = sum(1/dist)/n()) %>%
+            mutate(prob = sum1 / sum(sum1))
+        greatest_prob <- filter(temp_df, prob == max(prob))
+    
+        if(nrow(greatest_prob) == 0){
+            seascape_list[i] <- NA
+        }
+        else {seascape_list[i] <- greatest_prob$cellvalue
+        }
+    }
+    
+    sea_coord <- coord_df %>% 
+        mutate(seascape = unlist(seascape_list))
+    
+    return(sea_coord)
+    
+    # return(seascape_list)
 }
 
+extract_seascapes(file.sea[1], cmtx_avgs)
 ```
+
+```{r }
+
+seascapes_df <- data.frame(matrix(ncol = 4, nrow = 0))
+colnames(seascapes_df) <- c('lon', 'lat', 'seascape', "yr_mth")
+
+for (i in 1:length(file.sea)) {
+    filename = file.sea[i]
+    
+    yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = filename) %>% 
+        gsub(pattern = ".15.tif", replacement = "")
+    
+    seascapes_temp <- extract_seascapes(filename, cmtx_sea) %>% 
+        mutate(yr_mth = yr_mth)
+    
+    seascapes_df <- rbind(seascapes_df, seascapes_temp)
+}
+
+
+cmtx_sea2 <- cmtx_sea %>% 
+    left_join(seascapes_df)
+
+
+```
+
 
 
