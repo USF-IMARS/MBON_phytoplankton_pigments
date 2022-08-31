@@ -19,12 +19,15 @@ library("sp")
 library("rgdal")
 library("maptools")
 library("rgeos")
+library("vegan")
 
 
 
 
 
 root <- rprojroot::find_rstudio_root_file()
+
+source(paste0(root, "/scripts/seascapes_extract.R"))
 
 dirsea <- "/data/raw/seascapes/"
 seasc.path = paste0(root, dirsea)
@@ -154,52 +157,6 @@ sea1 %>% mutate(dist = as.numeric(temp_dist)) %>%
 
 ```
 
-```{r function-to-extract-seascapes-at-each-station-for-one-cruise}
-
-extract_seascapes <- function(filename, df) {
-    sea <- raster(filename) %>%
-        tabularaster::as_tibble(xy = T) %>%
-        drop_na(cellvalue)
-    
-    coord_df <- df %>%
-        distinct(station, .keep_all = T) %>%
-        select(lon, lat)
-
-    coord <- coord_df %>%
-        sp::SpatialPointsDataFrame(coords = cbind(coord$lon,coord$lat),
-                               proj4string = CRS(SRS_string = "EPSG:4326"))
-
-    seascape_list <- list()
-    for (i in 1:length(coord)) {
-        temp_dist <- geosphere::distGeo(
-        p1 = sea1[,3:4],
-        p2 = coord[i,]
-        )
-        temp_df <- sea1 %>% mutate(dist = as.numeric(temp_dist)) %>%
-            filter(temp_dist < 12000) %>%
-            group_by(cellvalue) %>%
-            summarise(sum1 = sum(1/dist)/n()) %>%
-            mutate(prob = sum1 / sum(sum1))
-        greatest_prob <- filter(temp_df, prob == max(prob))
-    
-        if(nrow(greatest_prob) == 0){
-            seascape_list[i] <- NA
-        }
-        else {seascape_list[i] <- greatest_prob$cellvalue
-        }
-    }
-    
-    sea_coord <- coord_df %>% 
-        mutate(seascape = unlist(seascape_list))
-    
-    return(sea_coord)
-    
-    # return(seascape_list)
-}
-
-extract_seascapes(file.sea[1], cmtx_avgs)
-```
-
 ```{r }
 
 seascapes_df <- data.frame(matrix(ncol = 4, nrow = 0))
@@ -208,21 +165,37 @@ colnames(seascapes_df) <- c('lon', 'lat', 'seascape', "yr_mth")
 for (i in 1:length(file.sea)) {
     filename = file.sea[i]
     
+    #extract month and year in format "YYYY.MM"
     yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = filename) %>% 
         gsub(pattern = ".15.tif", replacement = "")
     
+    #make temporary dataframe with seascapes, coordinates, and year+month for cruise
     seascapes_temp <- extract_seascapes(filename, cmtx_sea) %>% 
         mutate(yr_mth = yr_mth)
     
+    #combine the dataframes with seascapes for each cruise
     seascapes_df <- rbind(seascapes_df, seascapes_temp)
 }
 
-
+# join the chemtax and seascapes data
 cmtx_sea2 <- cmtx_sea %>% 
-    left_join(seascapes_df)
+    left_join(seascapes_df) %>% 
+    drop_na(seascape)
 
 
 ```
+
+```{r}
+#bray curtis then CAP
+
+seascspec <- cmtx_sea2 %>% 
+    select(chloro:pras)
+
+seasc.cap <- capscale(seascspec ~ seascape, cmtx_sea2, dist = "bray")
+
+plot(seasc.cap)
+```
+
 
 
 
