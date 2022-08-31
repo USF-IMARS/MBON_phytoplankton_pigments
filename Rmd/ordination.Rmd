@@ -41,9 +41,6 @@ ggplot(data = env_cmtx, aes(y = sal, x = season)) +
 cmtx_data_matrix <- cmtx_avgs2 %>%
     select(sample_code, chloro:pras) %>% 
     column_to_rownames(var = "sample_code")
-#using this "sample_code" is probably not the best. It's essentially just using the season and row number
-#I only did it this way because the sample IDs and hplc_gsfc_ids have repeat values so I could not convert them to rownames, 
-# and I needed some way to color by season
 ```
 
 ```{r Bray-Curtis-Dissimilarity-Matrix}

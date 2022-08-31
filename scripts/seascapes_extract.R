@@ -1,3 +1,5 @@
+
+
 extract_seascapes <- function(filename, df) {
     sea <- raster(filename) %>%
         tabularaster::as_tibble(xy = T) %>%
