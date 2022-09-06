@@ -1,21 +1,34 @@
+# load rerddap to aquire data
+
+
+# to read in all data for ctds, should do something like:
+# map_dfr({var from fs::dir_ls}, ~read_csv({with some parameters}), .id = "station")
+
+# then filter depth < 4 m, do either avg or median for parameters of interest
+# then link them to HPLC data using cruise ID and stations number
+
 library("purrr")
 library("rerddap")
 library("dplyr")
 root <- rprojroot::find_rstudio_root_file()
+
 
 # -----------------------------------------------------------------------------
 # set database
 database <- "https://gcoos5.geos.tamu.edu/erddap/"
 Sys.setenv(RERDDAP_DEFAULT_URL = database)
 
+
 # -----------------------------------------------------------------------------
 # function to query and download CTD data from each cruise
 ctd_downloads <- function(IDS){
     results <- ed_search_adv(query = IDS)
+
     
     print(results)
     
     for (j in 1:length(results$info$dataset_id)){
+
         filename <- results$info$dataset_id[j]
         file_path <- paste0(root,"/data/raw/ctd/",IDS,"/",filename,".csv")
         
@@ -28,6 +41,7 @@ ctd_downloads <- function(IDS){
         ctd_data <- tabledap(out, url = eurl(), store = disk())
         
         write.csv(ctd_data ,file_path)
+
         
     }
 }
@@ -43,7 +57,7 @@ cruiseID <- c("WS16074", "WS16130", "WS16263", "WS16319", "WS17086", "WS17170",
 # -----------------------------------------------------------------------------
 # create folder for cruises
 for (k in 1:length(cruiseID)){
-    try(dir.create(paste0(root,"//data//raw//ctd//",cruiseID[k]))) # need to test
+    try(dir.create(paste0(root,"/data/raw/ctd/", cruiseID[k]))) # need to test
 }
 
 
