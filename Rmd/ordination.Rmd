@@ -1,0 +1,424 @@
+---
+title: "Ordination"
+author: "Anna Finch"
+date: '2022-07-21'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library("dplyr")
+library("ggplot2")
+library("tidyverse")
+library("vegan")
+library("ggvegan")
+library("magrittr")
+library("ggord")
+library("GGally")
+library("cowplot")
+library("ggfortify")
+
+root <- rprojroot::find_rstudio_root_file()
+dir2     <- "//data//processed//"
+path_out <- paste0(root,dir2)
+dir3 <- "//data//raw//"
+path_in = paste0(root,dir3)
+
+# pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv")) %>% 
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
+
+# Chemtax files
+cmtx_avgs <- read_csv(paste0(path_out,"chemtax_with_metadata.csv")) %>%
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
+
+cmtx_avgs2 <- cmtx_avgs %>% 
+    rownames_to_column(var = "row_num") %>% 
+    unite("sample_code", row_num, season, remove = F)
+
+ggplot(data = env_cmtx, aes(y = sal, x = season)) +
+    geom_path()
+
+cmtx_data_matrix <- cmtx_avgs2 %>%
+    select(sample_code, chloro:pras) %>% 
+    column_to_rownames(var = "sample_code")
+```
+
+```{r Bray-Curtis-Dissimilarity-Matrix}
+library(ecodist)
+library(ggords)
+# cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray")
+# 
+# cmtx_pcoa <- cmdscale(cmtx_bray, eig = TRUE)
+# 
+# ggords::ggpcoa(cmtx_pcoa, cmtx_data_matrix, )
+#     
+# 
+# 
+# pcoa <- pco(cmtx_bray, negvals = "zero", dround = 0)
+# 
+# plot(pcoa$vectors[,1], pcoa$vectors[,2], type = "p", xlab = "PCoA1", ylab = "PCoA2",
+#  axes = TRUE, main = "PCoA on CHEMTAX data")
+# 
+# text(pcoa$vectors[,1], pcoa$vectors[,2], labels(cmtx_bray), 
+#  cex = 0.9, xpd = TRUE)
+# 
+# 
+# pcoa.var.per <- round(pcoa$value/sum(pcoa$value)*100, 1)
+# 
+# cmtx_val <-pcoa$vectors
+# 
+# pcoa.data <- data.frame(Sample = rownames(cmtx_val),
+#                        X=cmtx_val[,1],
+#                        Y=cmtx_val[,2]) %>% 
+#     separate(Sample, c("row_num", "season"))
+# 
+# barplot(mds.var.per)
+# 
+# ggplot(data=pcoa, aes(x=vectors[,1], y=vectors[,2], color=season)) +
+#   geom_point() +
+#   theme_bw() +
+#   xlab(paste("MDS1 - ", mds.var.per[1], "%", sep="")) +
+#   ylab(paste("MDS2 - ", mds.var.per[2], "%", sep="")) +
+#   ggtitle("MDS plot using avg(logFC) as the distance") 
+# 
+# pcoaVS$values # eigenvalue for each component. This is a measure of the variance explained by each dimension
+# pcoaVS$vectors # eigenvectors. Each column contains the scores for that dimension.
+
+# cmtx_data_matrix2 <- cmtx_avgs2 %>%
+#     mutate(group = season) %>%
+#     select(group, chloro:pras)
+# ggpca::ggPCoA(cmtx_data_matrix2) +
+#     theme_classic() +
+#     theme(text=element_text(family="serif", size=20))
+
+```
+
+```{r}
+ggPCoA2 <- function(data, pc = 12,
+                   level = 0.68){
+  dis <- vegan::vegdist(data[, -1], method = "bray", na.rm = TRUE)
+  pcoa <- ape::pcoa(dis, correction = "none", rn = NULL)
+  eig <- round(100*pcoa$values[1:3, 2], 2)
+  site <- pcoa$vectors[, 1:3]
+  if(all(rownames(site) == rownames(data))){
+    pca.data <- data.frame(group = data$group, site)
+    colnames(pca.data)[2:4] <- paste0("PCoA", 1:3)
+  }
+  label <- data.frame(min = apply(pca.data[, 2:4], 2, min),
+                      max = apply(pca.data[, 2:4], 2, max))
+  label$mean <- (label$min + label$max)/2
+  if (pc == 12) {
+    x <- "PCoA1"
+    y <- "PCoA2"
+    x.posi <- label[1, 3]
+    y.posi <- label[2, 2]
+    x.lab <- paste0(x, ": ", eig[1], "%")
+    y.lab <- paste0(y, ": ", eig[2], "%")
+  }else if (pc == 13) {
+    x <- "PCoA1"
+    y <- "PCoA3"
+    x.posi <- label[1, 3]
+    y.posi <- label[3, 2]
+    x.lab <- paste0(x, ": ", eig[1], "%")
+    y.lab <- paste0(y, ": ", eig[3], "%")
+  }else if (pc == 23) {
+    x <- "PCoA2"
+    y <- "PCoA3"
+    x.posi <- label[2, 3]
+    y.posi <- label[3, 2]
+    x.lab <- paste0(x, ": ", eig[2], "%")
+    y.lab <- paste0(y, ": ", eig[3], "%")
+  }
+  p <-ggplot(data = pca.data, aes_string(x = x, y = y, color = "group")) + 
+        geom_point(aes(color = group), size = 1.5, 
+            alpha = 1) + stat_ellipse(level = level, linetype = 3, 
+        geom = "polygon", alpha = 0.02, aes(fill = group), show.legend = FALSE) + 
+    xlab(x.lab) + ylab(y.lab)
+  p <- p + theme_classic() +
+      theme(text=element_text(family="serif", size=20),
+               legend.position = c(0.1, 0.85)) +
+      scale_color_discrete(name = "Season")
+  return(p)
+}
+
+
+cmtx_data_matrix2 <- cmtx_avgs2 %>%
+    mutate(group = season) %>%
+    select(group, chloro:pras)
+ggPCoA2(cmtx_data_matrix2)
+
+save_plot(filename = paste0(root,"/data/plots/pcoa", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
+
+
+env_data_matrix <- env_cmtx %>% 
+    # mutate(group = season) %>% 
+    select(temp, par, sal, season) %>% 
+    na.omit()
+
+env_pca <- prcomp(env_data_matrix[1:3], scale. = TRUE)
+ggplot2::autoplot(env_pca, data = env_data_matrix, colour = "season") +
+    theme_classic() +
+    theme(text=element_text(family="serif", size=20),
+               legend.position = c(0.8, 0.85)) +
+    scale_colour_discrete(name = "Season")
+
+save_plot(filename = paste0(root,"/data/plots/pca", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 6,
+          base_width = 10,
+          dpi = 600, units = "in", device='png')
+    
+
+set.seed(1082002)
+all_test <- adonis2(env_data_matrix[1:3] ~ season, data = env_data_matrix, method = "bray")
+
+```
+
+
+```{r permanova}
+set.seed(1082002)
+all_test <- adonis2(cmtx_data_matrix ~ season, data = cmtx_avgs, method = "bray")
+
+### Pairwise
+pairwise_p <- numeric()
+
+#Spring vs. Summer
+sp_su <- cmtx_avgs %>% 
+    filter(season == "Spring" | season == "Summer")
+
+sp_su_dm <- sp_su %>%
+    select(chloro:pras)
+
+sp_su_test <- adonis2(sp_su_dm ~ season*station, data = sp_su, method = "bray")
+
+pairwise_p["sp_su"] <- sp_su_test[["Pr(>F)"]][1]
+
+#Spring vs. Winter
+sp_w <- cmtx_avgs %>% 
+    filter(season == "Spring" | season == "Winter")
+
+sp_w_dm <- sp_w %>%
+    select(chloro:pras)
+
+sp_w_test <- adonis2(sp_w_dm ~ season, data = sp_w, method = "bray")
+
+pairwise_p["sp_w"] <- sp_w_test[["Pr(>F)"]][1]
+
+#Spring vs. Autumn
+sp_a <- cmtx_avgs %>% 
+    filter(season == "Spring" | season == "Autumn")
+
+sp_a_dm <- sp_a %>%
+    select(chloro:pras)
+
+sp_a_test <- adonis2(sp_a_dm ~ season, data = sp_a, method = "bray")
+
+pairwise_p["sp_a"] <- sp_a_test[["Pr(>F)"]][1]
+
+
+#Summer vs. Autumn
+su_a <- cmtx_avgs %>% 
+    filter(season == "Summer" | season == "Autumn")
+
+su_a_dm <- su_a %>%
+    select(chloro:pras)
+
+su_a_test <- adonis2(su_a_dm ~ season, data = su_a, method = "bray")
+
+pairwise_p["su_a"] <- su_a_test[["Pr(>F)"]][1]
+
+#Summer vs. Winter
+su_w <- cmtx_avgs %>% 
+    filter(season == "Summer" | season == "Winter")
+
+su_w_dm <- su_w %>%
+    select(chloro:pras)
+
+su_w_test <- adonis2(su_w_dm ~ season, data = su_w, method = "bray")
+
+pairwise_p["su_w"] <- su_w_test[["Pr(>F)"]][1]
+
+#Winter vs. Autumn
+w_a <- cmtx_avgs %>% 
+    filter(season == "Winter" | season == "Autumn")
+
+w_a_dm <- w_a %>%
+    select(chloro:pras)
+
+w_a_test <- adonis2(w_a_dm ~ season, data = w_a, method = "bray")
+
+pairwise_p["w_a"] <- w_a_test[["Pr(>F)"]][1]
+
+##correct p-values
+
+p.adjust(pairwise_p, method = "bonferroni")
+
+```
+
+```{r cca}
+
+extrafont::font_import()
+cca_matrix <- env_cmtx %>% 
+    select(chloro:pras)
+
+cmtx_cca <- cca(cca_matrix ~ temp +sal + par, data = env_cmtx, na.action = na.omit)
+
+# summary(cmtx_cca, scaling = 1)
+
+
+plot(cmtx_cca, scaling = 1)
+# autoplot(cmtx_cca, axes = c(1,2)) +
+#     theme_classic() 
+new.lab <- list(temp = "Temp", sal = "Sal", par = "PAR")
+Tol_muted2 <- c('#88CCEE', '#44AA99', '#117733', '#332288')
+ggord(cmtx_cca, size = 4, grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
+      ellipse = F, ptslab = T, addsize = 6, ylim = c(-6.25, 6.25), xlim = c(-4, 5),
+      repel = T, txt = 6, vec_lab = new.lab, grp_title = "Season"
+      ) +
+    scale_color_discrete(breaks=c('Winter', 'Spring', 'Summer', 'Autumn'), name = "Season") +
+    theme_classic()+
+    theme(text=element_text(family="serif", size=20), legend.position = c(0.15, 0.9))
+save_plot(filename = paste0(root,"/data/plots/cca", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 10,
+          base_width = 8,
+          dpi = 600, units = "in", device='png')
+
+ggplot(env_cmtx)+
+    geom_boxplot(aes(y=par)) +
+    facet_wrap(facet=~season)
+
+env_cmtx %>% 
+    select(-c(cruise_code, indx, cruise.y)) %>% 
+    ggpairs(columns = 27:41, ggplot2::aes(color=season)) 
+
+
+library(ggordiplots)
+gg_ordiplot(cmtx_cca, env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
+            scaling = 1)
+```
+
+```{r}
+neword <- function(ord_in, grp_in = NULL, axes = c("1", "2"), ...) 
+{
+axes <- paste0("CCA", axes)
+    obs <- data.frame(ord_in$CCA$wa[, axes])
+    obs$Groups <- grp_in
+    addpts <- data.frame(ord_in$CCA$v[, axes])
+    constr <- data.frame(ord_in$CCA$biplot[, axes])
+    exp_var <- summary(ord_in, scaling = 1)$concont$importance[2, axes]
+    axes <- paste0(axes, " (", round(100 * exp_var, 2), "%)")
+    names(obs)[1:2] <- axes
+    ggord:::ggord.default(obs, vecs = constr, axes, addpts = addpts, 
+        ...)
+}
+
+neword(cmtx_cca)
+```
+
+```{r}
+function (ord, groups, scaling = 1, choices = c(1, 2), kind = c("sd", 
+    "se", "ehull"), conf = NULL, show.groups = "all", ellipse = TRUE, 
+    label = FALSE, hull = FALSE, spiders = FALSE, pt.size = 3, 
+    plot = TRUE) 
+{
+    groups <- as.factor(groups)
+    if (show.groups[1] == "all") {
+        show.groups <- as.vector(levels(groups))
+    }
+    df_ord <- vegan::scores(ord, display = "sites", scaling = scaling, 
+        choices = choices)
+    axis.labels <- ord_labels(ord)[choices]
+    df_ord <- data.frame(x = df_ord[, 1], y = df_ord[, 2], Group = groups)
+    df_mean.ord <- aggregate(df_ord[, 1:2], by = list(df_ord$Group), 
+        mean)
+    colnames(df_mean.ord) <- c("Group", "x", "y")
+    df_mean.ord <- df_mean.ord[df_mean.ord$Group %in% show.groups, 
+        ]
+    if (is.null(conf)) {
+        rslt <- vegan::ordiellipse(ord, groups = groups, display = "sites", 
+            scaling = scaling, choices = choices, kind = kind, 
+            show.groups = show.groups, draw = "none", label = label)
+    }
+    else {
+        rslt <- vegan::ordiellipse(ord, groups = groups, display = "sites", 
+            scaling = scaling, choices = choices, kind = kind, 
+            show.groups = show.groups, draw = "none", conf = conf, 
+            label = label)
+    }
+    df_ellipse <- data.frame()
+    for (g in show.groups) {
+        df_ellipse <- rbind(df_ellipse, cbind(as.data.frame(with(df_ord[df_ord$Group == 
+            g, ], vegan:::veganCovEllipse(rslt[[g]]$cov, rslt[[g]]$center, 
+            rslt[[g]]$scale))), Group = g))
+    }
+    colnames(df_ellipse) <- c("x", "y", "Group")
+    df_ellipse <- df_ellipse[, c(3, 1, 2)]
+    rslt.hull <- vegan::ordihull(ord, groups = groups, scaling = scaling, 
+        choices = choices, show.groups = show.groups, draw = "none")
+    df_hull <- data.frame()
+    df_temp <- data.frame()
+    for (g in show.groups) {
+        x <- rslt.hull[[g]][, 1]
+        y <- rslt.hull[[g]][, 2]
+        Group <- rep(g, length(x))
+        df_temp <- data.frame(Group = Group, x = x, y = y)
+        df_hull <- rbind(df_hull, df_temp)
+    }
+    df_spiders <- df_ord
+    df_spiders$cntr.x <- NA
+    df_spiders$cntr.y <- NA
+    for (g in show.groups) {
+        df_spiders[which(df_spiders$Group == g), 4:5] <- df_mean.ord[which(df_mean.ord == 
+            g), 2:3]
+    }
+    df_spiders <- df_spiders[, c(3, 4, 5, 1, 2)]
+    df_spiders <- df_spiders[order(df_spiders$Group), ]
+    df_spiders <- df_spiders[df_spiders$Group %in% show.groups, 
+        ]
+    xlab <- axis.labels[1]
+    ylab <- axis.labels[2]
+    plt <- ggplot2::ggplot() + geom_point(data = df_ord, aes(x = x, 
+        y = y, color = Group), size = pt.size) + xlab(xlab) + 
+        ylab(ylab)
+    if (ellipse == TRUE) {
+        plt <- plt + geom_path(data = df_ellipse, aes(x = x, 
+            y = y, color = Group), show.legend = FALSE)
+    }
+    if (label == TRUE) {
+        plt <- plt + geom_text(data = df_mean.ord, aes(x = x, 
+            y = y, label = Group, color = Group), show.legend = FALSE)
+    }
+    if (hull == TRUE) {
+        plt <- plt + geom_path(data = df_hull, aes(x = x, y = y, 
+            color = Group), show.legend = FALSE)
+    }
+    if (spiders == TRUE) {
+        plt <- plt + geom_segment(data = df_spiders, aes(x = cntr.x, 
+            xend = x, y = cntr.y, yend = y, color = Group), show.legend = FALSE)
+    }
+    plt <- plt + coord_fixed(ratio = 1)
+    if (plot) {
+        print(plt)
+    }
+    invisible(list(df_ord = df_ord, df_mean.ord = df_mean.ord, 
+        df_ellipse = df_ellipse, df_hull = df_hull, df_spiders = df_spiders, 
+        plot = plt))
+}
+
+cca_new <- vegan::scores(cmtx_cca, display = "sites", scaling = 1, 
+        choices = c(1, 2))
+
+ggord(cca_new, size = 1.5, grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
+      ellipse = F, ptslab = T, addsize = 4, ylim = c(-6.25, 6.25), xlim = c(-5, 5))
+```

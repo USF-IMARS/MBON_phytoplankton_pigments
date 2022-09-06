@@ -64,12 +64,12 @@ cmtx4 <-
         range = "D305:N306",
         .name_repair = janitor::make_clean_names
     ) %>%
-    mutate(cluster_code = 4, season = "Fall")
+    mutate(cluster_code = 4, season = "Autumn")
 
 cmtx_all <- full_join(cmtx1, cmtx2) %>%
     full_join(cmtx3) %>%
     full_join(cmtx4) %>%
-    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
+    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 
 rm(cmtx1, cmtx2, cmtx3, cmtx4)
 ```
@@ -131,7 +131,9 @@ meta_data <- dplyr::select(.data=pig_dat,
                             comments, season) %>%
     filter(name_of_water_body == "Florida Keys")
 cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %>%
-    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Fall"))
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
+
+write_csv(cmtx_avgs, paste0(root,"//data//processed//chemtax_with_metadata.csv"))
 ```
 
 ```{r boxplots}
@@ -139,7 +141,8 @@ cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %
 plot.pig.3 <- function(.var, .title){
     ggplot() +
     geom_boxplot(cmtx_avgs, mapping = aes_string(x="season", y= .var)) +
-    theme_bw() +
+    theme_classic() +
+    theme(text = element_text(size = 12)) +
     ylim(0,0.125) +
     geom_jitter(cmtx_avgs, mapping = aes_string(x="season", y= .var, color="year"), width = 0.4, size=1) +
     scale_colour_gradient2(
@@ -178,6 +181,50 @@ for (i  in seq(phyto_name)) {
     
 }
 
+#PFTs with larger scales 
+cmtx_longer %>% 
+    filter(!func_type %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>% 
+    ggplot(aes(x=season, y = value, fill = season)) +
+    geom_boxplot(outlier.shape = NA) +
+    facet_wrap(facet =~ func_type, ncol = 2) +
+    theme_classic() +
+    theme(text = element_text(family = "serif", size = 18),
+          axis.text = element_text(size = 10),
+          legend.position = "none") +
+    scale_y_continuous(expand = c(0,0), limits = c(0, 0.2)) +
+    labs(x = "Season",
+         y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
+
+save_plot(filename = paste0(root,"/data/plots/cmtx_boxplots_large", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 5,
+          base_width = 15,
+          dpi = 600, units = "in", device='png')
+
+#plot for PFTs with smaller scales
+cmtx_longer %>% 
+    filter(func_type %in% c("cyano2", "chloro", "hapt6")) %>% 
+    ggplot(aes(x=season, y = value, fill = season)) +
+    geom_boxplot(outlier.shape = NA) +
+    facet_wrap(facet =~ func_type, ncol = 3) +
+    theme_classic() +
+    theme(text = element_text(family = "serif", size = 30),
+          axis.text = element_text(size = 12),
+          legend.position = "none") +
+    scale_y_continuous(expand = c(0,0), limits = c(0, 0.2)) +
+    labs(x = "Season",
+         y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
+
+cowplot::save_plot(filename = paste0(root,"/data/plots/cmtx_boxplots", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 8,
+          base_width = 16,
+          dpi = 600, units = "in", device='png')
+
 ```
 
 ```{r ANOVA}
@@ -209,3 +256,133 @@ cmtx_dunn <- cmtx_longer %>%
     dunn_test(value ~ season, p.adjust.method = "bonferroni")
 
 ```
+
+```{r station-seasonally-yearly-avgs}
+cmtx_stat <- cmtx_avgs %>% 
+    mutate(diat = diat1 + diat2,
+           cyano = cyano2 + cyano4,
+           hapt = hapt6 + hapt8,
+           total = chloro + crypto + diat + dino + hapt + pras + cyano
+           ) %>% 
+    # group_by(year, season, station) %>% 
+    group_by(season) %>% 
+    summarise_at(vars(chloro:hapt),
+                 list(avg = mean, sd = sd, var = var),
+                 na.rm = TRUE)
+options(scipen=999)
+
+cmtx_fract <- cmtx_avgs %>% 
+    mutate(diat = diat1 + diat2,
+           cyano = cyano2 + cyano4,
+           hapt = hapt6 + hapt8,
+           total = chloro + crypto + diat + dino + hapt + pras + cyano) %>% 
+    mutate(year = year,
+              season = season,
+              station = station,
+              frac_chloro = chloro/total,
+           frac_crypto = crypto/total,
+           frac_cyano = cyano/total,
+           frac_diat = diat/total,
+           frac_dino = dino/total,
+           frac_hapt = hapt/total,
+           frac_pras = pras/total)%>% 
+    select(hplc_gsfc_id:season, frac_chloro:frac_pras)
+
+
+
+cmtx_fract %>% 
+    pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_") %>% 
+    filter(func_type %in% c("diat", "cyano")) %>% 
+    filter(station %in% c("WS", "10", "16")) %>% 
+ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = frac, color = func_type, fill = func_type))+
+    geom_point() +
+    geom_line() +
+    facet_wrap(facets = "station") +
+    theme_classic() +
+    theme(text = element_text(family = "serif", size = 40),
+          axis.text = element_text(size = 30),
+          legend.position = c(0.5, 0.8))+
+    labs(color = "Functional Type", fill = "Functional Type", 
+         x = "", y = "Proportion to Total Chl-a")
+
+cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_bloom",
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 8,
+          base_width = 16,
+          dpi = 600, units = "in", device='png')
+
+
+view(cmtx_fract %>% 
+         group_by(season) %>% 
+         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)))
+view(cmtx_fract %>% 
+         mutate(station = forcats::fct_reorder(station, lon)) %>% 
+         group_by(station) %>% 
+         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)))
+
+
+
+
+max_fract <-cmtx_fract %>%
+    group_by(hplc_gsfc_id) %>% 
+    summarise(max_frac = max(frac)) %>% 
+    left_join(cmtx_fract, by = c("max_frac" = "frac"))
+
+cmtx_fract2 <- cmtx_fract %>% 
+         group_by(season) %>% 
+         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)) %>% 
+    pivot_longer(frac_chloro_avg:frac_pras_avg, names_to = "func_type",
+                 names_prefix = "frac_", values_to = "avg_fract") %>% 
+    mutate( 
+        func_type = gsub("_avg", "", func_type)
+        ) %>% 
+    ggplot(aes(fill = func_type, color = func_type, y=avg_fract, x=season)) +
+    geom_bar(position = "fill", stat = "identity") +
+    theme_classic() +
+    theme(text=element_text(family="serif", size = 40),
+          axis.title=element_text(size=40),
+          legend.position = "bottom",
+          legend.direction = "horizontal") +
+    labs(x = "Season", y= "Proportion to Total Chl-a", fill = "Phytoplankton Functional Type",
+         color = "Phytoplankton Functional Type") +
+    scale_fill_manual(values = Tol_muted) +
+    scale_color_manual(values = Tol_muted)
+
+cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio_reason", 
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".jpg"), 
+          plot = last_plot(),
+          base_height = 8,
+          base_width = 16,
+          dpi = 600, units = "in", device='png')
+
+    # gt(
+    #     rowname_col = NULL,
+    #     groupname_col = NULL
+    # ) %>% 
+    # cols_label(
+    #     frac_chloro_avg = "Chloro",
+    #     frac_crypto_avg = "Crypto",
+    #     frac_cyano_avg = "Cyano",
+    #     frac_diat_avg = "Diat",
+    #     frac_dino_avg = "Dino",
+    #     frac_hapt_avg = "Hapt",
+    #     frac_pras_avg = "Pras") %>% 
+    # tab_options(
+    #     table_body.hlines.width = 0,
+    #     table_body.vlines.width = 0,
+    #     stub.border.width = 0
+    # ) %>%
+    # # fmt_number(columns = starts_with("frac"), decimals = 4) %>% 
+    # fmt_percent(columns = starts_with("frac"), decimals = 0) %>% 
+    # tab_spanner(label = "Average Fraction",
+    #             columns = frac_chloro_avg:frac_pras_avg) %>% 
+    # tab_stubhead("Season") %>% 
+    # opt_table_font("serif") %>% 
+    # gtsave(filename = paste0(root,"/data/plots/community_fractions", 
+    #        format(Sys.time(), '_%Y%m%d_%H%M%S'),
+    #        ".html"))
+
+```
+

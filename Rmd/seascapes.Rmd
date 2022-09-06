@@ -1,0 +1,112 @@
+---
+title: "Seascapes"
+author: "Anna Finch"
+date: "8/15/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("raster")
+library("dplyr")
+library("tibble")
+library("tidyr")
+library("readr")
+library("purrr")
+library("stringr")
+library("ggplot2")
+library("sp")
+library("rgdal")
+library("maptools")
+library("rgeos")
+library("vegan")
+
+root <- rprojroot::find_rstudio_root_file()
+
+source(paste0(root, "/scripts/seascapes_extract.R"))
+
+dirsea <- "/data/raw/seascapes/"
+seasc.path = paste0(root, dirsea)
+unzip(paste0(seasc.path, "fknms_global_monthly.zip"), exdir = seasc.path)
+
+
+dir2 <- "//data//processed//"
+path_out <-  paste0(root,dir2)
+cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
+
+```
+
+```{r}
+# making new column in df with year and month in format "YYYY.MM" to match how
+# the seascapes .tif files are named
+cmtx_sea <- cmtx_avgs %>% 
+    mutate(yr_mth = substring(cmtx_avgs$date_time_utc, 1, 7),
+           yr_mth = gsub(pattern = "-", replacement = ".", x = yr_mth))
+mth_yr_df <- base::as.data.frame(unique(cmtx_sea$yr_mth)) %>% 
+    rename("yr_mth" = "unique(cmtx_sea$yr_mth)")
+
+# making df. one column is the file names and the other column is the year and
+# month for the file in format "YYYY.MM" to match with the other list
+file.seascapes <-
+  fs::dir_ls(path =seasc.path,
+             # included ^[^~]* to not match ~, means that a file is opened
+             regexp = "^[^~]*\\.tif$") %>% 
+    as.data.frame() %>% 
+    mutate(yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = .),
+           yr_mth = gsub(pattern = ".15.tif", replacement = "", x = yr_mth))
+
+# selecting the file names that correspond to the year and month combos that the 
+# cruises had
+seascapes_match <- left_join(mth_yr_df,
+                             file.seascapes,
+                             by = c("yr_mth")) %>%
+    na.omit()
+file.sea <- seascapes_match$. %>% 
+    str_sort()
+
+```
+
+```{r }
+# making empty data frame to be filled with seascapes values
+seascapes_df <- data.frame(matrix(ncol = 4, nrow = 0))
+colnames(seascapes_df) <- c('lon', 'lat', 'seascape', "yr_mth")
+
+# going through each seascapes file and extracting seascapes for each station
+# and adding them to a dataframe
+for (i in 1:length(file.sea)) {
+    filename = file.sea[i]
+    
+    #extract month and year in format "YYYY.MM"
+    yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = filename) %>% 
+        gsub(pattern = ".15.tif", replacement = "")
+    
+    #make temporary dataframe with seascapes, coordinates, and year+month for cruise
+    seascapes_temp <- extract_seascapes(filename, cmtx_sea) %>% 
+        mutate(yr_mth = yr_mth)
+    
+    #combine the dataframes with seascapes for each cruise
+    seascapes_df <- rbind(seascapes_df, seascapes_temp)
+}
+
+# join the chemtax and seascapes data
+cmtx_sea2 <- cmtx_sea %>% 
+    left_join(seascapes_df) %>% 
+    drop_na(seascape)
+
+
+```
+
+```{r}
+#CAP with Bray-Curtis
+
+seascspec <- cmtx_sea2 %>% 
+    select(chloro:pras)
+
+seasc.cap <- capscale(seascspec ~ seascape, cmtx_sea2, dist = "bray")
+
+plot(seasc.cap)
+```
+
+
+
+
