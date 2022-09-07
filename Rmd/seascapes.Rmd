@@ -27,6 +27,10 @@ source(paste0(root, "/scripts/seascapes_extract.R"))
 
 dirsea <- "/data/raw/seascapes/"
 seasc.path = paste0(root, dirsea)
+
+# get "fknms_global_monthly.zip" from https://shiny.marinebon.app/seascapes/. 
+# select "Florida Keys" in the region pull-down tab and click "all grids (.zip)"
+# to download Sanctuary files. 
 unzip(paste0(seasc.path, "fknms_global_monthly.zip"), exdir = seasc.path)
 
 
