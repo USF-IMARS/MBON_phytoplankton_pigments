@@ -7,7 +7,7 @@ extract_seascapes <- function(filename, df) {
     
     coord_df <- df %>%
         distinct(station, .keep_all = T) %>%
-        select(lon, lat)
+        dplyr::select(lon, lat)
     
     #extract coordinates for every station
     coord <- coord_df %>%
