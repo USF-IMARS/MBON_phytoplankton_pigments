@@ -83,9 +83,9 @@ phyto_name <- c("Chlorophytes", "Cryptophytes", "Cyanobacteria 2",
 phyto_shrt <- names(cmtx_all)[-c(1,12,13)]
 
 plot.pig <- function(.var, .title){
-    ggplot(cmtx_all, aes_string(x="season", y= .var)) +
-    geom_point(size=2) +
-    geom_line(group=1, size=1) +
+    ggplot(cmtx_all, aes_string(x = "season", y = .var)) +
+    geom_point(size = 2) +
+    geom_line(group = 1, size = 1) +
     theme_bw() +
     labs(title = paste("Average Concentration per Season of", .title),
          x = "Season",
@@ -101,39 +101,49 @@ for (i  in seq(phyto_name)) {
 
 print(p)
 
-plot.pig1 <- function(.var, .title){
+plot.pig1 <- function(.var, .title) {
     list(
-    # geom_point(cmtx_all, string(x=season, y= .var),size=2),
-    geom_line(group=1, size=1),
-    theme_bw(),
-    labs(title = paste("Average Concentration per Season of", .title),
-         x = "Season",
-         y = expression(paste("Concentration (mg  ", m^-3, ")")))
+        # geom_point(cmtx_all, string(x=season, y= .var),size=2),
+        geom_line(group = 1, size = 1),
+        theme_bw(),
+        labs(
+            title = paste("Average Concentration per Season of", .title),
+            x = "Season",
+            y = expression(paste("Concentration (mg  ", m ^ -3, ")"))
+        )
     )
-    }
-i =1
+}
+
+i = 1
 t <- plot.pig1(phyto_shrt[i], phyto_name[i])
 
-p$chloro + geom_line(data =cmtx_all, aes(season, chloro), color = "blue")
+p$chloro + geom_line(data = cmtx_all, aes(season, chloro), color = "blue")
+
 ggplot() +
-    geom_point(data =cmtx_all, aes(season, chloro)) + t
+    geom_point(data = cmtx_all, aes(season, chloro)) + t
 ```
 
 ```{r}
-cmtx_avgs_raw <- readxl::read_xls(
-    file.chem[5],
-    sheet=1,
-    .name_repair = janitor::make_clean_names
-)
+cmtx_avgs_raw <- 
+    readxl::read_xls(file.chem[5],
+                     sheet = 1,
+                     .name_repair = janitor::make_clean_names
+                     )
 
-meta_data <- dplyr::select(.data=pig_dat, 
-                            hplc_gsfc_id:filter_storage_before_shipment_to_gfsc, 
-                            comments, season) %>%
+pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv")) %>% 
+           mutate(season = factor(season, levels = c("Winter", "Spring", "Summer", "Autumn")))
+
+# TODO: either load pig_dat here or higher
+meta_data <- dplyr::select(.data = pig_dat,
+                           hplc_gsfc_id:filter_storage_before_shipment_to_gfsc,
+                           comments,
+                           season) %>%
     filter(name_of_water_body == "Florida Keys")
-cmtx_avgs <- full_join(meta_data, cmtx_avgs_raw, by=c("sample" = "sample_id")) %>%
-    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
+cmtx_avgs <-
+    full_join(meta_data, cmtx_avgs_raw, by = c("sample" = "sample_id")) %>%
+    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 
-write_csv(cmtx_avgs, paste0(root,"//data//processed//chemtax_with_metadata.csv"))
+write_csv(cmtx_avgs, paste0(root,"/data/processed/chemtax_with_metadata.csv"))
 ```
 
 ```{r boxplots}
