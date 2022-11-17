@@ -39,6 +39,8 @@ library("lubridate")
 library("glue")
 library("fs")
 library("magrittr")
+
+
 ```
 
 ```{r create-dir}
@@ -50,6 +52,9 @@ subDir <-
       "data/processed",
       "data/plots",
       "data/metadata",
+      "data/raw/seascapes",
+      "data/raw/chemtax",
+      "data/raw/microscopy",
       "Rmd",
       "scripts")
 

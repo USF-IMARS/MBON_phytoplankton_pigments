@@ -1,6 +1,24 @@
-
-
 extract_seascapes <- function(filename, df) {
+################################################################################
+#                                                                              # 
+#               Extract Seascapes from seascapes#
+#                                                                              #    
+################################################################################
+# ---- DESCRIPTION: ------
+# Description
+#
+# ---- INPUTS: -----------
+# Input =  
+#
+# ---- OUTPUTS: ----------
+# Output = 
+#
+# ---- NOTES: ------------
+#
+# ---- REFERENCES(s): ----
+#
+# ---- AUTHOR(s): --------
+# Anna Finch (2022-08-31)
     sea <- raster(filename) %>%
         tabularaster::as_tibble(xy = T) %>%
         drop_na(cellvalue)
