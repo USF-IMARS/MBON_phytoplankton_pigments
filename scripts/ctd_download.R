@@ -136,4 +136,4 @@ env_cmtx <- cmtx_avgs %>%
     mutate_all(~ifelse(is.nan(.), NA, .)) 
 
 
-write_csv(env_cmtx, file = paste0(root, "//data//processed//cmtx_env_data.csv"))
+write.csv(env_cmtx, file = paste0(root, "//data//processed//cmtx_env_data.csv"))
