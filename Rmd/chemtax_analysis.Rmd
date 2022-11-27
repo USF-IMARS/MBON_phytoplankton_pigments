@@ -11,6 +11,8 @@ library("dplyr")
 library("ggplot2")
 library("tidyverse")
 library("rstatix")
+library("ggh4x")
+library("lubridate")
 
 root <- rprojroot::find_rstudio_root_file()
 
@@ -272,36 +274,50 @@ cmtx_stat <- cmtx_avgs %>%
 options(scipen=999)
 
 cmtx_fract <- cmtx_avgs %>% 
-    mutate(diat = diat1 + diat2,
-           cyano = cyano2 + cyano4,
-           hapt = hapt6 + hapt8,
-           total = chloro + crypto + diat + dino + hapt + pras + cyano) %>% 
-    mutate(year = year,
-              season = season,
-              station = station,
-              frac_chloro = chloro/total,
+    # mutate(diat = diat1 + diat2,
+    #        cyano = cyano2 + cyano4,
+    #        hapt = hapt6 + hapt8,
+    #        total = 
+    #            chloro + crypto + diat + dino + hapt 
+    #        + pras + cyano) %>% 
+    mutate(total = chloro + crypto + cyano2 + cyano4 + diat1 +
+               diat2 + dino + hapt6 + hapt8 + pras,
+           year = year,
+           season = season,
+           station = station,
+           frac_chloro = chloro/total,
            frac_crypto = crypto/total,
-           frac_cyano = cyano/total,
-           frac_diat = diat/total,
+           # frac_cyano = cyano/total,
+           frac_cyano2 = cyano2/total,
+           frac_cyano4 = cyano4/total,
+           # frac_diat = diat/total,
+           frac_diat1 = diat1/total,
+           frac_diat2 = diat2/total,
            frac_dino = dino/total,
-           frac_hapt = hapt/total,
+           # frac_hapt = hapt/total,
+           frac_hapt6 = hapt6/total,
+           frac_hapt8 = hapt8/total,
            frac_pras = pras/total)%>% 
     select(hplc_gsfc_id:season, frac_chloro:frac_pras)
 
 
 
 cmtx_fract %>% 
-    pivot_longer(frac_chloro:frac_pras, names_to = "func_type", values_to = "frac", names_prefix = "frac_") %>% 
+    mutate(frac_diat = frac_diat1 + frac_diat2,
+           frac_cyano = frac_cyano2 + frac_cyano4) %>% 
+    pivot_longer(frac_chloro:frac_cyano, names_to = "func_type", values_to = "frac", names_prefix = "frac_") %>% 
     filter(func_type %in% c("diat", "cyano")) %>% 
     filter(station %in% c("WS", "10", "16")) %>% 
 ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = frac, color = func_type, fill = func_type))+
     geom_point() +
     geom_line() +
-    facet_wrap(facets = "station") +
+    facet_wrap(~fct_rev(station)) +
     theme_classic() +
     theme(text = element_text(family = "serif", size = 40),
           axis.text = element_text(size = 30),
-          legend.position = c(0.5, 0.8))+
+          legend.position = c(0.5, 0.8),
+          panel.background = element_rect(
+              fill = NA, color = "black"))+
     labs(color = "Functional Type", fill = "Functional Type", 
          x = "", y = "Proportion to Total Chl-a")
 
@@ -329,32 +345,55 @@ max_fract <-cmtx_fract %>%
     summarise(max_frac = max(frac)) %>% 
     left_join(cmtx_fract, by = c("max_frac" = "frac"))
 
+df_pig <-
+    readr::read_csv(paste0(root, "/data/processed/combined_pig_dat.csv")) %>%
+    mutate(date_time_utc = replace(
+        date_time_utc,
+        station == "MR" &
+            as_date(date_time_utc) == "2018-01-08",
+        ymd_hms("2018-01-09 00:52:00")
+    ))
 cmtx_fract2 <- cmtx_fract %>% 
-         group_by(season) %>% 
-         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)) %>% 
+    left_join(select(df_pig, c(hplc_gsfc_id, tot_chl_a)), by = "hplc_gsfc_id") %>% 
+    group_by(season) %>% 
+    summarise_at(vars(frac_chloro:tot_chl_a), list(avg = mean)) %>% 
     pivot_longer(frac_chloro_avg:frac_pras_avg, names_to = "func_type",
                  names_prefix = "frac_", values_to = "avg_fract") %>% 
     mutate( 
-        func_type = gsub("_avg", "", func_type)
-        ) %>% 
+        func_type = gsub("_avg", "", func_type))
+    
+sec <- help_secondary(data = cmtx_fract2,
+                      primary = c(season, avg_fract),
+                      secondary = c(season, tot_chl_a_avg),
+                      # method = c("range", "max", "fit", "ccf", "sortfit"))
+                      method = "max",
+                      name = "Average Total Chl-a")
+
+cmtx_fract_graph <- cmtx_fract2 %>% 
     ggplot(aes(fill = func_type, color = func_type, y=avg_fract, x=season)) +
     geom_bar(position = "fill", stat = "identity") +
     theme_classic() +
-    theme(text=element_text(family="serif", size = 40),
-          axis.title=element_text(size=40),
+    theme(text=element_text(family="serif", size = 60),
+          axis.title=element_text(size=60),
           legend.position = "bottom",
-          legend.direction = "horizontal") +
-    labs(x = "Season", y= "Proportion to Total Chl-a", fill = "Phytoplankton Functional Type",
+          legend.direction = "horizontal",
+          axis.text.y.right = element_text(color = "chartreuse3"),
+          axis.line.y.right = element_line(color = "chartreuse3"),
+          axis.title.y.right = element_text(color = "chartreuse3")) +
+    labs(x = "Season", y= "Proportion to Total Chl-a",
+         fill = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type") +
     scale_fill_manual(values = Tol_muted) +
-    scale_color_manual(values = Tol_muted)
+    scale_color_manual(values = Tol_muted) +
+    geom_point(aes(y = sec$proj(tot_chl_a_avg)), size = 12, color = "chartreuse3", show.legend = F) +
+    scale_y_continuous(sec.axis = sec)
 
-cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio_reason", 
+cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio_season", 
            format(Sys.time(), '_%Y%m%d_%H%M%S'),
            ".jpg"), 
           plot = last_plot(),
-          base_height = 8,
-          base_width = 16,
+          base_height = 14,
+          base_width = 26,
           dpi = 600, units = "in", device='png')
 
     # gt(
