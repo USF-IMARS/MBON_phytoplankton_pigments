@@ -24,8 +24,8 @@ extract_seascapes <- function(filename, df) {
         
         #temporary dataframe with distances, seascapes, coordinates
         temp_df <- sea %>% mutate(dist = as.numeric(temp_dist)) %>%
-            #filter for distances less than 12 km (3-pixel radius, pixels are 4km x 4km)
-            filter(temp_dist < 12000) %>%
+            #filter for distances less than 15 km (3-pixel radius, pixels are 5km x 5km)
+            filter(temp_dist < 15000) %>%
             group_by(cellvalue) %>%
             #calculate average inverse distance for each seascape class
             summarise(sum1 = sum(1/dist)/n()) %>%
