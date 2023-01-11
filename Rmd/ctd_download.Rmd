@@ -113,6 +113,7 @@ This will take some time, ~ 30 - 60 min
 for (i in seq(cruiseID)) {
   try(ctd_downloads(cruiseID[i], loc, TRUE), silent = TRUE)
 }
+rm(i, cruiseID)
 ```
 
 # Read CTD files and average top 5 meters
@@ -184,13 +185,10 @@ if (FALSE) {
                            here("data", "processed", "ctd_all.csv"),
                            delim = ",")
 }
-
-shell.exec(here("data", "processed", "ctd_all.csv"))
 ```
 
 
-
-# Don't run
+# TODO: remove tjos tp another location
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
 if (FALSE) {
