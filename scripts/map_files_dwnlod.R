@@ -48,12 +48,20 @@ world_download <- function(path_land = NULL,
 # ---- AUTHOR(s): --------
 # Sebastian Di Geronimo (2023-01-11 14:55:54)
 
-    # Load libraries
+    # ============================================================================ #
+    # ---- Load libraries ----
+    # ============================================================================ #    
     library("here")
     library("fs")
     library("rerddap")
     library("cli")
     library("rlang")
+    
+    # ======================================================================== #
+    # ---- Create directories for files ----
+    # ======================================================================== #    
+    fs::dir_create(path_land)
+    fs::dir_create(path_topo)
     
     # ======================================================================== #
     # ---- Download topography for the specific location ----
