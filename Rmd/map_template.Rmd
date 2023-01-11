@@ -5,14 +5,11 @@ date: '2022-06-14'
 output: html_document
 ---
 
-## Creates map of site locations for Natalia Lopez Figueroa Zooplankton Paper
+## Creates map of site locations for IMaRS MBON
 Uses topography and coastline data from NOAA.
-Dataframe of station location from Natalia, programmed here.
 
 ```{r setup, include=FALSE}
-root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = root)
 library("fields")
 library("raster")
 library("rerddap")
@@ -25,13 +22,18 @@ library("metR")
 library("tidyr")
 library("dplyr")
 library("cowplot")
+library("conflicted")
+library("here")
 
-# fixes issue with reading file?
+# specify select and filter 
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+
+# fixes issue with reading file
 sf::sf_use_s2(FALSE)
 
-root <- rprojroot::find_rstudio_root_file()
-
-path <- paste0(root,"/data/map/")
+# path for map
+path <- here("data", "map")
 
 # Region of Interest Bounding Box    ------------- edit this
 # Change the spatial extent
@@ -50,41 +52,55 @@ exnt2 <-  c(-90, # West
 names(exnt2) <- names(exnt)
 ```
 
-Load some dataset here!!!
+# Load Combined Pigment Data
 ```{r}
-dir2 <- "//data//processed//"
-path_out = paste0(root,dir2)
-pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
-
+path_out <- here("data", "processed")
+pig_dat  <- read.csv(here(path_out,"combined_pig_dat.csv"))
 ```
 
 
-# download bathymetry and coastline files
+# Download bathymetry and coastline files
 **Note:** this will be done automatically if files **do not exists**
+
+Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
+
+Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
 ```{r download-maps}
+# source map download function
+source(here("scripts", "map_files_dwnlod.R"))
+
 fs::dir_create(path)
 
-# Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface)
-# from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
+world_download(
+    path_land = path,
+    path_topo = path,
+    extent = exnt
+)
+
 # download if not already 
-if (!file.exists(paste0(path,"etopo1.nc"))){
+if (!file.exists(here(path,"etopo1.nc"))) {
+    
   message("Getting Topography Data")
   # ERDDAP method
-  etopo    <- info('etopo180')
+  # etopo    <- info('etopo180')
 
   # ERDDAP extract and save
-  griddap(etopo, latitude=exnt[3:4], longitude=exnt[1:2], stride=c(1,1), fields='altitude',
-          store = disk(paste0(root,"/data/map/")))
+  griddap(
+      info('etopo180'),
+      latitude  = exnt[3:4],
+      longitude = exnt[1:2],
+      stride    = c(1, 1),
+      fields    = 'altitude',
+      store     = disk(here("data", "map"))
+  )
   
   # Rename file 
   file.rename(fs::dir_ls(path, regexp = "\\.nc$"),
-              paste0(root,"/data/map/etopo1.nc"))
+              here("data", "map", "etopo1.nc"))
   
-  rm(etopo)
+  # rm(etopo)
 }
 
-# Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG)
-# from https://www.ngdc.noaa.gov/mgg/shorelines/
 # download GSHHS shapefile if not already downloaded
 coast         <- fs::dir_ls(path = paste0(path),
                recurse = TRUE ,
@@ -99,7 +115,7 @@ if (rlang::is_empty(coast)){
           method = "libcurl",
           mode = "wb"
       )
-      unzip(exdir = paste0(path), temp)
+      unzip(exdir = path, temp)
       unlink(temp)
       rm(temp)
 }
@@ -110,28 +126,28 @@ rm(coast)
 # ggplot way of mapping
 ```{r load-map}
 # select and read coastline file from GSHHS then crop
-world2 <- fs::dir_ls(path = paste0(path),
+world2 <- fs::dir_ls(path = path,
                recurse = TRUE ,
                regexp = "GSHHS_h_L1.shp") %>%
                st_read(.) %>%
                st_crop(., st_bbox(exnt2))
 
 # read state lines and crop
-state <- fs::dir_ls(path = paste0(path),
+state <- fs::dir_ls(path = path,
                recurse = TRUE ,
                regexp = "WDBII_border_h_L2.shp") %>%
                st_read(.) %>%
                st_crop(., st_bbox(exnt2))
 
 
-bathy <- nc_open(paste0(root,"/data/map/etopo1.nc"))
+bathy <- nc_open(here(path, "etopo1.nc"))
 topo <- ncvar_get(bathy, 'altitude')
 topo_lat <- ncvar_get(bathy, 'latitude')
 topo_lon <- ncvar_get(bathy, 'longitude')
 nc_close(bathy)
 
 # read bahtymetry data
-bathy <- raster::raster(paste0(path,"etopo1.nc")) %>%
+bathy <- raster::raster(here(path,"etopo1.nc")) %>%
   as.data.frame(xy = T)
 
 
