@@ -1,22 +1,13 @@
 ---
-title: "Load Data"
+title: "Merge Pigment Data"
 author: "Sebastian DiGeronimo"
 date: '2022-06-13'
 output: html_document
 ---
 
-# Small lists of things to do
-* rename headers to be `tidy`
-    can use: .name_repair = janitor::make_clean_names inside read_csv
-    
-* combine date and time columns to a standard date_time
-    - Something like this
-     mutate(
-    date_time_utc = ymd_hms(paste(`year col`, `month col`, `day col`, `time col`), tz = "utc"),
-    .before = lat
-  )
-  
-* set -8888 to 0
+# This file is to merge the separate HPLC data files into one
+
+# List of TODOs 
 * address notes from file to potentially ignore certain rows 
 * start plotting
     * histogram, per stations, per pigments, etc
@@ -47,7 +38,6 @@ library("here")
 ```{r create-dir}
 # will create a set directory if does not exists
 # useful for new projects
-mainDir <- rprojroot::find_rstudio_root_file()
 subDir <-
     c("data/raw",
       "data/processed",
@@ -59,18 +49,19 @@ subDir <-
       "Rmd",
       "scripts")
 
-fs::dir_create(path = paste0(mainDir,"/",subDir))
-rm(mainDir, subDir)
+fs::dir_create(path = here(subDir))
+rm(subDir)
 ```
 
 
 ```{r file-paths}
 # find pigment data
-dir <- "//data//raw//"
+dir      <- here("data", "raw")
+path_out <- here("data", "processed")
 
 # pigment files
 file.pig <-
-  fs::dir_ls(path = here("data", "raw"),
+  fs::dir_ls(path = dir,
              recurse = TRUE,
              # included ^[^~]* to not match ~, means that a file is opened
              regexp = "^[^~]*\\.xlsx$") %>% 
@@ -92,11 +83,9 @@ df <-
         .name_repair = janitor::make_clean_names
     ) %>%
 
-    
     rename(lon = longitude,
            lat = latitude) %>%
     
-
     mutate(
         gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S", 
                                         tz = "utc")),
@@ -250,8 +239,9 @@ df5 <-
     replace(., . == -8888, 0)
 
 ```
-```{r}
 
+# Merge data
+```{r merge-df}
 # ---- merge df 2, 3, 4 ----
 df_merg  <-
     full_join(df3, df2)
@@ -351,8 +341,7 @@ rm(df, df2, df3, df4, df5, df_merg, df_merg2, params)
 ```
 
 ```{r summary-statistics}
-#group by seasons
-df_all$month <- strtrim(df_all$month, 3)
+# group by seasons
 winter <- c("Dec", "Jan", "Feb")
 spring <- c("Mar", "Apr", "May")
 summer <- c("Jun", "Jul", "Aug")
@@ -360,137 +349,151 @@ autumn <- c("Sep", "Nov", "Oct")
 
 df_all <- df_all %>% 
     mutate(
+    month  = strtrim(month, 3),
     season = case_when(
         month %in% winter ~ "Winter",
         month %in% spring ~ "Spring",
         month %in% summer ~ "Summer",
         month %in% autumn ~ "Autumn",
-    )
+    ),
+    .after = month
 )
 
+# average and standard deviations for each pigment
 pig_stat <- df_all %>%
     group_by(season) %>%
     summarise_at(vars(tot_chl_a:tchl_a_tpg),
                  list(avg = mean, sd = sd, var = var),
                  na.rm = TRUE)
 
-
 ```
 
+# Calculate size fractionation based on Uitz, 2006
 ```{r size-fractionation}
 df_all <- df_all %>%
-    mutate(dp_w = 1.41*fuco + 1.41*perid + 1.27*hex_fuco + 0.35*but_fuco +
-               0.6*allo + 1.01*tot_chl_b + 0.86*zea) %>%
-    mutate(f_micro = (1.41*fuco + 1.41 * perid) / dp_w) %>%
-    mutate(f_nano = (1.27 * hex_fuco + 0.35*but_fuco + 0.6*allo)/dp_w) %>%
-    mutate(f_pico = (1.01*tot_chl_b + 0.86*zea)/dp_w) %>%
-    mutate(micro = f_micro * tot_chl_a) %>%
-    mutate(nano = f_nano * tot_chl_a) %>%
-    mutate(pico = f_pico * tot_chl_a)
-
+    mutate(
+        # diagnostic pigment
+        dp_w =
+            1.41 * fuco + 1.41 * perid + 1.27 * hex_fuco + 0.35 * but_fuco +
+            0.6 * allo + 1.01 * tot_chl_b + 0.86 * zea,
+        
+        # fractions
+        f_micro = (1.41 * fuco + 1.41 * perid) / dp_w,
+        f_nano  = (1.27 * hex_fuco + 0.35 * but_fuco + 0.6 * allo) / dp_w,
+        f_pico  = (1.01 * tot_chl_b + 0.86 * zea) / dp_w,
+        
+        # biomass
+        micro   = f_micro * tot_chl_a,
+        nano    = f_nano * tot_chl_a,
+        pico    = f_pico * tot_chl_a
+    )
 ```
 
+# Save pigment data combined and mean/std dev
 ```{r save-combined-data}
-
-# dir2     <- "//data//processed//"
-path_out <-  here("data", "processed")
-readr::write_csv(df_all, here(path_out, "combined_pig_dat.csv"))
-readr::write_csv(pig_stat, here(path_out, "pig_summary_stat.csv"))
+if (FALSE) {
+    readr::write_csv(df_all, here(path_out, "combined_pig_dat.csv"))
+    readr::write_csv(pig_stat, here(path_out, "pig_summary_stat.csv"))
+    }
 ```
- 
+# Convert pigments to log
 ```{r log-dat}
-# dir2     <- "//data//processed//"
-# path_out <- paste0(root,dir2)
+# read combined pigment data 
 if (!exists("df_all")) {
-    pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+    pig_dat  <- read_csv(here(path_out,"combined_pig_dat.csv"))
 } else {
     pig_dat <- df_all
 }
 
-add1 <- function(n) {
-    n + 1
-}
+# transform pigments to log10 
+val     <- 0.001 # change to 1 or 0.001
 
-log_pig <- pig_dat %>%
-    mutate_at(.vars = vars(tot_chl_a:dp), add1) %>%
-    mutate_at(.vars = vars(tot_chl_a:dp), .funs = (log = log10))
+log_pig <- 
+    pig_dat %>%
+    mutate(
+           across(tot_chl_a:dp,
+                  ~ log10(.x + val)))
 
-log_pig_stat <- log_pig %>%
-    pivot_longer(tot_chl_a:dp, names_to = "pigment", values_to = "log_conc") %>% 
+
+# TODO: maybe I don't need to do this
+    # log_pig %>% 
+    #     select(season, tot_chl_a:dp) %>%
+    #     group_by(season) %>%
+    #     summarise(across(tot_chl_a:dp, .fn = list(mean = mean, sd = sd, var = var), na.rm = TRUE,
+    #            .names = "{.col}_{.fn}")) %>%
+    #             pivot_longer(2:last_col(), 
+    #              names_to  = "pigment", 
+    #              values_to = "log_conc")
+    
+log_pig_stat <-
+    log_pig %>%
+    pivot_longer(tot_chl_a:dp, 
+                 names_to  = "pigment", 
+                 values_to = "log_conc") %>% 
+    
     filter(!is.na(log_conc)) %>% 
+    
     group_by(season, pigment) %>% 
-    summarise(log_avg=mean(log_conc), log_sd=sd(log_conc), log_var = var(log_conc)) %>% 
-    transmute(pigment = pigment,
-              avg = 10^log_avg - 1,
-              sd = 10^log_sd - 1,
-              var = 10^log_var - 1)
-
-readr::write_csv(log_pig, paste0(path_out, "log_combined_pig_dat.csv"))
-readr::write_csv(log_pig_stat, paste0(path_out, "log_pig_summary_stat.csv"))
+    
+    summarise(
+        log_avg = mean(log_conc),
+        log_sd  = sd(log_conc),
+        log_var = var(log_conc)
+    ) %>%
+    
+    transmute(pigment,
+              avg     = 10^log_avg - val,
+              sd      = 10^log_sd - val,
+              var     = 10^log_var - val,
+              log_avg,
+              log_sd,
+              log_var)
 ```
 
-```{r}
-#filter for Florida Keys and cluster by seasons
-chemtax_seasons <- pig_dat %>%
+# Filter for FL Keys specifically
+```{r fl-keys-only}
+# filter for Florida Keys and cluster by seasons
+chemtax_seasons <- 
+    pig_dat %>%
     filter(name_of_water_body == "Florida Keys") %>%
     mutate(cluster_code = case_when(season == "Winter" ~ 1,
                                     season == "Spring" ~ 2, 
                                     season == "Summer" ~ 3,
-                                    season == "Autumn" ~ 4)) %>%
-    dplyr::select(hplc_gsfc_id, cluster_code, sample, chl_c3, chl_c1c2, perid, but_fuco,
-           fuco, pras, hex_fuco, zea, allo, lut, tot_chl_b, dv_chl_a, tot_chl_a)
-
-write_csv(chemtax_seasons, paste0(path_out,"dat_for_chemtax_season_clust.csv"))
+                                    season == "Autumn" ~ 4)
+           ) %>%
+    dplyr::select(hplc_gsfc_id, 
+                  cluster_code, 
+                  sample, 
+                  chl_c3, 
+                  chl_c1c2, 
+                  perid, 
+                  but_fuco,
+                  fuco, 
+                  pras, 
+                  hex_fuco, 
+                  zea, 
+                  allo, 
+                  lut, 
+                  tot_chl_b, 
+                  dv_chl_a, 
+                  tot_chl_a)
 ```
 
-```{r wind-speed-data}
-# rnoaa package seems promising to gather this data
-# https://docs.ropensci.org/rnoaa/articles/rnoaa.html
-library("rnoaa")
-dir3 <- "//data//raw//"
-path_in = paste0(root,dir3)
-# wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
 
-# will need to go to https://www.ncdc.noaa.gov/cdo-web/token to get token
-# then paste into .Rprofile using below code, should be ignored in .gitignore
-usethis::edit_r_profile(scope = "project")
-
-# when running, we have to source it, 
-source(here::here(".Rprofile"))
-
-# then set the options to it
-# DO NOT paste the raw key here - use above 
-options(noaakey = noaa)
-
-# test that it works
-ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
-
-# might want data from https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/gsom-gsoy.pdf
-ncdc_datasets(locationid = "ZIP:33050", startdate = '2015-03-01', enddate = '2022-05-31')
-rnoaa::ncdc_stations(locationid = "ZIP:33050")
-ncdc(locationid = "ZIP:33050", startdate = '2010-03-01', enddate = '2010-05-31', datasetid = "GHCND")
-
-# need to check station ids around the florida keys
-out <- ghcnd(stationid = "USW00012873", date_min = "2010-01-01", add_units = T) %>%
-    filter(year >= 2016 & year <= 2021)
-alldat <- ghcnd_splitvars(out)
-awnd_df <- as.data.frame(alldat$awnd) %>% 
-    separate(col= "date", into = c("year", "month", "day"), sep = "-", remove = F)
-
-wsf5_df <- as.data.frame(alldat$wsf5) %>% 
-    separate(col= "date", into = c("year", "month", "day"), sep = "-", remove = F)
-
-#average wind speeds (AWND) and fastest 5-second wind speeds (WSF5) are in tenths of meters per second
-ggplot(filter(awnd_df, year == 2016), aes(x=date, y=awnd)) +
-    geom_point()
-
-
-#plotting wind speeds during Hurricane Irma
-ggplot(filter(awnd_df, year == 2017 & month == '09'), aes(x=date, y=awnd)) +
-    geom_point()
-
-ggplot(filter(wsf5_df, year == 2017 & month == '09'), aes(x=date, y=wsf5)) +
-    geom_point()
-
-
+# Save data
+```{r save-data}
+if (FALSE) {
+    # log trans of pigment
+    write_csv(log_pig, 
+              here(path_out, "log_combined_pig_dat.csv"))
+    
+    # mean, std dev, var
+    write_csv(log_pig_stat, 
+              here(path_out, "log_pig_summary_stat.csv"))
+    
+    # chemtax season clusters
+    write_csv(chemtax_seasons, 
+              here(path_out,"chemtax_season_clust.csv"))
+    }
 ```
+
