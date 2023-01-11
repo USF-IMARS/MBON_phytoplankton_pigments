@@ -1,0 +1,63 @@
+---
+title: "NOAA Wind Data"
+author: "Sebastian DiGeronimo"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("rnoaa")
+```
+
+```{r wind-speed-data}
+# rnoaa package seems promising to gather this data
+# https://docs.ropensci.org/rnoaa/articles/rnoaa.html
+
+path_in <-  here("data", "raw")
+# wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
+
+# will need to go to https://www.ncdc.noaa.gov/cdo-web/token to get token
+# then paste into .Rprofile using below code, should be ignored in .gitignore
+usethis::edit_r_profile(scope = "project")
+
+# when running, we have to source it, 
+source(here::here(".Rprofile"))
+
+# then set the options to it
+# DO NOT paste the raw key here - use above 
+options(noaakey = noaakey)
+
+# test that it works
+ncdc_locs(locationcategoryid='CITY', sortfield='name', sortorder='desc')
+
+# might want data from https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/gsom-gsoy.pdf
+ncdc_datasets(locationid = "ZIP:33050", startdate = '2015-03-01', enddate = '2022-05-31')
+rnoaa::ncdc_stations(locationid = "ZIP:33050")
+ncdc(locationid = "ZIP:33050", startdate = '2010-03-01', enddate = '2010-05-31', datasetid = "GHCND")
+
+# need to check station ids around the florida keys
+out <- ghcnd(stationid = "USW00012873", date_min = "2010-01-01", add_units = T) %>%
+    filter(year >= 2016 & year <= 2021)
+alldat <- ghcnd_splitvars(out)
+awnd_df <- as.data.frame(alldat$awnd) %>% 
+    separate(col= "date", into = c("year", "month", "day"), sep = "-", remove = F)
+
+wsf5_df <- as.data.frame(alldat$wsf5) %>% 
+    separate(col= "date", into = c("year", "month", "day"), sep = "-", remove = F)
+
+#average wind speeds (AWND) and fastest 5-second wind speeds (WSF5) are in tenths of meters per second
+ggplot(filter(awnd_df, year == 2016), aes(x=date, y=awnd)) +
+    geom_point()
+
+
+#plotting wind speeds during Hurricane Irma
+ggplot(filter(awnd_df, year == 2017 & month == '09'), aes(x=date, y=awnd)) +
+    geom_point()
+
+ggplot(filter(wsf5_df, year == 2017 & month == '09'), aes(x=date, y=wsf5)) +
+    geom_point()
+
+
+```
+
