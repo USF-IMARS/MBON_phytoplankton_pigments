@@ -25,7 +25,7 @@ output: html_document
     * maybe map
 
 ```{r setup, include=FALSE}
-root <- rprojroot::find_rstudio_root_file()
+# root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
 library("ggplot2")
 library("tibble")
@@ -39,7 +39,8 @@ library("lubridate")
 library("glue")
 library("fs")
 library("magrittr")
-
+library("here")
+# library("broom") # optional
 
 ```
 
@@ -69,7 +70,7 @@ dir <- "//data//raw//"
 
 # pigment files
 file.pig <-
-  fs::dir_ls(path = paste0(root,dir),
+  fs::dir_ls(path = here("data", "raw"),
              recurse = TRUE,
              # included ^[^~]* to not match ~, means that a file is opened
              regexp = "^[^~]*\\.xlsx$") %>% 
@@ -391,17 +392,20 @@ df_all <- df_all %>%
 
 ```{r save-combined-data}
 
-dir2     <- "//data//processed//"
-path_out <-  paste0(root,dir2)
-readr::write_csv(df_all, paste0(path_out,"combined_pig_dat.csv"))
-readr::write_csv(pig_stat, paste0(path_out, "pig_summary_stat.csv"))
+# dir2     <- "//data//processed//"
+path_out <-  here("data", "processed")
+readr::write_csv(df_all, here(path_out, "combined_pig_dat.csv"))
+readr::write_csv(pig_stat, here(path_out, "pig_summary_stat.csv"))
 ```
-
+ 
 ```{r log-dat}
-dir2     <- "//data//processed//"
-path_out <- paste0(root,dir2)
-pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
-
+# dir2     <- "//data//processed//"
+# path_out <- paste0(root,dir2)
+if (!exists("df_all")) {
+    pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+} else {
+    pig_dat <- df_all
+}
 
 add1 <- function(n) {
     n + 1
