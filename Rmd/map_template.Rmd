@@ -113,7 +113,7 @@ nc_close(bathy)
 
 # read topography data
 bathy <- raster::raster(here(path_topo,"etopo1.nc")) %>%
-  as.data.frame(xy = T)
+  as.data.frame(xy = TRUE)
 
 rm(path_topo, path_land)
 ```
@@ -266,11 +266,11 @@ if (FALSE) {
 }
 ```
 
-# Kriging for Fucoxanthin
+# ---- Kriging for Fucoxanthin ----
+Test to see if it works
 ```{r filter-fuco-winter}
-## testing out mapping one pigment during one season
 pig <- "fuco"
-fuco_data <-
+df_fuco <-
     pig_dat %>%
     filter(
         # season == "Winter" 
@@ -282,10 +282,7 @@ fuco_data <-
                   tot_chl_a, fuco
         ) %>%
     mutate(fuco_ratio = fuco/tot_chl_a, 
-           .after = fuco)
-
-df_fuco <-
-    fuco_data %>%
+           .after = fuco) %>%
     group_by(station) %>%
     summarise(
         across(c(fuco_ratio, fuco, tot_chl_a), 
@@ -312,54 +309,78 @@ df_fuco <-
 # df_fuco[cols.num_fuco] <- sapply(df_fuco[cols.num_fuco],as.numeric)
 
 ```
-```{r kriging}
-# -------------- kriging FUCO --------------
-# kriging resolution
+
+# Kriging Fuco predction grid setup
+Takes min and max of locations +/- adjustment and equidistant by resolution 
+creating a bounding box with grid point as a `list()` object
+```{r prediction-surface-setup}
+# kriging resolution in decimal degrees
 resolution <- 0.01
 adj        <- 0.1
 
-# krigging locations
-df_fuco.loc   <- select(df_fuco, lat, lon)
+# kriging locations
+df_fuco_loc   <- select(df_fuco, lon, lat)
 
-loc.grid_fuco <- 
-    list(lon = seq(min(df_fuco$lon, na.rm = T) - adj,
-                   max(df_fuco$lon, na.rm = T) + adj, 
+# creates two list: lat and lon that is bounding box for prediction surface
+# min to max +/- adjustment by resolution amount in decimal degress
+loc_grid_fuco <- 
+    list(lon = seq(min(df_fuco$lon, na.rm = TRUE) - adj,
+                   max(df_fuco$lon, na.rm = TRUE) + adj, 
                    resolution),
          
-         lat = seq(min(df_fuco$lat, na.rm = T) - adj, 
-                   max(df_fuco$lat, na.rm = T) + adj, 
+         lat = seq(min(df_fuco$lat, na.rm = TRUE) - adj, 
+                   max(df_fuco$lat, na.rm = TRUE) + adj, 
                    resolution))
 
-# limits for plotting
-xlims_fuco    <- range(loc.grid_fuco$lon)
-ylims_fuco    <- range(loc.grid_fuco$lat)
+# set limits for plotting as range of lat/lon
+xlims_fuco    <- range(loc_grid_fuco$lon)
+ylims_fuco    <- range(loc_grid_fuco$lat)
 
-# spatialProcess()
-# ----------------- Pigment FUCO ratio krig -----------------
-my.krig_fuco      <- 
-    spatialProcess(as.matrix(df_fuco.loc), 
-                                    df_fuco$fuco_ratio_avg)
-my.krig_fuco      <- 
-    spatialProcess((df_fuco.loc), 
-                                    df_fuco$fuco_ratio_avg)
-
+loc_grid_fuco
 ```
-```{r label}
+# spatialProcess()
 
-ratio_kriged_fuco <- predictSurface(my.krig_fuco, 
-                                    loc.grid_fuco, 
-                                    extrap = FALSE)
 
-ratio_SE_fuco     <- predictSurfaceSE(my.krig_fuco, 
-                                      loc.grid_fuco, 
+```{r model-predict-surface}
+set.seed(123)
+krig_fuco      <-
+    spatialProcess(as.matrix(df_fuco_loc),
+                                    df_fuco$fuco_ratio_avg)
+krig_fuco      <-
+    spatialProcess(test,
+                                    df_fuco$fuco_ratio_avg)
+
+# model spatial process using lon/lat and fuco:chla 
+krig_fuco   <- spatialProcess(df_fuco_loc, 
+                              df_fuco$fuco_ratio_avg)
+summary(krig_fuco)
+
+set.panel(2,2)
+  plot(krig_fuco)
+  
+set.panel(m=1, n=1, relax=FALSE)
+ 
+ surface(krig_fuco)
+ 
+# prediction surface and standard errors
+ratio_kriged_fuco <- predictSurface(krig_fuco, 
+                                    loc_grid_fuco,
+                                    # tes,
+                                    # nx = 74, ny = 74,
+                                    extrap = FALSE
+                                    )
+
+ratio_SE_fuco     <- predictSurfaceSE(krig_fuco, 
+                                      loc_grid_fuco, 
                                       extrap = FALSE)
-
+```
+```{r stopped-here}
 # corrects the kriged min and max to observed min and max
 if (max(ratio_kriged_fuco$z, na.rm = TRUE) > max(df_fuco$fuco_rat_avg, na.rm = TRUE)) {
   ratio_kriged_fuco$z[which(ratio_kriged_fuco$z > max(df_fuco$fuco_rat_avg, na.rm = TRUE))] <- max(df_fuco$fuco_rat_avg, na.rm = TRUE)
 }
 
-if (min(ratio_kriged_fuco$z, na.rm = T) < min(df_fuco$fuco_rat_avg, na.rm = TRUE)) {
+if (min(ratio_kriged_fuco$z, na.rm = TRUE) < min(df_fuco$fuco_rat_avg, na.rm = TRUE)) {
   ratio_kriged_fuco$z[which(ratio_kriged_fuco$z < min(df_fuco$fuco_rat_avg, na.rm = TRUE))] <- min(df_fuco$fuco_rat_avg, na.rm = TRUE)
 }
 
@@ -384,135 +405,282 @@ file <- here("data", "map",
 if (FALSE) png(file, height = 11, width = 4, units = "in", res = 300)
 
 ```
-```{r}
+```{r base-plot-fuco}
+par(
+    mfrow = c(3, 1),
+    mar = c(4.5, 4, 2, 1),
+    oma = c(4, 1, 4, 1)
+)
 
-### FUCO ###
+imagePlot(
+    ratio_kriged_fuco$x,
+    ratio_kriged_fuco$y,
+    ratio_kriged_fuco$z,
+    col = cols_fuco,
+    breaks = breaks_fuco,
+    asp = 1,
+    xlab = '',
+    ylab = '',
+    las = 1,
+    xlim = xlims_fuco,
+    ylim = ylims_fuco,
+    nlevel = length(cols_fuco),
+    legend.width = 1,
+    legend.mar = 3
+)
 
-par(mfrow=c(3,1),mar=c(4.5,4,2,1),oma=c(4,1,4,1))
+contour(
+    ratio_kriged_fuco$x,
+    ratio_kriged_fuco$y,
+    ratio_kriged_fuco$z,
+    levels = breaks_fuco,
+    add = TRUE
+)
 
-imagePlot(ratio_kriged_fuco$x,
-          ratio_kriged_fuco$y,
-          ratio_kriged_fuco$z,
-          col=cols_fuco,breaks=breaks_fuco,asp=1,
-          xlab='',ylab='',las=1,
-          xlim=xlims_fuco,ylim=ylims_fuco,
-          nlevel=length(cols_fuco),legend.width=1,legend.mar=3)
-contour(ratio_kriged_fuco$x,
-        ratio_kriged_fuco$y,
-        ratio_kriged_fuco$z,
-        levels=breaks_fuco,add=T)
-image(ratio_SE_fuco,add=T,breaks=quantile(ratio_SE_fuco$z,c(1,1),na.rm = TRUE),col='white')
-image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
-# plot(FL,col='gray70',add=T)
-plot(world2,col='gray70',add=T)
-contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
-points(df_fuco$lon,df_fuco$lat,pch=20,col='yellow')
-mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
-mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
-mtext('Fucoxanthin:TChla: Winter',adj=1,cex=.75)
+image(
+    ratio_SE_fuco,
+    add = TRUE,
+    breaks = quantile(ratio_SE_fuco$z, c(1, 1), na.rm = TRUE),
+    col = 'white'
+)
+
+image(
+    topo_lon,
+    topo_lat,
+    topo,
+    breaks = c(-1, 100),
+    col = 'white',
+    add = TRUE
+)
+
+# plot(FL,col='gray70',add=TRUE)
+plot(world2, col = 'gray70', add = TRUE)
+contour(
+    topo_lon,
+    topo_lat,
+    topo,
+    add = TRUE,
+    levels = c(-100, -50, -25, -10),
+    col = 'gray40'
+)
+
+points(df_fuco$lon,
+       df_fuco$lat,
+       pch = 20,
+       col = 'yellow')
+
+mtext(expression(paste('Longitude (', degree, 'W)')), 1, line = 3, cex = 0.75)
+
+mtext(expression(paste('Latitude (', degree, 'N)')), 2, line = 3, cex = 0.75)
+mtext('Fucoxanthin:TChla: Winter', adj = 1, cex = 0.75)
 ```
 
+# Function to wrap kriging?
 ```{r function-for-mapping-pigments}
-pig_dat_longer <- pig_dat %>% 
-    pivot_longer(tot_chl_b:dp, names_to = "pigment", values_to = "conc")
-
 map_pigment <- function(.pig, .long_file, .season) {
-    pig_data <- .long_file %>%
-        filter(season == .season, name_of_water_body == "Florida Keys",
+    # browser()
+    # 
+    pig_data <- 
+        .long_file %>%
+        filter(season == .season & 
+               name_of_water_body == "Florida Keys" &
                pigment == .pig
         ) %>%
         dplyr::select(
-        hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
-                  pigment, conc, tot_chl_a
+            hplc_gsfc_id, sample, station, 
+            lat, lon, season, year, date_time_utc,
+            pigment, conc, tot_chl_a
         ) %>%
         group_by(hplc_gsfc_id) %>% 
-    mutate(ratio = conc/tot_chl_a, .after=conc)
+        mutate(ratio = conc/tot_chl_a, .after = conc)
     
-    df_pigm <- pig_data %>% 
+    # 
+    df_pigm <- 
+        pig_data %>% 
         group_by(station) %>% 
-        summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
-        distinct(station, .keep_all = T) %>% 
+        summarize(ratio_avg = mean(ratio), 
+                  conc_avg  = mean(conc), 
+                  chla_avg  = mean(tot_chl_a), 
+                  across()) %>% 
+        distinct(station, .keep_all = TRUE) %>% 
         ungroup()
-    #krigging
-    resolution <- .01
-    adj <- .1
-    ### krigging locations
-    df_pigm.loc <- cbind(lon=df_pigm$lon,lat=df_pigm$lat)
-    loc.grid_pigm <- list(lon=seq(min(df_pigm$lon, na.rm = TRUE) - adj, max(df_pigm$lon, na.rm = TRUE) + adj, resolution),
-                 lat=seq(min(df_pigm$lat, na.rm = TRUE) - adj, max(df_pigm$lat, na.rm = TRUE) + adj, resolution))
-    ### limits for plotting
-    xlims_pigm <- range(loc.grid_pigm$lon)
-    ylims_pigm <- range(loc.grid_pigm$lat)
     
-    #pigment krig
-    my.krig_pigm <- spatialProcess(df_pigm.loc, df_pigm$ratio_avg)
-    ratio_kriged_pigm <- predictSurface(my.krig_pigm, loc.grid_pigm, extrap=F)
-    ratio_SE_pigm <- predictSurfaceSE(my.krig_pigm, loc.grid_pigm, extrap=F)
+    #kriging
+    resolution    <- 0.01
+    adj           <- 0.1
     
-    ### ----------------- Pigment pigm ratio krig -----------------
+    
+    # kriging locations
+    df_pigm.loc   <- cbind(lon = pig_data$lon, 
+                           lat = pig_data$lat)
+    
+    loc.grid_pigm <- 
+        list(
+            lon = seq(min(df_pigm$lon, na.rm = TRUE) - adj, 
+                      max(df_pigm$lon, na.rm = TRUE) + adj, 
+                      resolution),
+        
+            lat = seq(min(df_pigm$lat, na.rm = TRUE) - adj, 
+                      max(df_pigm$lat, na.rm = TRUE) + adj, 
+                      resolution))
+    
 
-    ### corrects the krigged min and max to observed min and max
-    if(max(ratio_kriged_pigm$z, na.rm = TRUE) > max(df_pigm$ratio_avg, na.rm = TRUE)){
+    ### limits for plotting
+    xlims_pigm    <- range(loc.grid_pigm$lon)
+    ylims_pigm    <- range(loc.grid_pigm$lat)
+    
+    # model spatial process
+    my.krig_pigm      <- spatialProcess(df_pigm.loc, 
+                                        df_pigm$ratio_avg)
+    
+    # predict using model
+    ratio_kriged_pigm <- predictSurface(my.krig_pigm, 
+                                        loc.grid_pigm,
+                                        extrap = FALSE)
+    
+    ratio_SE_pigm     <- predictSurfaceSE(my.krig_pigm, 
+                                          loc.grid_pigm, 
+                                          extrap = FALSE)
+    
+    #  Pigment pigm ratio krig
+    # corrects the krigged min and max to observed min and max
+    if (max(ratio_kriged_pigm$z, na.rm = TRUE) > max(df_pigm$ratio_avg, na.rm = TRUE)) {
         ratio_kriged_pigm$z[which(ratio_kriged_pigm$z > max(df_pigm$ratio_avg, na.rm = TRUE))] <- max(df_pigm$ratio_avg, na.rm = TRUE)
     }
-    if(min(ratio_kriged_pigm$z, na.rm = TRUE) < min(df_pigm$ratio_avg, na.rm = TRUE)){
+    if (min(ratio_kriged_pigm$z, na.rm = TRUE) < min(df_pigm$ratio_avg, na.rm = TRUE)) {
         ratio_kriged_pigm$z[which(ratio_kriged_pigm$z < min(df_pigm$ratio_avg, na.rm = TRUE))] <- min(df_pigm$ratio_avg, na.rm = TRUE)
     }
-    ### color and contour breaks pigm
+    # color and contour breaks pigm
+    # breaks
     breaks_pigm <- pretty(df_pigm$ratio_avg, n=10)
-    breaks_pigm <- seq(0, 0.6, by=.05) ### use for fixed breaks.
-    chl_col <- colorRampPalette(c('honeydew2','darkseagreen3','forestgreen','darkslategrey'))
-    cols_pigm <- chl_col(length(breaks_pigm)-1)
-    root <- rprojroot::find_rstudio_root_file()
-    dir5 <- "//data//plots//"
-    path_map = paste0(root,dir5)
-    file <-
-    paste0(pathmap,'MBON_pigm_',
-           .pig,
-           .season,
-           format(Sys.time(), "%y%m%d_%H%M%S") ,
-           '.png')
-    png(file, height = 11, width = 4, units = 'in', res=300)
+    breaks_pigm <- seq(0, 0.6, by=.05) # use for fixed breaks.
     
-    par(mfrow=c(3,1),mar=c(4.5,4,2,1),oma=c(4,1,4,1))
-
+    # color
+    chl_col     <- colorRampPalette(c('honeydew2','darkseagreen3','forestgreen','darkslategrey'))
+    cols_pigm   <- chl_col(length(breaks_pigm) - 1)
+    
+    # file name to save
+    file <-
+    here("data", "plots",
+         glue('MBON_pigm_',
+              .pig,
+              .season,
+              format(Sys.time(), "%y%m%d_%H%M%S") ,
+              '.png'))
+    
+    
+    png(
+        file,
+        height = 11,
+        width = 4,
+        units = 'in',
+        res = 300
+    )
+    
+    par(
+        mfrow = c(3, 1),
+        mar   = c(4.5, 4, 2, 1),
+        oma   = c(4, 1, 4, 1)
+    )
+    
+    # plot image
     imagePlot(ratio_kriged_pigm$x,
               ratio_kriged_pigm$y,
               ratio_kriged_pigm$z,
-              col=cols_pigm,breaks=breaks_pigm,asp=1,
-              xlab='',ylab='',las=1,
-              xlim=xlims_pigm,ylim=ylims_pigm,
-              nlevel=length(cols_pigm),legend.width=1,legend.mar=3)
-contour(ratio_kriged_pigm$x,
+              col          = cols_pigm, 
+              breaks       = breaks_pigm, 
+              asp          = 1,
+              xlab         = '', ylab = '', 
+              las          = 1,
+              xlim         = xlims_pigm, 
+              ylim         = ylims_pigm,
+              nlevel       = length(cols_pigm), 
+              legend.width = 1, 
+              legend.mar   = 3)
+    
+    contour(
+        ratio_kriged_pigm$x,
         ratio_kriged_pigm$y,
         ratio_kriged_pigm$z,
-        levels=breaks_pigm,add=T)
-image(ratio_SE_pigm,add=T,breaks=quantile(ratio_SE_pigm$z,c(1,1),na.rm = TRUE),col='white')
-image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
-plot(world2,col='gray70',add=T)
-contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
-points(df_pigm$lon,df_pigm$lat,pch=20,col='yellow')
-mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
-mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
-mtext(paste(.pig,':TChla:',.season),adj=1,cex=.75)
+        levels = breaks_pigm,
+        add    = TRUE
+    )
+    
+    image(
+        ratio_SE_pigm,
+        add    = TRUE,
+        breaks = quantile(ratio_SE_pigm$z, c(1, 1), na.rm = TRUE),
+        col    = 'white'
+    )
+    image(
+        topo_lon,
+        topo_lat,
+        topo,
+        breaks = c(-1, 100),
+        col    = 'white',
+        add    = TRUE
+    )
+    plot(world2, col = 'gray70', add = TRUE)
+    contour(
+        topo_lon,
+        topo_lat,
+        topo,
+        add    = TRUE,
+        levels = c(-100, -50, -25, -10),
+        col    = 'gray40'
+    )
+    points(df_pigm$lon,
+           df_pigm$lat,
+           pch = 20,
+           col = 'yellow')
+    mtext(expression(paste('Longitude (', degree, 'W)')), 
+          1, 
+          line = 3, 
+          cex = 0.75)
+    
+    mtext(expression(paste('Latitude (', degree, 'N)')), 
+          2, 
+          line = 3, 
+          cex = 0.75)
+    
+    mtext(paste(.pig, ':TChla:', .season),
+          adj = 1,
+          cex = 0.75)
 
 }
 
+```
+```{r run-pig-func}
 
-map_pigment("fuco", pig_dat_longer, "Winter")
-map_pigment("fuco", pig_dat_longer, "Summer")
-map_pigment("fuco", pig_dat_longer, "Spring")
-map_pigment("fuco", pig_dat_longer, "Autumn")
+pig_dat_longer <- pig_dat %>% 
+    pivot_longer(tot_chl_b:dp, names_to = "pigment", values_to = "conc")
 
 
+# map_pigment("fuco", pig_dat_longer, "Winter")
+# map_pigment("fuco", pig_dat_longer, "Summer")
+# map_pigment("fuco", pig_dat_longer, "Spring")
+# map_pigment("fuco", pig_dat_longer, "Autumn")
+map_pigment("fuco", pig_dat_longer, "W")
+map_pigment("fuco", pig_dat_longer, "Su")
+map_pigment("fuco", pig_dat_longer, "Sp")
+map_pigment("fuco", pig_dat_longer, "F")
+
+pig_dat_longer %$% unique(season)
 
 ```
 
-```{r function-for-mapping}
 
+
+
+
+
+```{r function-for-mapping}
 map_phyto <- function(.phyto, .long_file, .season) {
+    
+    # filter data for season and water body
     phyto_data <- .long_file %>%
-        filter(season == .season, name_of_water_body == "Florida Keys",
+        filter(season == .season &
+               name_of_water_body == "Florida Keys" &
                func_type == .phyto
         ) %>%
         dplyr::select(
@@ -522,26 +690,49 @@ map_phyto <- function(.phyto, .long_file, .season) {
         group_by(hplc_gsfc_id) %>% 
     mutate(ratio = conc/tot_chl_a, .after=conc)
     
+    # 
     df_phyto <- phyto_data %>% 
         group_by(station) %>% 
-        summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
-        distinct(station, .keep_all = T) %>% 
+        summarize(ratio_avg = mean(ratio), 
+                  conc_avg = mean(conc), 
+                  chla_avg = mean(tot_chl_a), 
+                  across()) %>% 
+        distinct(station, .keep_all = TRUE) %>% 
         ungroup()
-    #krigging
-    resolution <- .01
-    adj <- .1
-    ### krigging locations
-    df_phyto.loc <- cbind(lon=df_phyto$lon,lat=df_phyto$lat)
-    loc.grid_phyto <- list(lon=seq(min(df_phyto$lon, na.rm = TRUE) - adj, max(df_phyto$lon, na.rm = TRUE) + adj, resolution),
-                 lat=seq(min(df_phyto$lat, na.rm = TRUE) - adj, max(df_phyto$lat, na.rm = TRUE) + adj, resolution))
-    ### limits for plotting
-    xlims_phyto <- range(loc.grid_phyto$lon)
-    ylims_phyto <- range(loc.grid_phyto$lat)
+    
+    
+    #kriging
+    resolution     <- 0.01
+    adj            <- 0.1
+    
+    #kriging locations
+    df_phyto.loc   <- cbind(lon = df_phyto$lon, 
+                          lat = df_phyto$lat)
+    
+    loc.grid_phyto <- 
+        list(lon = seq(min(df_phyto$lon, na.rm = TRUE) - adj, 
+                       max(df_phyto$lon, na.rm = TRUE) + adj, 
+                       resolution),
+                 
+             lat = seq(min(df_phyto$lat, na.rm = TRUE) - adj, 
+                       max(df_phyto$lat, na.rm = TRUE) + adj, 
+                       resolution))
+    
+    # limits for plotting
+    xlims_phyto    <- range(loc.grid_phyto$lon)
+    ylims_phyto    <- range(loc.grid_phyto$lat)
     
     #phyto krig
-    my.krig_phyto <- spatialProcess(df_phyto.loc, df_phyto$ratio_avg)
-    ratio_kriged_phyto <- predictSurface(my.krig_phyto, loc.grid_phyto, extrap=F)
-    ratio_SE_phyto <- predictSurfaceSE(my.krig_phyto, loc.grid_phyto, extrap=F)
+    my.krig_phyto      <- spatialProcess(df_phyto.loc, 
+                                         df_phyto$ratio_avg)
+    
+    ratio_kriged_phyto <- predictSurface(my.krig_phyto, 
+                                         loc.grid_phyto, 
+                                         extrap = FALSE)
+    
+    ratio_SE_phyto     <- predictSurfaceSE(my.krig_phyto, 
+                                           loc.grid_phyto, 
+                                           extrap = FALSE)
     
     ### ----------------- phyto ratio krig -----------------
 
@@ -557,15 +748,15 @@ map_phyto <- function(.phyto, .long_file, .season) {
     breaks_phyto <- seq(0, 0.6, by=.05) ### use for fixed breaks.
     chl_col <- colorRampPalette(c('honeydew2','darkseagreen3','forestgreen','darkslategrey'))
     cols_phyto <- chl_col(length(breaks_phyto)-1)
-    root <- rprojroot::find_rstudio_root_file()
-    dir5 <- "//data//plots//"
-    path_map <- paste0(root,dir5)
-    file <-
-    paste0(path_map,'MBON_pigments_',
-           .phyto,
-           .season,
-           format(Sys.time(), "%y%m%d_%H%M%S") ,
-           '.png')
+
+    file <- 
+        here("data", "plots",
+             glue('MBON_pigments_',
+                  .phyto,
+                  .season,
+                  format(Sys.time(), "%y%m%d_%H%M%S") ,
+                  '.png'))
+    
     png(file, height = 11, width = 4, units = 'in', res=300)
     
     par(mfrow=c(3,1),mar=c(4.5,4,2,1),oma=c(4,1,4,1))
@@ -580,11 +771,11 @@ map_phyto <- function(.phyto, .long_file, .season) {
     contour(ratio_kriged_phyto$x,
             ratio_kriged_phyto$y,
             ratio_kriged_phyto$z,
-            levels=breaks_phyto,add=T)
-    image(ratio_SE_phyto,add=T,breaks=quantile(ratio_SE_phyto$z,c(1,1),na.rm = TRUE),col='white')
-    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
-    plot(world2,col='gray70',add=T)
-    contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
+            levels=breaks_phyto,add=TRUE)
+    image(ratio_SE_phyto,add=TRUE,breaks=quantile(ratio_SE_phyto$z,c(1,1),na.rm = TRUE),col='white')
+    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=TRUE)
+    plot(world2,col='gray70',add=TRUE)
+    contour(topo_lon,topo_lat,topo,add=TRUE,levels=c(-100,-50,-25,-10),col='gray40')
     points(df_phyto$lon,df_phyto$lat,pch=20,col='yellow')
     mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
     mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
@@ -601,20 +792,32 @@ map_phyto("fuco", cmtx_longer2, "Autumn")
 ```
 ```{r}
 #Longer chemtax dataframe with combined functional types 
-cmtx_longer3 <- cmtx_avgs %>% 
-    mutate(diat = diat1 + diat2,
+cmtx_longer3 <-
+    fs::dir_ls(here(), 
+               regexp  = "chemtax_with_metadata", 
+               recurse = TRUE) %>% 
+    read.csv() %>%
+    
+    mutate(diat  = diat1 + diat2,
            cyano = cyano2 + cyano4,
-           hapt = hapt6 + hapt8,
+           hapt  = hapt6 + hapt8,
            .keep = "unused"
               ) %>% 
-    pivot_longer(cols = chloro:hapt, names_to = "func_type", values_to = "conc") %>%
+    
+    pivot_longer(cols = chloro:hapt, 
+                 names_to = "func_type", 
+                 values_to = "conc") %>%
+    
     filter(station != 60)
+```
+# PROBABLY DONT NEED
+```{r all-seasons}
 
 #function for mapping multiple seasons in one file
 map_phyto <- function(.phyto, .long_file) {
-    ### ----------------- SPRING -----------------
+    # ----------------- SPRING -----------------
      phyto_spring_data <- .long_file %>%
-        filter(season == "Spring", name_of_water_body == "Florida Keys",
+        filter(season == "Spring" & name_of_water_body == "Florida Keys" &
                func_type == .phyto
         ) %>%
         dplyr::select(
@@ -624,13 +827,16 @@ map_phyto <- function(.phyto, .long_file) {
         group_by(hplc_gsfc_id) %>% 
     mutate(ratio = conc/tot_chl_a, .after=conc)
     
-    df_phyto_spring <- phyto_spring_data %>% 
+    df_phyto_spring <- 
+        phyto_spring_data %>% 
         group_by(station) %>% 
-        summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
-        distinct(station, .keep_all = T) %>% 
+        summarize(ratio_avg = mean(ratio), 
+                  conc_avg = mean(conc), 
+                  chla_avg = mean(tot_chl_a), across()) %>% 
+        distinct(station, .keep_all = TRUE) %>% 
         ungroup()
     #krigging
-    resolution <- .01
+    resolution <- 0.01
     adj <- .1
     ### krigging locations
     df_phyto_spring.loc <- cbind(lon=df_phyto_spring$lon,lat=df_phyto_spring$lat)
@@ -642,8 +848,8 @@ map_phyto <- function(.phyto, .long_file) {
     
     #phyto krig
     my.krig_phyto_spring <- spatialProcess(df_phyto_spring.loc, df_phyto_spring$ratio_avg)
-    ratio_kriged_phyto_spring <- predictSurface(my.krig_phyto_spring, loc.grid_phyto_spring, extrap=F)
-    ratio_SE_phyto_spring <- predictSurfaceSE(my.krig_phyto_spring, loc.grid_phyto_spring, extrap=F)
+    ratio_kriged_phyto_spring <- predictSurface(my.krig_phyto_spring, loc.grid_phyto_spring, extrap=FALSE)
+    ratio_SE_phyto_spring <- predictSurfaceSE(my.krig_phyto_spring, loc.grid_phyto_spring, extrap=FALSE)
     
     ### ----------------- Spring Phyto ratio krig -----------------
 
@@ -678,7 +884,7 @@ map_phyto <- function(.phyto, .long_file) {
     df_phyto_summer <- phyto_summer_data %>% 
         group_by(station) %>% 
         summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
-        distinct(station, .keep_all = T) %>% 
+        distinct(station, .keep_all = TRUE) %>% 
         ungroup()
     ### krigging locations
     df_phyto_summer.loc <- cbind(lon=df_phyto_summer$lon,lat=df_phyto_summer$lat)
@@ -690,8 +896,8 @@ map_phyto <- function(.phyto, .long_file) {
     
     #phyto krig
     my.krig_phyto_summer <- spatialProcess(df_phyto_summer.loc, df_phyto_summer$ratio_avg)
-    ratio_kriged_phyto_summer <- predictSurface(my.krig_phyto_summer, loc.grid_phyto_summer, extrap=F)
-    ratio_SE_phyto_summer <- predictSurfaceSE(my.krig_phyto_summer, loc.grid_phyto_summer, extrap=F)
+    ratio_kriged_phyto_summer <- predictSurface(my.krig_phyto_summer, loc.grid_phyto_summer, extrap=FALSE)
+    ratio_SE_phyto_summer <- predictSurfaceSE(my.krig_phyto_summer, loc.grid_phyto_summer, extrap=FALSE)
     
     ### ----------------- summer Phyto ratio krig -----------------
 
@@ -724,7 +930,7 @@ map_phyto <- function(.phyto, .long_file) {
     df_phyto_autumn <- phyto_autumn_data %>% 
         group_by(station) %>% 
         summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
-        distinct(station, .keep_all = T) %>% 
+        distinct(station, .keep_all = TRUE) %>% 
         ungroup()
     ### krigging locations
     df_phyto_autumn.loc <- cbind(lon=df_phyto_autumn$lon,lat=df_phyto_autumn$lat)
@@ -736,8 +942,8 @@ map_phyto <- function(.phyto, .long_file) {
     
     #phyto krig
     my.krig_phyto_autumn <- spatialProcess(df_phyto_autumn.loc, df_phyto_autumn$ratio_avg)
-    ratio_kriged_phyto_autumn <- predictSurface(my.krig_phyto_autumn, loc.grid_phyto_autumn, extrap=F)
-    ratio_SE_phyto_autumn <- predictSurfaceSE(my.krig_phyto_autumn, loc.grid_phyto_autumn, extrap=F)
+    ratio_kriged_phyto_autumn <- predictSurface(my.krig_phyto_autumn, loc.grid_phyto_autumn, extrap=FALSE)
+    ratio_SE_phyto_autumn <- predictSurfaceSE(my.krig_phyto_autumn, loc.grid_phyto_autumn, extrap=FALSE)
     
     ### ----------------- autumn Phyto ratio krig -----------------
 
@@ -770,7 +976,7 @@ map_phyto <- function(.phyto, .long_file) {
     df_phyto_winter <- phyto_winter_data %>% 
         group_by(station) %>% 
         summarize(ratio_avg = mean(ratio), conc_avg = mean(conc), chla_avg = mean(tot_chl_a), across()) %>% 
-        distinct(station, .keep_all = T) %>% 
+        distinct(station, .keep_all = TRUE) %>% 
         ungroup()
     ### krigging locations
     df_phyto_winter.loc <- cbind(lon=df_phyto_winter$lon,lat=df_phyto_winter$lat)
@@ -782,8 +988,8 @@ map_phyto <- function(.phyto, .long_file) {
     
     #phyto krig
     my.krig_phyto_winter <- spatialProcess(df_phyto_winter.loc, df_phyto_winter$ratio_avg)
-    ratio_kriged_phyto_winter <- predictSurface(my.krig_phyto_winter, loc.grid_phyto_winter, extrap=F)
-    ratio_SE_phyto_winter <- predictSurfaceSE(my.krig_phyto_winter, loc.grid_phyto_winter, extrap=F)
+    ratio_kriged_phyto_winter <- predictSurface(my.krig_phyto_winter, loc.grid_phyto_winter, extrap=FALSE)
+    ratio_SE_phyto_winter <- predictSurfaceSE(my.krig_phyto_winter, loc.grid_phyto_winter, extrap=FALSE)
     
     ### ----------------- winter Phyto ratio krig -----------------
 
@@ -824,11 +1030,11 @@ map_phyto <- function(.phyto, .long_file) {
     contour(ratio_kriged_phyto_spring$x,
             ratio_kriged_phyto_spring$y,
             ratio_kriged_phyto_spring$z,
-            levels=breaks_phyto_spring,add=T)
-    image(ratio_SE_phyto_spring,add=T,breaks=quantile(ratio_SE_phyto_spring$z,c(1,1),na.rm = TRUE),col='white')
-    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
-    plot(world2,col='gray70',add=T)
-    contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
+            levels=breaks_phyto_spring,add=TRUE)
+    image(ratio_SE_phyto_spring,add=TRUE,breaks=quantile(ratio_SE_phyto_spring$z,c(1,1),na.rm = TRUE),col='white')
+    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=TRUE)
+    plot(world2,col='gray70',add=TRUE)
+    contour(topo_lon,topo_lat,topo,add=TRUE,levels=c(-100,-50,-25,-10),col='gray40')
     points(df_phyto_spring$lon,df_phyto_spring$lat,pch=20,col='yellow')
     mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
     mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
@@ -845,11 +1051,11 @@ map_phyto <- function(.phyto, .long_file) {
     contour(ratio_kriged_phyto_summer$x,
             ratio_kriged_phyto_summer$y,
             ratio_kriged_phyto_summer$z,
-            levels=breaks_phyto_summer,add=T)
-    image(ratio_SE_phyto_summer,add=T,breaks=quantile(ratio_SE_phyto_summer$z,c(1,1),na.rm = TRUE),col='white')
-    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
-    plot(world2,col='gray70',add=T)
-    contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
+            levels=breaks_phyto_summer,add=TRUE)
+    image(ratio_SE_phyto_summer,add=TRUE,breaks=quantile(ratio_SE_phyto_summer$z,c(1,1),na.rm = TRUE),col='white')
+    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=TRUE)
+    plot(world2,col='gray70',add=TRUE)
+    contour(topo_lon,topo_lat,topo,add=TRUE,levels=c(-100,-50,-25,-10),col='gray40')
     points(df_phyto_summer$lon,df_phyto_summer$lat,pch=20,col='yellow')
     mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
     mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
@@ -866,11 +1072,11 @@ map_phyto <- function(.phyto, .long_file) {
     contour(ratio_kriged_phyto_autumn$x,
             ratio_kriged_phyto_autumn$y,
             ratio_kriged_phyto_autumn$z,
-            levels=breaks_phyto_autumn,add=T)
-    image(ratio_SE_phyto_autumn,add=T,breaks=quantile(ratio_SE_phyto_autumn$z,c(1,1),na.rm = TRUE),col='white')
-    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
-    plot(world2,col='gray70',add=T)
-    contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
+            levels=breaks_phyto_autumn,add=TRUE)
+    image(ratio_SE_phyto_autumn,add=TRUE,breaks=quantile(ratio_SE_phyto_autumn$z,c(1,1),na.rm = TRUE),col='white')
+    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=TRUE)
+    plot(world2,col='gray70',add=TRUE)
+    contour(topo_lon,topo_lat,topo,add=TRUE,levels=c(-100,-50,-25,-10),col='gray40')
     points(df_phyto_autumn$lon,df_phyto_autumn$lat,pch=20,col='yellow')
     mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
     mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
@@ -887,11 +1093,11 @@ map_phyto <- function(.phyto, .long_file) {
     contour(ratio_kriged_phyto_winter$x,
             ratio_kriged_phyto_winter$y,
             ratio_kriged_phyto_winter$z,
-            levels=breaks_phyto_winter,add=T)
-    image(ratio_SE_phyto_winter,add=T,breaks=quantile(ratio_SE_phyto_winter$z,c(1,1),na.rm = TRUE),col='white')
-    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=T)
-    plot(world2,col='gray70',add=T)
-    contour(topo_lon,topo_lat,topo,add=T,levels=c(-100,-50,-25,-10),col='gray40')
+            levels=breaks_phyto_winter,add=TRUE)
+    image(ratio_SE_phyto_winter,add=TRUE,breaks=quantile(ratio_SE_phyto_winter$z,c(1,1),na.rm = TRUE),col='white')
+    image(topo_lon,topo_lat,topo,breaks=c(-1,100),col='white',add=TRUE)
+    plot(world2,col='gray70',add=TRUE)
+    contour(topo_lon,topo_lat,topo,add=TRUE,levels=c(-100,-50,-25,-10),col='gray40')
     points(df_phyto_winter$lon,df_phyto_winter$lat,pch=20,col='yellow')
     mtext(expression(paste('Longitude (',degree,'W)')),1,line=3,cex=.75)
     mtext(expression(paste('Latitude (',degree,'N)')),2,line=3,cex=.75)
