@@ -10,22 +10,15 @@ Uses topography and coastline data from NOAA.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library("fields")
-library("raster")
-library("rerddap")
-library("rgdal")
-library("ncdf4")
-library("magrittr")
-library("ggplot2")
-library("sf")
-library("metR")
-library("tidyr")
-library("dplyr")
-library("cowplot")
-library("conflicted")
-library("here")
-library("stringr")
-library("glue")
+librarian::shelf(
+    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here, conflicted,
+    # broom # optional
+     
+    # additional 
+    fields, cowplot, metR, rgdal, ncdf4, sf, 
+    raster
+)
 
 # prefer select and filter 
 conflict_prefer("filter", "dplyr")
@@ -85,30 +78,32 @@ world_download(
     path_topo = path_topo,
     extent = exnt
 )
+
+rm(world_download)
 ```
 
 # Load coastline and topography data
 ```{r load-shapefiles}
 # select and read coastline file from GSHHS then crop
-world2 <- fs::dir_ls(path = path_land,
-               recurse = TRUE ,
-               regexp = "GSHHS_h_L1.shp") %>%
-               st_read(.) %>%
-               st_crop(., st_bbox(exnt2))
+world2   <- fs::dir_ls(path = path_land,
+                       recurse = TRUE ,
+                       regexp = "GSHHS_h_L1.shp") %>%
+                       st_read(.) %>%
+                       st_crop(., st_bbox(exnt2))
 
 # read state lines and crop
-state <- fs::dir_ls(path = path_land,
-               recurse = TRUE ,
-               regexp = "WDBII_border_h_L2.shp") %>%
-               st_read(.) %>%
-               st_crop(., st_bbox(exnt2))
+state    <- fs::dir_ls(path = path_land,
+                       recurse = TRUE ,
+                       regexp = "WDBII_border_h_L2.shp") %>%
+                       st_read(.) %>%
+                       st_crop(., st_bbox(exnt2))
 
-
-bathy <- nc_open(here(path_topo, "etopo1.nc"))
-topo <- ncvar_get(bathy, 'altitude')
-topo_lat <- ncvar_get(bathy, 'latitude')
-topo_lon <- ncvar_get(bathy, 'longitude')
-nc_close(bathy)
+# TODO: remove?
+# bathy    <- nc_open(here(path_topo, "etopo1.nc"))
+# topo     <- ncvar_get(bathy, 'altitude')
+# topo_lat <- ncvar_get(bathy, 'latitude')
+# topo_lon <- ncvar_get(bathy, 'longitude')
+# nc_close(bathy)
 
 # read topography data
 bathy <- raster::raster(here(path_topo,"etopo1.nc")) %>%
@@ -245,9 +240,13 @@ if (FALSE) {
         units = "in", 
         device = 'svg')
 }
+
+# clean up workspace
+suppressWarnings(rm(stn.map, east.map, lat_lon_dat, state, exnt, exnt2, bathy,
+                    world2))
 ```
 
-# ---- Kriging for Fucoxanthin ----
+# ---- Kriging for All Pigments ----
 Test to see if it works
 ```{r map-pigments}
 source("../scripts/krig_fun.R")
@@ -291,8 +290,9 @@ pigm_dat <-
               str_detect(season, "^(?i)f") ~ "Autumn",
               str_detect(season, "^(?i)w") ~ "Winter",
               TRUE ~ season)
-           ) #%>%
- pigm_dat2 <- pigm_dat %>%
+           ) 
+
+pigm_dat <- pigm_dat %>%
     slice_sample(n = 5) %>%
     mutate(
         krig = pmap(list(data,conc_name,szn_name), 
@@ -301,57 +301,16 @@ pigm_dat <-
                                conc_name = ..2,
                                .title    = ..3,
                                base_map  = base_map,
-                               sav = TRUE,
+                               sav = T,
                                sv_name = ..2)
                    )
     ) %>%
       unnest_wider(krig) 
 
 pigm_dat$map
-
-
-
-
-map_data(
-    pigm_dat$data[[1]],
-    conc_name = pigm_dat$conc_name[1],
-    .title   = pigm_dat$season[1],
-    base_map = base_map,
-    sav = TRUE
-)
-
-
 ```
 
-
-
-```{r function-for-mapping}
-map_phyto <- function(.phyto, .long_file, .season) {
-    
-    # filter data for season and water body
-    phyto_data <- .long_file %>%
-        filter(season == .season &
-               name_of_water_body == "Florida Keys" &
-               func_type == .phyto
-        ) %>%
-        dplyr::select(
-        hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
-                  func_type, conc, tot_chl_a
-        ) %>%
-        group_by(hplc_gsfc_id) %>% 
-    mutate(ratio = conc/tot_chl_a, .after = conc)
-  
-
-}
-
-
-map_phyto("cyano4", cmtx_longer2, "Winter")
-map_phyto("fuco", cmtx_longer2, "Summer")
-map_phyto("fuco", cmtx_longer2, "Spring")
-map_phyto("fuco", cmtx_longer2, "Autumn")
-
-```
-# ERROR: tot_chl_a doesn't exist in chemtax_with_metadata
+# ---- ERROR: tot_chl_a doesn't exist in chemtax_with_metadata ----
 ```{r}
 #Longer chemtax dataframe with combined functional types 
 cmtx_longer3 <-
@@ -378,33 +337,8 @@ cmtx_longer3 <-
                   conc_name, conc, tot_chl_a 
     )
 ```
-# PROBABLY DONT NEED
-```{r all-seasons}
-    # ----------------- SPRING -----------------
-     phyto_spring_data <- .long_file %>%
-        filter(season == "Spring" & name_of_water_body == "Florida Keys" &
-               func_type == .phyto
-        ) %>%
-        dplyr::select(
-        hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
-                  func_type, conc, tot_chl_a
-        ) %>%
-        group_by(hplc_gsfc_id) %>% 
-    mutate(ratio = conc/tot_chl_a, .after=conc)
-    
-    df_phyto_spring <- 
-        phyto_spring_data %>% 
-        group_by(station) %>% 
-        summarize(ratio_avg = mean(ratio), 
-                  conc_avg = mean(conc), 
-                  chla_avg = mean(tot_chl_a), across()) %>% 
-        distinct(station, .keep_all = TRUE) %>% 
-        ungroup()
 
-```
-
-
-# Old plotting method
+# Don't Use: Old plotting method
 ```{r base-plot-fuco}
 # if (FALSE) {
 # png(file, height = 11, width = 4, units = "in", res = 300)
