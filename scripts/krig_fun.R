@@ -9,19 +9,27 @@ map_data <- function(.data,
                         sav        = FALSE,
                         sv_name    = NA,
                         verbose    = FALSE) {
+    
+    # TODO: add function description
+    # TODO: fix ggplot
+    # TODO: allow to use ratio or not
     set.seed(123)
+    
+    librarian::shelf(
+        cli, ggplot2, rlang, fields, dplyr, 
+    )
     
     # ======================================================================== #
     # ---- color and contour breaks ----
     # ======================================================================== #
     if (!is.numeric(colr) && str_detect(colr, "data")) {
-        breaks_fuco <- pretty(.data$ratio_avg, n = 10)
+        breaks <- pretty(.data$ratio_avg, n = 10)
         
     } else if (is.numeric(colr) && length(colr) == 3) {
-        breaks_fuco <- seq(colr[1], colr[2], by = colr[3])
+        breaks <- seq(colr[1], colr[2], by = colr[3])
         
     } else if (is.numeric(colr) && length(colr) > 3) {
-        breaks_fuco <- colr 
+        breaks <- colr 
         
     } else {
         rlang::abort(
@@ -40,7 +48,7 @@ map_data <- function(.data,
                            "forestgreen", 
                            "darkslategrey"))
                                       
-    cols_fuco <- chl_col(length(breaks_fuco) - 1)
+    cols_fuco <- chl_col(length(breaks) - 1)
     
     # ======================================================================== #
     # ---- kriging setup locations ----
@@ -134,6 +142,7 @@ map_data <- function(.data,
     # ======================================================================== #
     
     if (rlang::is_null(base_map)) {
+        cli_inform("\n")
         cli_alert_warning(c("{.var base_map} is set to {.var NULL}. ",
                             "Skipping plotting."))
         return(dat_sp)
@@ -142,26 +151,27 @@ map_data <- function(.data,
     # ---- plot  ----
     plt <- base_map +
         geom_point(data = dat_sp, aes(x = lon, y = lat, color = value)) +
-        geom_point(data = df_fuco, aes(x = lon, y = lat), color = "yellow") +
+        geom_point(data = .data, aes(x = lon, y = lat), color = "yellow") +
         labs(color = NULL,
              title = glue("{.title}: {conc_name}:TChla")) + 
-        scale_color_gradientn(breaks = breaks_fuco, colors = cols_fuco) +
+        scale_color_gradientn(breaks = breaks, colors = cols_fuco) +
         coord_sf(xlim = xlims, ylim = ylims) +
         theme(
             legend.key.height = unit(50, "pt")
         )
     
-    plt_se <- base_map +
-        # geom_contour_filled(data = dat_se_sp, aes(x = lon, y = lat, z = value)) +
-        geom_point(data = dat_se_sp, aes(x = lon, y = lat, color = value)) +
-        geom_point(data = df_fuco, aes(x = lon, y = lat), color = "yellow") +
-        labs(color = NULL,
-             title = glue("{.title}: {conc_name}:TChla")) + 
-        scale_color_gradientn(breaks = breaks_fuco, colors = cols_fuco) +
-        coord_sf(xlim = xlims, ylim = ylims) +
-        theme(
-            legend.key.height = unit(50, "pt")
-        )
+    # maybe add back?
+    # plt_se <- base_map +
+    #     # geom_contour_filled(data = dat_se_sp, aes(x = lon, y = lat, z = value)) +
+    #     geom_point(data = dat_se_sp, aes(x = lon, y = lat, color = value)) +
+    #     geom_point(data = .data, aes(x = lon, y = lat), color = "yellow") +
+    #     labs(color = NULL,
+    #          title = glue("{.title}: {conc_name}:TChla")) + 
+    #     scale_color_gradientn(breaks = breaks, colors = cols_fuco) +
+    #     coord_sf(xlim = xlims, ylim = ylims) +
+    #     theme(
+    #         legend.key.height = unit(50, "pt")
+    #     )
     
     # save location and name
     if (sav) {
@@ -170,7 +180,7 @@ map_data <- function(.data,
                          glue("MBON_pigm_", sv_name, "_winter_",
                               format(Sys.time(), "%y%m%d_%H%M%S") ,
                               ".png"))
-        
+        cli_inform("\n")
         cli_alert_info("Map file location: {.file {dirname(file)}}")
         cli_alert_info("Map file name: {.file {basename(file)}}")
         
@@ -180,12 +190,13 @@ map_data <- function(.data,
                height = 6)
     }
     
+    # return list of data
     result <- list(
-        dat_sp,
-        plt,
-        plt_se
+        dat = dat_sp,
+        map = list(plt = plt)#,
+        # map2 = plt_se
     )
     
     return(result)
-    
+    # ---- end of function ----
     }
