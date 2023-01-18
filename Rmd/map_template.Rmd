@@ -135,31 +135,12 @@ base_map <-
                   breaks = c(100, 50, 25, 10, 0)
                   ) +
     geom_sf(data = world2) +
-    
-    # TODO: remove ----
-    # geom_point(data = lat_lon_dat,
-    #            aes(
-    #                x = lon,
-    #                y = lat
-    #                # shape = station,
-    #                ),
-    #           size = 2,
-    #           # alpha = 0.5,
-    #           stroke = 1.5,
-    #           show.legend = FALSE) +
 
-    # geom_text(data = lat_lon_dat,
-    #           aes(x = lon, y = lat, label = station),
-    #           vjust = -0.5,
-    #           hjust = -0.0001,
-    #           size = 5) +
-
-    # scale_shape_manual(values = c(24,25,21)) +
     scale_x_continuous(expand = c(0,0)) + 
     scale_y_continuous(expand = c(0,0), 
                        breaks = seq(floor(exnt[3]), ceiling(exnt[4]), 0.5)
                        ) +
-    # coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
+
     labs(
       x = NULL,
       y = NULL
@@ -168,11 +149,6 @@ base_map <-
     theme(text = element_text(family = "serif", size = 20),
           panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank()
-          # legend.position = c(0.85, 0.25),
-          # legend.title = element_text(size = 10), 
-          # legend.text = element_text(size = 15),
-          # legend.key.size = unit(0.6, "cm"),
-          # legend.margin=margin(c(0.1,0.1,0.1,0.1), unit='cm')
           )
 
 stn.map <- 
@@ -194,22 +170,7 @@ stn.map <-
     coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
      scale_shape_manual(values = c(24,25,21)) 
 
-base_map
 stn.map
-# plotly::ggplotly(
-#     ggplot() +
-#   geom_point(data = pig_dat,
-#              aes(
-#                x = lon,
-#                y = lat,
-#                fill = station,
-#                ##shape = station,
-#              ),
-#              size = 2,
-#              alpha = 0.5,
-#              stroke = 1.5,
-#              show.legend = FALSE)
-# )
 ```
 # Zoomed out map 
 ```{r plt-large, fig.width=8, fig.height=10}
@@ -256,7 +217,7 @@ May need to play with draw_plot(east.map, x, y, width and height)
 ```{r plt-lg-sm, fig.height=6, fig.width=10}
 ggdraw() +
   draw_plot(stn.map) +
-  draw_plot(east.map, x = 0.04, y = 0.57, width = 0.1908108, height = 0.4)
+  draw_plot(east.map, x = 0.04, y = 0.57, width = 0.19, height = 0.4)
 ```
 ```{r save-plt-map}
 if (FALSE) {
@@ -288,121 +249,81 @@ if (FALSE) {
 
 # ---- Kriging for Fucoxanthin ----
 Test to see if it works
-```{r filter-fuco-winter}
-# filter for pigment and season
-conc_name <- "perid"
-loc       <- "West Florida Shelf"
-szn_sel   <- "Spring"
-szn_filt  <- case_when(
-    str_detect(szn_sel, "(?i)sp|(?i)su") ~ str_trunc(szn_sel, 2, ellipsis = ""),
-    str_detect(szn_sel, "^(?i)a") ~ "F",
-    str_detect(szn_sel, "^(?i)w") ~ "W") %>%
-    str_to_title()
+```{r map-pigments}
+source("../scripts/krig_fun.R")
 
-df_fuco <-
+# filter for pigment and season
+loc       <- "Florida Keys"
+
+pigm_dat <-
     pig_dat %>%
     pivot_longer(tot_chl_b:dp, names_to = "conc_name", values_to = "conc") %>%
-    filter(
-        str_detect(season, szn_filt) &
-        str_detect(name_of_water_body, loc) &
-        str_detect(conc_name, pig)
-        ) %>%
+    filter(str_detect(name_of_water_body, loc)) %>%
     select(
-        hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
-        tot_chl_a, conc_name, conc
-        ) %>%
+        hplc_gsfc_id, sample,                   # id
+        station, lat, lon, name_of_water_body,  # spatial
+        year, date_time_utc, season,            # temporal
+        tot_chl_a, conc_name, conc) %>%         # measurements
+    group_by(conc_name, season) %>%
+    nest() %>%
+    ungroup() %>%
     
-    mutate(ratio  = conc/tot_chl_a) %>%
-    group_by(station) %>%
-    summarise(
-        across(c(ratio, conc, tot_chl_a), 
-               .fn = list(avg = mean), na.rm = TRUE), 
-        across(c(lat, lon), .fn = mean)) %>%
-    ungroup()
+    # calc ratio of each pigment to total chlor-a
+    mutate(data = pmap(list(season, conc_name, data),
+                       function(x, y, z) {
+                           z  %>%
+                               mutate(ratio  = conc / tot_chl_a) %>%
+                               group_by(station) %>%
+                               summarise(across(
+                                   c(ratio, conc, tot_chl_a),
+                                   .fn = list(avg = mean),
+                                   na.rm = TRUE
+                               ),
+                               across(c(lat, lon), .fn = mean)) %>%
+                               ungroup()  %>%
+                               mutate(season    = x,
+                                      conc_name = y,
+                                      .before   = 1)
+                       }),
+           szn_name = case_when(
+              str_detect(season, "(?i)sp") ~ "Spring",
+              str_detect(season, "(?i)su") ~ "Summer",
+              str_detect(season, "^(?i)f") ~ "Autumn",
+              str_detect(season, "^(?i)w") ~ "Winter",
+              TRUE ~ season)
+           ) #%>%
+ pigm_dat2 <- pigm_dat %>%
+    slice_sample(n = 5) %>%
+    mutate(
+        krig = pmap(list(data,conc_name,szn_name), 
+                    ~ map_data(
+                               ..1,
+                               conc_name = ..2,
+                               .title    = ..3,
+                               base_map  = base_map,
+                               sav = TRUE,
+                               sv_name = ..2)
+                   )
+    ) %>%
+      unnest_wider(krig) 
+
+pigm_dat$map
 
 
-source("../scripts/krig_fun.R")
+
+
 map_data(
-    df_fuco,
-    conc_name = conc_name,
-    .title   = szn_sel,
-    base_map = base_map
+    pigm_dat$data[[1]],
+    conc_name = pigm_dat$conc_name[1],
+    .title   = pigm_dat$season[1],
+    base_map = base_map,
+    sav = TRUE
 )
+
+
 ```
 
 
-```{r base-plot-fuco}
-if (FALSE) {
-png(file, height = 11, width = 4, units = "in", res = 300)
-par(
-    mfrow = c(3, 1),
-    mar = c(4.5, 4, 2, 1),
-    oma = c(4, 1, 4, 1)
-)
-
-imagePlot(
-    ratio_kriged_fuco$x,
-    ratio_kriged_fuco$y,
-    ratio_kriged_fuco$z,
-    col = cols_fuco,
-    breaks = breaks_fuco,
-    asp = 1,
-    xlab = '',
-    ylab = '',
-    las = 1,
-    xlim = xlims_fuco,
-    ylim = ylims_fuco,
-    nlevel = length(cols_fuco),
-    legend.width = 1,
-    legend.mar = 3
-)
-
-contour(
-    ratio_kriged_fuco$x,
-    ratio_kriged_fuco$y,
-    ratio_kriged_fuco$z,
-    levels = breaks_fuco,
-    add = TRUE
-)
-
-image(
-    ratio_SE_fuco,
-    add = TRUE,
-    breaks = quantile(ratio_SE_fuco$z, c(1, 1), na.rm = TRUE),
-    col = 'white'
-)
-
-image(
-    topo_lon,
-    topo_lat,
-    topo,
-    breaks = c(-1, 100),
-    col = 'white',
-    add = TRUE
-)
-
-# plot(FL,col='gray70',add=TRUE)
-plot(world2, col = 'gray70', add = TRUE)
-contour(
-    topo_lon,
-    topo_lat,
-    topo,
-    add = TRUE,
-    levels = c(-100, -50, -25, -10),
-    col = 'gray40'
-)
-
-points(df_fuco$lon,
-       df_fuco$lat,
-       pch = 20,
-       col = 'yellow')
-
-mtext(expression(paste('Longitude (\u00B0W)')), 1, line = 3, cex = 0.75)
-
-mtext(expression(paste('Latitude (\u00B0N)')), 2, line = 3, cex = 0.75)
-mtext('Fucoxanthin:TChla: Winter', adj = 1, cex = 0.75)
-}
-```
 
 ```{r function-for-mapping}
 map_phyto <- function(.phyto, .long_file, .season) {
@@ -418,17 +339,8 @@ map_phyto <- function(.phyto, .long_file, .season) {
                   func_type, conc, tot_chl_a
         ) %>%
         group_by(hplc_gsfc_id) %>% 
-    mutate(ratio = conc/tot_chl_a, .after=conc)
-    
-    # 
-    df_phyto <- phyto_data %>% 
-        group_by(station) %>% 
-        summarize(ratio_avg = mean(ratio), 
-                  conc_avg = mean(conc), 
-                  chla_avg = mean(tot_chl_a), 
-                  across()) %>% 
-        distinct(station, .keep_all = TRUE) %>% 
-        ungroup()
+    mutate(ratio = conc/tot_chl_a, .after = conc)
+  
 
 }
 
@@ -439,6 +351,7 @@ map_phyto("fuco", cmtx_longer2, "Spring")
 map_phyto("fuco", cmtx_longer2, "Autumn")
 
 ```
+# ERROR: tot_chl_a doesn't exist in chemtax_with_metadata
 ```{r}
 #Longer chemtax dataframe with combined functional types 
 cmtx_longer3 <-
@@ -451,16 +364,18 @@ cmtx_longer3 <-
            cyano = cyano2 + cyano4,
            hapt  = hapt6 + hapt8,
            .keep = "unused"
-              ) %>% 
-    
+              ) #%>% 
+    cmtx_longer3 
     pivot_longer(cols = chloro:hapt, 
-                 names_to = "func_type", 
+                 names_to = "conc_name", 
                  values_to = "conc") %>%
     
-    filter(station != 60) %>%
-    select(
+    filter(station != 60) #%>%
+  
+  
+      select(
        hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
-                  func_type, conc, tot_chl_a 
+                  conc_name, conc, tot_chl_a 
     )
 ```
 # PROBABLY DONT NEED
@@ -484,6 +399,81 @@ cmtx_longer3 <-
                   conc_avg = mean(conc), 
                   chla_avg = mean(tot_chl_a), across()) %>% 
         distinct(station, .keep_all = TRUE) %>% 
-        ungroup(
+        ungroup()
 
+```
+
+
+# Old plotting method
+```{r base-plot-fuco}
+# if (FALSE) {
+# png(file, height = 11, width = 4, units = "in", res = 300)
+# par(
+#     mfrow = c(3, 1),
+#     mar = c(4.5, 4, 2, 1),
+#     oma = c(4, 1, 4, 1)
+# )
+# 
+# imagePlot(
+#     ratio_kriged_fuco$x,
+#     ratio_kriged_fuco$y,
+#     ratio_kriged_fuco$z,
+#     col = cols_fuco,
+#     breaks = breaks_fuco,
+#     asp = 1,
+#     xlab = '',
+#     ylab = '',
+#     las = 1,
+#     xlim = xlims_fuco,
+#     ylim = ylims_fuco,
+#     nlevel = length(cols_fuco),
+#     legend.width = 1,
+#     legend.mar = 3
+# )
+# 
+# contour(
+#     ratio_kriged_fuco$x,
+#     ratio_kriged_fuco$y,
+#     ratio_kriged_fuco$z,
+#     levels = breaks_fuco,
+#     add = TRUE
+# )
+# 
+# image(
+#     ratio_SE_fuco,
+#     add = TRUE,
+#     breaks = quantile(ratio_SE_fuco$z, c(1, 1), na.rm = TRUE),
+#     col = 'white'
+# )
+# 
+# image(
+#     topo_lon,
+#     topo_lat,
+#     topo,
+#     breaks = c(-1, 100),
+#     col = 'white',
+#     add = TRUE
+# )
+# 
+# # plot(FL,col='gray70',add=TRUE)
+# plot(world2, col = 'gray70', add = TRUE)
+# contour(
+#     topo_lon,
+#     topo_lat,
+#     topo,
+#     add = TRUE,
+#     levels = c(-100, -50, -25, -10),
+#     col = 'gray40'
+# )
+# 
+# points(df_fuco$lon,
+#        df_fuco$lat,
+#        pch = 20,
+#        col = 'yellow')
+# 
+# mtext(expression(paste('Longitude (\u00B0W)')), 1, line = 3, cex = 0.75)
+# 
+# mtext(expression(paste('Latitude (\u00B0N)')), 2, line = 3, cex = 0.75)
+# mtext('Fucoxanthin:TChla: Winter', adj = 1, cex = 0.75)
+# }
 ```
