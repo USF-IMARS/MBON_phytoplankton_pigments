@@ -64,6 +64,7 @@ log_pig_stat %>%
 ggplot(aes())
  
 #chemtax histograms
+# TODO: fix this, the var should be available, but its not here
 cmtx_longer2 %>% 
     filter(func_type == "chloro" & conc < 0.2) %>% 
     ggplot(aes(conc)) +
