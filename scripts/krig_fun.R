@@ -1,4 +1,4 @@
-map_pigment <- function(.data,
+map_data <- function(.data,
                         pig,
                         szn,
                         resolution = 0.01, 
