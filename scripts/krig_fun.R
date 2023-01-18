@@ -1,6 +1,6 @@
 map_data <- function(.data,
-                        pig,
-                        szn,
+                        conc_name,
+                        .title,
                         resolution = 0.01, 
                         adj        = 0.1, 
                         base_map   = NULL, 
@@ -30,14 +30,15 @@ map_data <- function(.data,
                   "{.var data} to select 10 values from the data,", 
                   "a vector with 3 values for `seq()` (i.e {.var c(1,2,3)}), or",
                   "a seqence of numbers greater than 3 (i.e {.var c(1,2,3,5,6,7)})" 
-                )))
+                ))
+            )
     }
     
     chl_col <-
         colorRampPalette(c("honeydew2", 
-                                      "darkseagreen3", 
-                                      "forestgreen", 
-                                      "darkslategrey"))
+                           "darkseagreen3", 
+                           "forestgreen", 
+                           "darkslategrey"))
                                       
     cols_fuco <- chl_col(length(breaks_fuco) - 1)
     
@@ -143,7 +144,7 @@ map_data <- function(.data,
         geom_point(data = dat_sp, aes(x = lon, y = lat, color = value)) +
         geom_point(data = df_fuco, aes(x = lon, y = lat), color = "yellow") +
         labs(color = NULL,
-             title = glue("{szn_sel}: {pig}:TChla")) + 
+             title = glue("{.title}: {conc_name}:TChla")) + 
         scale_color_gradientn(breaks = breaks_fuco, colors = cols_fuco) +
         coord_sf(xlim = xlims, ylim = ylims) +
         theme(
@@ -155,7 +156,7 @@ map_data <- function(.data,
         geom_point(data = dat_se_sp, aes(x = lon, y = lat, color = value)) +
         geom_point(data = df_fuco, aes(x = lon, y = lat), color = "yellow") +
         labs(color = NULL,
-             title = glue("{szn}: {pig}:TChla")) + 
+             title = glue("{.title}: {conc_name}:TChla")) + 
         scale_color_gradientn(breaks = breaks_fuco, colors = cols_fuco) +
         coord_sf(xlim = xlims, ylim = ylims) +
         theme(
