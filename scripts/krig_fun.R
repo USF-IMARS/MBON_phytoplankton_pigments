@@ -180,11 +180,11 @@ map_data <- function(.data,
                          glue("MBON_pigm_", sv_name, "_winter_",
                               format(Sys.time(), "%y%m%d_%H%M%S") ,
                               ".png"))
-        cli_inform("\n")
-        cli_alert_info("Map file location: {.file {dirname(file)}}")
-        cli_alert_info("Map file name: {.file {basename(file)}}")
+        cat("\n\n")
+        cli_alert_info("Map file location: {.file {dirname(filename)}}")
+        cli_alert_info("Map file name: {.file {basename(filename)}}")
         
-        ggsave(filename, 
+        ggsave(filename,
                plot = plt,
                width = 10,
                height = 6)
@@ -197,6 +197,7 @@ map_data <- function(.data,
         # map2 = plt_se
     )
     
+    Sys.sleep(1)
     return(result)
     # ---- end of function ----
     }
