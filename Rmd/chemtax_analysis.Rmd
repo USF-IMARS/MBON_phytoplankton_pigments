@@ -4,192 +4,228 @@ author: "Anna Finch"
 date: '2022-06-24'
 output: html_document
 ---
-
+# Load libraries
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library("dplyr")
-library("ggplot2")
-library("tidyverse")
-library("rstatix")
-
-root <- rprojroot::find_rstudio_root_file()
-
-```
-
-```{r reading in data}
-dir3 <- "//data//raw//"
-path_in = paste0(root,dir3)
-
-# Chemtax files
-file.chem <-
-  fs::dir_ls(path = paste0(root,dir3),
-             recurse = TRUE,
-             regexp = "\\.xls$") %>% 
-    str_sort()
-```
-
-
-```{r}
-cmtx1 <-
-    readxl::read_xls(
-        file.chem[1],
-        sheet = 2,
-        range = "D177:N178",
-        .name_repair = janitor::make_clean_names
-    ) %>%
-    mutate(cluster_code = 1, season = "Winter")
-
-cmtx2 <-
-    readxl::read_xls(
-        file.chem[2],
-        sheet = 2,
-        range = "D273:N274",
-        .name_repair = janitor::make_clean_names
-    ) %>%
-    mutate(cluster_code = 2, season = "Spring")
-
-cmtx3 <-
-    readxl::read_xls(
-        file.chem[3],
-        sheet = 2,
-        range = "D241:N242",
-        .name_repair = janitor::make_clean_names
-    ) %>%
-    mutate(cluster_code = 3, season = "Summer")
-
-cmtx4 <-
-    readxl::read_xls(
-        file.chem[4],
-        sheet = 2,
-        range = "D305:N306",
-        .name_repair = janitor::make_clean_names
-    ) %>%
-    mutate(cluster_code = 4, season = "Autumn")
-
-cmtx_all <- full_join(cmtx1, cmtx2) %>%
-    full_join(cmtx3) %>%
-    full_join(cmtx4) %>%
-    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
-
-rm(cmtx1, cmtx2, cmtx3, cmtx4)
-```
-
-```{r plotting}
-# ---- base plot function ----
-phyto_name <- c("Chlorophytes", "Cryptophytes", "Cyanobacteria 2", 
-                "Cyanobacteria 4", "Diatoms 1", "Diatoms 2", "Dinoflagellates",
-                "Haptophytes 6","Haptophytes 8", "Prasinophytes")
-
-phyto_shrt <- names(cmtx_all)[-c(1,12,13)]
-
-plot.pig <- function(.var, .title){
-    ggplot(cmtx_all, aes_string(x = "season", y = .var)) +
-    geom_point(size = 2) +
-    geom_line(group = 1, size = 1) +
-    theme_bw() +
-    labs(title = paste("Average Concentration per Season of", .title),
-         x = "Season",
-         y = expression(paste("Concentration (mg  ", m^-3, ")")))
-}
-
-# ---- line plots ----
-p <- list()
-for (i  in seq(phyto_name)) {
-    p[[sym(phyto_shrt[i])]] <- plot.pig(phyto_shrt[i], phyto_name[i])
+librarian::shelf(
+    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    # broom # optional
     
-}
+    # additional
+    rstatix, readxl
+    )
 
-print(p)
+library("conflicted")
 
-plot.pig1 <- function(.var, .title) {
-    list(
-        # geom_point(cmtx_all, string(x=season, y= .var),size=2),
-        geom_line(group = 1, size = 1),
-        theme_bw(),
-        labs(
-            title = paste("Average Concentration per Season of", .title),
-            x = "Season",
-            y = expression(paste("Concentration (mg  ", m ^ -3, ")"))
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+# Load Average Phytoplankton Concentrations from CHEMTAX 
+```{r load-avg-phyto-data}
+file.chem <-
+  fs::dir_ls(path    = here("data", "raw"),
+             recurse = TRUE,
+             regexp  = "mbonpig.*\\.xls$") %>% 
+  str_sort() %>%
+  tibble(files = .)
+  
+cmtx_all <- 
+    file.chem %>%
+    filter(str_detect(files, "cluster")) %>%
+    mutate(
+      filename = basename(files) %>% tools::file_path_sans_ext(),
+      ranges   = c("D177:N178", "D273:N274", "D241:N242", "D305:N306"),
+      cluster  = str_trunc(filename, 1, "left", ellipsis = ""),
+      season   = fct_inorder(c("Winter", "Spring", "Summer", "Autumn")),
+      data     = map2(files, ranges, 
+                      ~ read_xls(
+                          path = .x,
+                          sheet = 2,
+                          range = .y,
+                          .name_repair = janitor::make_clean_names
+                          ))
+      ) %>%
+  select(-c(1:ranges))  %>%
+  unnest(data)
+```
+
+```{r names-for-plts}
+phyto_name <- 
+    tibble(
+        names = c("Chlorophytes", "Cryptophytes", "Cyanobacteria 2", 
+                  "Cyanobacteria 4", "Diatoms 1", "Diatoms 2", 
+                  "Dinoflagellates", "Haptophytes 6","Haptophytes 8", 
+                  "Prasinophytes")
         )
+
+phyto_shrt <- names(cmtx_all)[-c(1:3)]
+```
+
+
+# ---- Line Plot ----
+```{r line-plt}
+plot_pig <- function(.dat, .var, .title) {
+    
+    # set limits
+    ylims <- c(0, max(.dat[[.var]]) * 1.05)
+    brake <- pretty(ylims, 5)
+    
+    # plot
+    .dat %>%
+    ggplot(aes_string(x = "season", y = .var)) +
+    geom_point(size = 2) +
+    geom_line(group = 1, 
+              size  = 1) +
+    
+    # labels
+    labs(title = glue("Average Concentration per Season of {.title}"),
+         x     = "Season",
+         y     = expression(paste("Concentration (mg ", m^-3, ")"))) +
+     
+    # scale setup   
+    scale_y_continuous(breaks = brake,
+                       limits = ylims,
+                       expand = expand_scale(mult = c(0, 0))
+                       ) +
+    
+    # theme setup   
+    theme_bw(base_family = "serif") +
+    theme(
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      plot.title         = element_text(size = 15),
+      axis.ticks.length  = unit(-0.05, "in"),
+      axis.text.y       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.text.x       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.ticks.x      = element_blank(),
+      legend.background = element_rect(color = "black", fill = "white")
     )
 }
 
-i = 1
-t <- plot.pig1(phyto_shrt[i], phyto_name[i])
+# ---- avg season line plots ----
+temp1 <- cmtx_all %>%
+    select(-rms) %>%
+    pivot_longer(
+                 cols = -c(1:2),
+                 names_to = "phyto",
+                 values_to = "avg_conc"
+    )  %>%
+    group_by(phyto) %>%
+    nest() %>%
+    bind_cols(phyto_name) %>%
+    mutate(
+        plt = map2(data, names, ~ plot_pig(.dat = .x, 
+                                           .var = "avg_conc", 
+                                           .title = .y))
+    )
 
-p$chloro + geom_line(data = cmtx_all, aes(season, chloro), color = "blue")
-
-ggplot() +
-    geom_point(data = cmtx_all, aes(season, chloro)) + t
+temp1$plt
 ```
 
-```{r}
+# Load All Phytoplankton Concentrations
+```{r load-comb-data}
 cmtx_avgs_raw <- 
-    readxl::read_xls(file.chem[5],
+    pull(file.chem, files)[5] %>%
+    readxl::read_xls(.,
                      sheet = 1,
                      .name_repair = janitor::make_clean_names
                      )
 
-pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv")) %>% 
-           mutate(season = factor(season, levels = c("Winter", "Spring", "Summer", "Autumn")))
-
-# TODO: either load pig_dat here or higher
-meta_data <- dplyr::select(.data = pig_dat,
-                           hplc_gsfc_id:filter_storage_before_shipment_to_gfsc,
-                           comments,
-                           season) %>%
-    filter(name_of_water_body == "Florida Keys")
+meta_data <-
+    here("data", "processed", "combined_pig_dat.csv") %>%
+    read.csv() %>% 
+    select(
+        hplc_gsfc_id:filter_storage_before_shipment_to_gfsc,
+        comments, season
+        ) %>%
+    filter(name_of_water_body == "Florida Keys") %>%
+    mutate(
+        season = fct_inorder(season),
+        season = fct_relabel(season, ~ c("Winter", "Spring", "Summer", "Autumn"))
+    )
+    
 cmtx_avgs <-
-    full_join(meta_data, cmtx_avgs_raw, by = c("sample" = "sample_id")) %>%
-    mutate(season = forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
+    full_join(meta_data, cmtx_avgs_raw, by = c("sample" = "sample_id"))
 
-write_csv(cmtx_avgs, paste0(root,"/data/processed/chemtax_with_metadata.csv"))
+if (!fs::file_exists(here("data", "processed", "chemtax_with_metadata.csv"))) {
+    
+    write_csv(cmtx_avgs, 
+              here("data", "processed", "chemtax_with_metadata.csv"))
+}
 ```
 
+
+# ---- Box Plots ----
 ```{r boxplots}
-# ---- box plot function ----
-plot.pig.3 <- function(.var, .title){
-    ggplot() +
-    geom_boxplot(cmtx_avgs, mapping = aes_string(x="season", y= .var)) +
-    theme_classic() +
-    theme(text = element_text(size = 12)) +
-    ylim(0,0.125) +
-    geom_jitter(cmtx_avgs, mapping = aes_string(x="season", y= .var, color="year"), width = 0.4, size=1) +
-    scale_colour_gradient2(
-        low = "red",
-        mid = "blue",
-        high = "green",
-        midpoint = 2018.5) +
-    # geom_line(cmtx_all, mapping=aes_string(x="season", y=.var, group=1)) +
-    # scale_y_continuous(trans = "log10") +
-    labs(title = paste("Concentration per Season of", .title),
-         x = "Season",
-         y = expression(paste("Concentration (mg  ", m^-3, ")")))
-}
-
-# # boxplot function without geom_line
-# plot.pig.3 <- function(.var, .title){
-#     ggplot(cmtx_avgs, aes_string(x="season", y= .var)) +
-#     geom_boxplot() +
-#     theme_bw() +
-#     ylim(0,0.125) +
-#     geom_jitter(width = 0.4, size=1, aes(color = year)) +
-#     scale_colour_gradient2(
-#         low = "red",
-#         mid = "blue",
-#         high = "green",
-#         midpoint = 2018.5) +
-#     labs(title = paste("Concentration per Season of", .title),
-#          x = "Season",
-#          y = expression(paste("Concentration (mg  ", m^-3, ")")))
-# }
-
-# ---- box plots ----
-p2 <- list()
-for (i  in seq(phyto_name)) {
-    p2[[sym(phyto_shrt[i])]] <- plot.pig.3(phyto_shrt[i], phyto_name[i])
+box_plt <- function(.dat, .var, .title) {
     
+    # limits for plot
+    ylims <-  c(0, quantile(.dat[[.var]], 0.99))
+    brake <- pretty(ylims, 6)
+
+    # plotting
+    .dat %>%
+    ggplot() +
+    geom_boxplot(
+                 aes_string(x = "season", y = .var),
+                 outlier.shape = NA) +
+    geom_jitter(
+            aes_string(x = "season", y = .var, color = "year"),
+            width = 0.4,
+            size = 0.5
+        ) +
+    
+    # labels
+    labs(title = glue("Concentration of {.title} per Season "),
+         x     = "Season",
+         y     = expression(paste("Concentration (mg", m^-3, ")")),
+         color = "Year") +
+
+    # scale settings
+    scale_color_binned(type = "viridis") +
+    
+    scale_y_continuous(breaks = brake,
+                       expand = expand_scale(mult = c(0, 0)),
+                       oob = scales::squish,
+                       limits = ylims
+                       ) +
+    
+    # theme settings
+    theme_bw(base_family = "serif") +
+    theme(
+      panel.grid        = element_blank(),
+      plot.title        = element_text(size = 15),
+      axis.ticks.length = unit(-0.05, "in"),
+      axis.text.y       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.text.x       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.ticks.x      = element_blank(),
+      legend.background = element_rect(color = "black", fill = "white")
+    )
 }
+
+# ---- avg season line plots ----
+temp2 <-
+    cmtx_avgs %>%
+    select(-c(pi:volfilt, bottle, filter_type:comments)) %>%
+    pivot_longer(
+                 cols = chloro:pras,
+                 names_to = "phyto",
+                 values_to = "avg_conc"
+    )  %>%
+    group_by(phyto) %>%
+    nest() %>%
+    bind_cols(phyto_name) %>%
+    mutate(
+        plt = map2(data, names, ~ box_plt(.dat = .x, 
+                                           .var = "avg_conc", 
+                                           .title = .y))
+    )
+
+temp2$plt
+```
+```{r label}
 
 #PFTs with larger scales 
 cmtx_longer %>% 
@@ -205,13 +241,17 @@ cmtx_longer %>%
     labs(x = "Season",
          y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
 
-save_plot(filename = paste0(root,"/data/plots/cmtx_boxplots_large", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 5,
-          base_width = 15,
-          dpi = 600, units = "in", device='png')
+save_plot(
+    filename    = here("data", "plots", 
+                    glue("cmtx_boxplots_large", 
+                         format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                          ".jpg")), 
+    plot        = last_plot(),
+    base_height = 5,
+    base_width  = 15,
+    dpi         = 600, 
+    units       = "in", 
+    device      = "png")
 
 #plot for PFTs with smaller scales
 cmtx_longer %>% 
@@ -227,13 +267,17 @@ cmtx_longer %>%
     labs(x = "Season",
          y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
 
-cowplot::save_plot(filename = paste0(root,"/data/plots/cmtx_boxplots", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 8,
-          base_width = 16,
-          dpi = 600, units = "in", device='png')
+cowplot::save_plot(
+    filename    = here("data", "plots", 
+                      glue("cmtx_boxplots", 
+                      format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                      ".jpg")), 
+    plot        = last_plot(),
+    base_height = 8,
+    base_width  = 16,
+    dpi         = 600, 
+    units       = "in", 
+    device      = "png")
 
 ```
 
@@ -279,7 +323,7 @@ cmtx_stat <- cmtx_avgs %>%
     summarise_at(vars(chloro:hapt),
                  list(avg = mean, sd = sd, var = var),
                  na.rm = TRUE)
-options(scipen=999)
+options(scipen = 999)
 
 cmtx_fract <- cmtx_avgs %>% 
     mutate(diat = diat1 + diat2,
@@ -295,7 +339,7 @@ cmtx_fract <- cmtx_avgs %>%
            frac_diat = diat/total,
            frac_dino = dino/total,
            frac_hapt = hapt/total,
-           frac_pras = pras/total)%>% 
+           frac_pras = pras/total) %>% 
     select(hplc_gsfc_id:season, frac_chloro:frac_pras)
 
 
@@ -311,16 +355,21 @@ ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = frac, color = func_type, fil
     theme_classic() +
     theme(text = element_text(family = "serif", size = 40),
           axis.text = element_text(size = 30),
-          legend.position = c(0.5, 0.8))+
-    labs(color = "Functional Type", fill = "Functional Type", 
-         x = "", y = "Proportion to Total Chl-a")
+          legend.position = c(0.5, 0.8)) +
+    labs(x     = NULL, 
+         y     = "Proportion to Total Chl-a",
+         color = "Functional Type", 
+         fill  = "Functional Type"
+         )
 
-cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_bloom",
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 8,
-          base_width = 16,
-          dpi = 600, units = "in", device='png')
+cowplot::save_plot(
+    filename    = here("data", "plots", glue("phyto_bloom", ".jpg")), 
+    plot        = last_plot(),
+    base_height = 8,
+    base_width  = 16,
+    dpi         = 600, 
+    units       = "in", 
+    device      = "png")
 
 
 view(cmtx_fract %>% 
@@ -334,38 +383,66 @@ view(cmtx_fract %>%
 
 
 
-max_fract <-cmtx_fract %>%
+max_fract <- cmtx_fract %>%
     group_by(hplc_gsfc_id) %>% 
     summarise(max_frac = max(frac)) %>% 
     left_join(cmtx_fract, by = c("max_frac" = "frac"))
 
-cmtx_fract2 <- cmtx_fract %>% 
-         group_by(season) %>% 
-         summarise_at(vars(frac_chloro:frac_pras), list(avg = mean)) %>% 
-    pivot_longer(frac_chloro_avg:frac_pras_avg, names_to = "func_type",
-                 names_prefix = "frac_", values_to = "avg_fract") %>% 
+cmtx_fract2 <- 
+    cmtx_fract %>%
+    group_by(season) %>%
+    summarise_at(vars(frac_chloro:frac_pras), 
+                 list(avg = mean)) %>%
+    
+    pivot_longer(
+        frac_chloro_avg:frac_pras_avg,
+        names_to     = "func_type",
+        names_prefix = "frac_",
+        values_to    = "avg_fract"
+    ) %>% 
+    
     mutate( 
         func_type = gsub("_avg", "", func_type)
         ) %>% 
-    ggplot(aes(fill = func_type, color = func_type, y=avg_fract, x=season)) +
-    geom_bar(position = "fill", stat = "identity") +
-    theme_classic() +
-    theme(text=element_text(family="serif", size = 40),
-          axis.title=element_text(size=40),
-          legend.position = "bottom",
-          legend.direction = "horizontal") +
-    labs(x = "Season", y= "Proportion to Total Chl-a", fill = "Phytoplankton Functional Type",
+    
+    ggplot(aes(
+               fill  = func_type,
+               color = func_type,
+               y     = avg_fract,
+               x     = season
+    )) +
+    geom_bar(position = "fill", 
+             stat     = "identity") +
+    
+     labs(x     = "Season",
+         y     = "Proportion to Total Chl-a",
+         fill  = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type") +
-    scale_fill_manual(values = Tol_muted) +
-    scale_color_manual(values = Tol_muted)
+    
+    scale_fill_manual(values  = Tol_muted) +
+    scale_color_manual(values = Tol_muted) +
+    
+    # theme
+    theme_classic() +
+    theme(
+        text             = element_text(family = "serif", size = 40),
+        axis.title       = element_text(size = 40),
+        legend.position  = "bottom",
+        legend.direction = "horizontal"
+    ) 
+   
 
-cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio_reason", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 8,
-          base_width = 16,
-          dpi = 600, units = "in", device='png')
+cowplot::save_plot(
+    filename    = here("data", "plots", 
+                       glue("phyto_func_type_bar_ratio_reason", 
+                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                       ".jpg")), 
+    plot        = last_plot(),
+    base_height = 8,
+    base_width  = 16,
+    dpi         = 600, 
+    units       = "in", 
+    device      = "png")
 
     # gt(
     #     rowname_col = NULL,
@@ -390,9 +467,9 @@ cowplot::save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio
     #             columns = frac_chloro_avg:frac_pras_avg) %>% 
     # tab_stubhead("Season") %>% 
     # opt_table_font("serif") %>% 
-    # gtsave(filename = paste0(root,"/data/plots/community_fractions", 
+    # gtsave(filename = here("data", "plots", glue("community_fractions", 
     #        format(Sys.time(), '_%Y%m%d_%H%M%S'),
-    #        ".html"))
+    #        ".html")))
 
 ```
 
