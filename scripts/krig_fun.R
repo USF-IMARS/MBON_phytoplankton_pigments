@@ -1,20 +1,21 @@
-map_data <- function(.data,
-                        conc_name,
-                        .title,
-                        resolution = 0.01, 
-                        adj        = 0.1, 
-                        base_map   = NULL, 
-                        colr       = "data",
-                        sav_loc    = here("data", "plots", "map"),
-                        sav        = FALSE,
-                        sv_name    = NA,
-                        verbose    = FALSE) {
+map_data <- function(
+                    .data,
+                    conc_name,
+                    .title,
+                    resolution = 0.01, 
+                    adj        = 0.1, 
+                    base_map   = NULL, 
+                    colr       = "data",
+                    sav_loc    = here("data", "plots", "map"),
+                    sav        = FALSE,
+                    sv_name    = NA,
+                    verbose    = FALSE) {
     
     # TODO: add function description
     # TODO: fix ggplot
     # TODO: allow to use ratio or not
     set.seed(123)
-    
+
     librarian::shelf(
         cli, ggplot2, rlang, fields, dplyr, 
     )
@@ -175,9 +176,9 @@ map_data <- function(.data,
     
     # save location and name
     if (sav) {
-        fs::dir_create(sav_loc)
+        # fs::dir_create(sav_loc)
         filename <- here(sav_loc,
-                         glue("MBON_pigm_", sv_name, "_winter_",
+                         glue("MBON_pigm_{sv_name}_{str_to_lower(.title)}_",
                               format(Sys.time(), "%y%m%d_%H%M%S") ,
                               ".png"))
         cat("\n\n")
@@ -185,8 +186,8 @@ map_data <- function(.data,
         cli_alert_info("Map file name: {.file {basename(filename)}}")
         
         ggsave(filename,
-               plot = plt,
-               width = 10,
+               plot   = plt,
+               width  = 10,
                height = 6)
     }
     
