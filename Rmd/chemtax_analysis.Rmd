@@ -4,6 +4,7 @@ author: "Anna Finch"
 date: '2022-06-24'
 output: html_document
 ---
+
 # Load libraries
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -143,7 +144,10 @@ meta_data <-
     filter(name_of_water_body == "Florida Keys") %>%
     mutate(
         season = fct_inorder(season),
-        season = fct_relabel(season, ~ c("Winter", "Spring", "Summer", "Autumn"))
+        season = fct_relabel(season, ~ c("Winter", 
+                                         "Spring", 
+                                         "Summer", 
+                                         "Autumn"))
     )
     
 cmtx_avgs <-
@@ -225,8 +229,7 @@ temp2 <-
 
 temp2$plt
 ```
-```{r label}
-
+```{r}
 #PFTs with larger scales 
 cmtx_longer %>% 
     filter(!func_type %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>% 
@@ -267,18 +270,28 @@ cmtx_longer %>%
     labs(x = "Season",
          y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
 
-cowplot::save_plot(
-    filename    = here("data", "plots", 
-                      glue("cmtx_boxplots", 
-                      format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                      ".jpg")), 
-    plot        = last_plot(),
-    base_height = 8,
-    base_width  = 16,
-    dpi         = 600, 
-    units       = "in", 
-    device      = "png")
+identical(fs::dir_ls(here("data", "plots"),
+           regexp = "cmtx_boxplots", 
+           recurse = TRUE)  %>%
+           as.character(), character(0))
 
+
+if (FALSE) {
+    cowplot::save_plot(
+        filename    = here("data", "plots", "boxplots",
+                           glue(
+                               "cmtx_boxplot",
+                               format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                               ".jpg"
+                           )),
+        plot        = last_plot(),
+        base_height = 8,
+        base_width  = 16,
+        dpi         = 600,
+        units       = "in",
+        device      = "png"
+    )
+    }
 ```
 
 ```{r ANOVA}
