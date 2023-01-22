@@ -293,16 +293,15 @@ pigm_dat <-
            ) 
 
 pigm_dat <- pigm_dat %>%
-    slice_sample(n = 5) %>%
     mutate(
-        krig = pmap(list(data,conc_name,szn_name), 
+        krig = pmap(list(data, conc_name, szn_name), 
                     ~ map_data(
                                ..1,
                                conc_name = ..2,
                                .title    = ..3,
                                base_map  = base_map,
-                               sav = T,
-                               sv_name = ..2)
+                               sav       = TRUE,
+                               sv_name   = ..2)
                    )
     ) %>%
       unnest_wider(krig) 
