@@ -14,7 +14,7 @@ librarian::shelf(
     # broom # optional
     
     # additional
-    rstatix, readxl
+    rstatix, readxl, ggtext
     )
 
 library("conflicted")
@@ -83,7 +83,8 @@ plot_pig <- function(.dat, .var, .title) {
     # labels
     labs(title = glue("Average Concentration per Season of {.title}"),
          x     = "Season",
-         y     = expression(paste("Concentration (mg ", m^-3, ")"))) +
+         y     = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)"
+         ) +
      
     # scale setup   
     scale_y_continuous(breaks = brake,
@@ -99,6 +100,7 @@ plot_pig <- function(.dat, .var, .title) {
       plot.title         = element_text(size = 15),
       axis.ticks.length  = unit(-0.05, "in"),
       axis.text.y       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.title.y      = element_markdown(size = 10),
       axis.text.x       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
       axis.ticks.x      = element_blank(),
       legend.background = element_rect(color = "black", fill = "white")
@@ -184,7 +186,7 @@ box_plt <- function(.dat, .var, .title) {
     # labels
     labs(title = glue("Concentration of {.title} per Season "),
          x     = "Season",
-         y     = expression(paste("Concentration (mg", m^-3, ")")),
+         y     = "Concentration (mg m<sup>-3</sup>)",
          color = "Year") +
 
     # scale settings
@@ -203,6 +205,7 @@ box_plt <- function(.dat, .var, .title) {
       plot.title        = element_text(size = 15),
       axis.ticks.length = unit(-0.05, "in"),
       axis.text.y       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.title.y      = element_markdown(size = 10),
       axis.text.x       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
       axis.ticks.x      = element_blank(),
       legend.background = element_rect(color = "black", fill = "white")
@@ -210,117 +213,145 @@ box_plt <- function(.dat, .var, .title) {
 }
 
 # ---- avg season line plots ----
-temp2 <-
+cmtx_avgs <-
     cmtx_avgs %>%
     select(-c(pi:volfilt, bottle, filter_type:comments)) %>%
     pivot_longer(
                  cols = chloro:pras,
                  names_to = "phyto",
-                 values_to = "avg_conc"
+                 values_to = "conc"
     )  %>%
     group_by(phyto) %>%
     nest() %>%
     bind_cols(phyto_name) %>%
     mutate(
         plt = map2(data, names, ~ box_plt(.dat = .x, 
-                                           .var = "avg_conc", 
+                                           .var = "conc", 
                                            .title = .y))
     )
 
-temp2$plt
+cmtx_avgs$plt
 ```
-```{r}
-#PFTs with larger scales 
-cmtx_longer %>% 
-    filter(!func_type %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>% 
-    ggplot(aes(x=season, y = value, fill = season)) +
-    geom_boxplot(outlier.shape = NA) +
-    facet_wrap(facet =~ func_type, ncol = 2) +
-    theme_classic() +
-    theme(text = element_text(family = "serif", size = 18),
-          axis.text = element_text(size = 10),
-          legend.position = "none") +
-    scale_y_continuous(expand = c(0,0), limits = c(0, 0.2)) +
-    labs(x = "Season",
-         y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
 
-save_plot(
-    filename    = here("data", "plots", 
-                    glue("cmtx_boxplots_large", 
+# PFT multi-plots
+```{r}
+cmtx_merg <- cmtx_avgs %>%
+    # filter(!phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+    unnest(data) %>% 
+    select(-plt)
+```
+
+## PFTs with a more dynamic range of values
+```{r, fig.height=6, fig.width=10}
+box_lg <- cmtx_merg %>%
+    filter(!phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+    ggplot(aes(x    = season, 
+               y    = conc, 
+               fill = season)) +
+    geom_boxplot(outlier.shape = NA) +
+    
+
+    scale_y_continuous(expand = c(0,0), 
+                       limits = c(0, 0.2),
+                       oob    = scales::squish) +
+    labs(x = "Season",
+         # y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")"))) +
+         y = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)"
+         ) +
+    
+    facet_wrap(facet = ~ names, ncol = 2) +
+    
+    theme_classic() +
+    theme(text            = element_text(family = "serif", size = 18),
+          axis.text       = element_markdown(size = 10),
+          axis.title.y    = element_markdown(size = 10),
+          legend.position = "none") 
+    
+box_lg
+```
+
+## PFTs with a more dynamic range of values
+```{r, fig.height=6, fig.width=10}
+box_sm <-
+    cmtx_merg %>%
+    filter(!phyto %in% c("cyano2", "chloro", "hapt6")) %>%
+    
+    ggplot(aes(x    = season, 
+               y    = conc, 
+               fill = season)) +
+    
+    geom_boxplot(outlier.shape = NA) +
+    
+    scale_y_continuous(expand = c(0,0), 
+                       limits = c(0, 0.1),
+                       oob    = scales::squish) +
+    
+    # labels
+    labs(x = "Season",
+         y = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)"
+             ) +
+    
+    facet_wrap(facet = ~ names, ncol = 3) +
+    
+    # theme
+    theme_classic() +
+    theme(text            = element_text(family = "serif", size = 18),
+          axis.text       = element_text(size = 12),
+          axis.title.y    = element_markdown(size = 10),
+          legend.position = "none") 
+
+box_sm
+```
+```{r save-plt}
+if (FALSE) {
+    save_plot(
+    filename    = here("data", "plots", "boxplots",
+                    glue("cmtx_boxplots_lg", 
                          format(Sys.time(), '_%Y%m%d_%H%M%S'),
                           ".jpg")), 
-    plot        = last_plot(),
-    base_height = 5,
-    base_width  = 15,
+    plot        = box_lg,
+    base_height = 6,
+    base_width  = 10,
     dpi         = 600, 
     units       = "in", 
     device      = "png")
 
-#plot for PFTs with smaller scales
-cmtx_longer %>% 
-    filter(func_type %in% c("cyano2", "chloro", "hapt6")) %>% 
-    ggplot(aes(x=season, y = value, fill = season)) +
-    geom_boxplot(outlier.shape = NA) +
-    facet_wrap(facet =~ func_type, ncol = 3) +
-    theme_classic() +
-    theme(text = element_text(family = "serif", size = 30),
-          axis.text = element_text(size = 12),
-          legend.position = "none") +
-    scale_y_continuous(expand = c(0,0), limits = c(0, 0.2)) +
-    labs(x = "Season",
-         y = expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
-
-identical(fs::dir_ls(here("data", "plots"),
-           regexp = "cmtx_boxplots", 
-           recurse = TRUE)  %>%
-           as.character(), character(0))
-
-
-if (FALSE) {
-    cowplot::save_plot(
+   save_plot(
         filename    = here("data", "plots", "boxplots",
                            glue(
-                               "cmtx_boxplot",
+                               "cmtx_boxplot_sm",
                                format(Sys.time(), '_%Y%m%d_%H%M%S'),
                                ".jpg"
                            )),
-        plot        = last_plot(),
-        base_height = 8,
-        base_width  = 16,
+        plot        = box_sm,
+        base_height = 6,
+        base_width  = 10,
         dpi         = 600,
         units       = "in",
         device      = "png"
     )
-    }
-```
-
-```{r ANOVA}
-# #ANOVA test
-# summary(aov(diat2 ~ season, data=cmtx_avgs))
-# 
-# #Dunn test with Bonferroni correction
-# chloro_dunn <- dunn_test(cmtx_avgs, chloro ~ season, p.adjust.method = "bonferroni")
-# crypto_dunn <- dunn_test(cmtx_avgs, crypto ~ season, p.adjust.method = "bonferroni")
-# cyano4_dunn <- dunn_test(cmtx_avgs, cyano4 ~ season, p.adjust.method = "bonferroni")
-# dino_dunn <- dunn_test(cmtx_avgs, dino ~ season, p.adjust.method = "bonferroni")
-# hapt6_dunn <- dunn_test(cmtx_avgs, hapt6 ~ season, p.adjust.method = "bonferroni")
-# hapt8_dunn <- dunn_test(cmtx_avgs, hapt8 ~ season, p.adjust.method = "bonferroni")
-# pras_dunn <- dunn_test(cmtx_avgs, pras ~ season, p.adjust.method = "bonferroni")
+}
 
 ```
 
+# Perform Kruskal-Wallis and Dunn test
+PFT on season
 ```{r kruskal-and-dunn}
-cmtx_longer <- cmtx_avgs %>% 
-    pivot_longer(cols = chloro:pras, names_to = "func_type", values_to = "value")
+cmtx_kruskal <-
+    cmtx_avgs %>% 
+    select(-plt) %>%
+    unnest(data) %>% 
+    group_by(phyto) %>% 
+    kruskal_test(conc ~ season)
 
-cmtx_kruskal <- cmtx_longer %>% 
-    group_by(func_type) %>% 
-    kruskal_test(value ~ season)
-
-cmtx_dunn <- cmtx_longer %>%
-    filter(!(func_type %in% c("cyano2", "diat1"))) %>% 
-    group_by(func_type) %>%
-    dunn_test(value ~ season, p.adjust.method = "bonferroni")
+cmtx_dunn <-
+    cmtx_avgs %>%
+    filter(!(phyto %in% c("cyano2", "diat1"))) %>% 
+    select(-plt) %>%
+    unnest(data) %>%
+    group_by(phyto) %>%
+    dunn_test(conc ~ season, p.adjust.method = "bonferroni") %>%
+    filter(phyto == "pras")
 
 ```
 
@@ -336,6 +367,7 @@ cmtx_stat <- cmtx_avgs %>%
     summarise_at(vars(chloro:hapt),
                  list(avg = mean, sd = sd, var = var),
                  na.rm = TRUE)
+
 options(scipen = 999)
 
 cmtx_fract <- cmtx_avgs %>% 
@@ -444,19 +476,19 @@ cmtx_fract2 <-
         legend.direction = "horizontal"
     ) 
    
-
-cowplot::save_plot(
-    filename    = here("data", "plots", 
-                       glue("phyto_func_type_bar_ratio_reason", 
-                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                       ".jpg")), 
-    plot        = last_plot(),
-    base_height = 8,
-    base_width  = 16,
-    dpi         = 600, 
-    units       = "in", 
-    device      = "png")
-
+if (FALSE) {
+    cowplot::save_plot(
+        filename    = here("data", "plots", 
+                           glue("phyto_func_type_bar_ratio_reason", 
+                           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                           ".jpg")), 
+        plot        = last_plot(),
+        base_height = 8,
+        base_width  = 16,
+        dpi         = 600, 
+        units       = "in", 
+        device      = "png")
+}
     # gt(
     #     rowname_col = NULL,
     #     groupname_col = NULL
