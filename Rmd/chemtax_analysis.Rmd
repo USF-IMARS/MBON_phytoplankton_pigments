@@ -42,7 +42,6 @@ line_plt <- function(.dat, .var, .title) {
     
     # plot
     .dat %>%
-    # ggplot(aes_string(x = "season", y = .var)) +
     ggplot(aes_string(x = "season", y = .var)) +
     geom_point(size = 2) +
     geom_line(group = 1, 
@@ -227,7 +226,7 @@ cmtx_avgs_no_dupes <-
 
 
 if (!fs::file_exists(here("data", "processed", "chemtax_w_meta.csv")) |
-    !fs::file_exists(here("data", "processed", "chemtax_w__rm_dup.csv"))) {
+    !fs::file_exists(here("data", "processed", "chemtax_w_meta_rm_dup.csv"))) {
     
     cmtx_avgs <- cmtx_avgs %>%
     
@@ -263,7 +262,7 @@ cmtx_avgs <- cmtx_avgs_no_dupes %>%
 
 cmtx_avgs_w <- cmtx_avgs_no_dupes
 
-rm(meta_data, cmtx_avgs_raw, cmtx_avgs_no_dupes)
+rm(file.chem, meta_data, cmtx_avgs_raw, cmtx_avgs_no_dupes)
 ```
 
 ## Plot
@@ -404,7 +403,7 @@ cmtx_dunn <-
     group_by(phyto) %>%
     dunn_test(conc ~ season, 
               p.adjust.method = "bonferroni") 
-
+p_gt_05
 cmtx_kruskal
 cmtx_dunn
 ```
