@@ -167,8 +167,8 @@ phyto_name <-
 cmtx_all <- cmtx_all %>%
     select(-rms) %>%
     pivot_longer(
-                 cols = -c(1:2),
-                 names_to = "phyto",
+                 cols      = -c(1:2),
+                 names_to  = "phyto",
                  values_to = "avg_conc"
     )  %>%
     group_by(phyto) %>%
