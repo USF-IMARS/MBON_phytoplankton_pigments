@@ -300,11 +300,12 @@ pigm_dat <- pigm_dat %>%
                                conc_name = ..2,
                                .title    = ..3,
                                base_map  = base_map,
-                               sav       = TRUE,
+                               sav       = FALSE,
                                sv_name   = ..2)
                    )
     ) %>%
       unnest_wider(krig) 
+
 
 pigm_dat$map
 ```

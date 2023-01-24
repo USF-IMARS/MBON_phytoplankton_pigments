@@ -29,7 +29,8 @@ path_in = paste0(root,dir3)
 
 ```{r}
 df_pig <-
-    readr::read_csv(paste0(root, "/data/processed/combined_pig_dat.csv")) %>%
+    readr::read_csv(paste0(root, "/data/processed/combined_pig_dat.csv"),
+                    show_col_types = FALSE) %>%
     mutate(date_time_utc = replace(
         date_time_utc,
         station == "MR" &
