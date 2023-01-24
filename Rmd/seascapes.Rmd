@@ -7,18 +7,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library("ggplot2")
-library("tibble")
-library("tidyr")
-library("readr")
-library("purrr")
-library("stringr")
-library("forcats")
-library("lubridate")
-library("glue")
-library("fs")
-library("magrittr")
-# library("broom") # optional
+librarian::shelf(
+    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here, conflicted,
+    # broom # optional
+)
+
+library("conflicted")
+
 library("raster")
 library("sp")
 library("rgdal")
@@ -26,26 +22,23 @@ library("maptools")
 library("rgeos")
 library("vegan")
 library("ggord")
-library("dplyr")
 
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
 
 # ---- set path variables ----
-root       <- rprojroot::find_rstudio_root_file()
-seasc.path <- paste0(root, "/data/raw/seascapes/")
-path_out   <- paste0(root, "/data/processed/")
+
+seasc_path <- here("data", "raw", "seascapes")
+path_out   <- here("data", "processed")
 
 # ---- source extract function ----
-source(paste0(root, "/scripts/seascapes_extract.R"))
-
-
-dirsea <- "/data/raw/seascapes/"
-seasc.path = paste0(root, dirsea)
+source(here("scripts", "seascapes_extract.R"))
 
 # ---- unzip seascapes file ----
 # get "fknms_global_monthly.zip" from https://shiny.marinebon.app/seascapes/. 
 # select "Florida Keys" in the region pull-down tab and click "all grids (.zip)"
 # to download Sanctuary files. 
-unzip(paste0(seasc.path, "fknms_global_monthly.zip"), exdir = seasc.path)
+unzip(here(seasc_path, "fknms_global_monthly.zip"), exdir = seasc_path)
 
 # ---- load chemtax data ----
 dir2 <- "//data//processed//"
@@ -80,12 +73,12 @@ mth_yr_df <- cmtx_sea %>%
 # making df. one column is the file names and the other column is the year and
 # month for the file in format "YYYY.MM" to match with the other list
 file.seascapes <-
-  fs::dir_ls(path = seasc.path,
+  fs::dir_ls(path = seasc_path,
              # included ^[^~]* to not match ~, means that a file is opened
              regexp = "^[^~]*\\.tif$") %>% 
     as.data.frame() %>%
     # as_tibble() %>% 
-    mutate(yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = .),
+    mutate(yr_mth = gsub(pattern = paste0(seasc_path, "grd_CLASS_"), replacement = "", x = .),
            yr_mth = gsub(pattern = ".15.tif", replacement = "", x = yr_mth))
 
 # selecting the file names that correspond to the year and month combos that the 
@@ -113,7 +106,7 @@ for (i in seq(file.sea)) {
     filename <- file.sea[i]
     
     #extract month and year in format "YYYY.MM"
-    yr_mth <- gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = filename) %>% 
+    yr_mth <- gsub(pattern = paste0(seasc_path, "grd_CLASS_"), replacement = "", x = filename) %>% 
         gsub(pattern = ".15.tif", replacement = "")
     
     #make temporary dataframe with seascapes, coordinates, and year+month for cruise
