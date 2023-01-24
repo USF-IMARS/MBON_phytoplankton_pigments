@@ -4,8 +4,8 @@ author: "Anna Finch"
 date: '2022-06-24'
 output: html_document
 ---
-
-# Load libraries
+# ---- Setup ----
+## Load libraries
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
@@ -29,10 +29,17 @@ phyto_name <-
                   "Dinoflagellates", "Haptophytes 6","Haptophytes 8", 
                   "Prasinophytes")
         )
+
+file.chem <-
+  fs::dir_ls(path    = here("data", "raw"),
+             recurse = TRUE,
+             regexp  = "mbonpig.*\\.xls$") %>% 
+  str_sort() %>%
+  tibble(files = .)
 ```
 
-# Custom Plotting Functions 
-```{r}
+## Custom Plotting Functions 
+```{r functions}
 # line plot
 line_plt <- function(.dat, .var, .title) {
     
@@ -127,13 +134,6 @@ box_plt <- function(.dat, .var, .title) {
 # ---- Line Plot ----
 ## Load Average Phytoplankton Concentrations from CHEMTAX 
 ```{r load-avg-phyto-data}
-file.chem <-
-  fs::dir_ls(path    = here("data", "raw"),
-             recurse = TRUE,
-             regexp  = "mbonpig.*\\.xls$") %>% 
-  str_sort() %>%
-  tibble(files = .)
-  
 cmtx_all <- 
     file.chem %>%
     filter(str_detect(files, "cluster")) %>%
@@ -283,13 +283,8 @@ cmtx_avgs_plt$plt
 ```
 
 # ---- PFT multi-plots ----
-```{r}
-cmtx_merg <- cmtx_avgs %>%
-    janitor::get_dupes()
-```
-
 ## PFTs with a more dynamic range of values
-```{r, fig.height=6, fig.width=10}
+```{r box-lg-dynm, fig.height=6, fig.width=10}
 box_lg <- cmtx_avgs %>%
     filter(!phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
     ggplot(aes(x    = season, 
@@ -317,7 +312,7 @@ box_lg
 ```
 
 ## PFTs with a more dynamic range of values
-```{r, fig.height=6, fig.width=10}
+```{r box-sm-dynm, fig.height=6, fig.width=10}
 box_sm <-
     cmtx_avgs %>%
     filter(!phyto %in% c("cyano2", "chloro", "hapt6")) %>%
@@ -418,7 +413,8 @@ cmtx_avgs_w <- cmtx_avgs_w %>%
            ) 
 
 ```
-```{r, fig.height=8, fig.width=16}
+# ---- Plot Cyano and Diat vs time and station (10, 16, WS) ----
+```{r plt-cyano-diat, fig.height=8, fig.width=16}
 cmtx_season_avgs <- cmtx_avgs_w %>%
     group_by(season) %>% 
     summarise_at(vars(chloro:hapt),
