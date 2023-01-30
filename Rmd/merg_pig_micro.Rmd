@@ -270,7 +270,7 @@ micro_longer <-
         by = "taxa")
 
 ```
-```{r stopped}
+```{r merge-micro-pigm}
 cmtx_avgs_raw <- 
     fs::dir_ls(path  = here("data", "raw"),
              recurse = TRUE,
@@ -301,12 +301,14 @@ df_type_counts <-
     summarise(micro_count = sum(count)) %>% 
     ungroup() %>%
     left_join(select(indx_match, sample, indx), by = "indx") %>%
-    left_join(cmtx_avgs_raw, by = c("sample" = "sample_id", "func_type" = "taxa")) %>%
+    left_join(cmtx_avgs_raw, 
+              by = c("sample" = "sample_id", "func_type" = "taxa")) %>%
     filter(str_detect(func_type, "") & !is.na(conc))
 
  
     
-df_pig_filt2 <- df_pig_filt  %>%
+df_pig_filt2 <-
+    df_pig_filt  %>%
     select(
         indx, sample, date_time_utc:lat
     ) %>%
@@ -317,181 +319,203 @@ df_pig_filt2 <- df_pig_filt  %>%
     # select desired columns
     select(indx, func_type, conc, micro_count) %>% 
     filter(conc >= 0 & micro_count >= 0) %>% 
-    filter(indx != "17-3" & indx != "3-35" & indx != "4-39")
+        
+    # not sure why filter this out
+    filter(!str_detect(indx, "17-3|3-35|4-39"))
+
+df_pig_filt2
 ```
 
 # ---- Start Bland-Altman ----
-```{r}
-conv_facts <- df_pig_filt2  %>% 
-    # select desired columns
-    select(indx, func_type, conc, micro_count) %>% 
-    
-    # TODO: why this exists ----
-    # filter(conc >= 0 & micro_count >= 0) %>% 
-    
-    # TODO: idk why remove these ----
-    filter(!str_detect(indx, "17-3|3-35|4-39"))
-
-
-
+```{r sub-sample}
 set.seed(122237)
-# generate subset of data to produce conversion factors
-indices <- as.vector(distinct(conv_facts, indx))
-
-rand_indx <- sample(indices$indx, 17, replace = FALSE)
-
-# cf_avgs1 <- cf_avgs
-cf_avgs <- 
-    conv_facts %>%
-    
-    # filter out rows where count or concentration == 0
-    filter(indx %in% rand_indx , conc > 0 & micro_count > 0) %>%
-    
-    # calculate conversion factors
-    mutate(cf = conc / micro_count) %>%
-    
+cf_avgs <-
+    df_pig_filt2 %>%
+     
     # group by func_type
     group_by(func_type) %>%
     
+    filter(conc > 0 & micro_count > 0 ) %>%
+        
+    # sample subset of data to produce conversion factors
+    slice_sample(prop = 0.5) %>%
+
+    # calculate conversion factors
+    mutate(cf = conc / micro_count) %>%
+    
     # average the conversion factors
-    summarize(avg_cf = mean(cf))
-    # summarize(avg_cf = median(cf))
+    summarize(avg_cf = mean(cf), med_cf = median(cf))
 
-cmtx_micro <- conv_facts %>% 
+cmtx_micro <- 
+    df_pig_filt2 %>% 
     left_join(cf_avgs, by = "func_type") %>%
-    filter(!indx %in% rand_indx) %>% 
-    # multiply conversion factors by microscopy counts to get T chla of counted functional type
-    mutate(micro_conc = micro_count * avg_cf) %>% 
-    pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(conc, micro_conc))
+    
+    # not sure why we want to filter out the used data for this?
+    # filter(!indx %in% rand_indx) %>% 
+    
+    # conversion factors * microscopy counts to get [chla] per PFT
+    mutate(micro_conc     = micro_count * avg_cf,
+           log_conc       = log(conc + 1e-6),
+           log_micro_conc = log(micro_conc + 1e-6)
+           ) #%>% 
+    
+    # pivot_wider(
+    #     id_cols     = indx,
+    #     names_from  = func_type,
+    #     values_from = c(conc, micro_conc)
+    # )
 
-cmtx_micro_log <- conv_facts %>% 
+cmtx_micro_log <-
+    df_pig_filt2 %>% 
     left_join(cf_avgs, by = "func_type") %>%
-    # multiply conversion factors by microscopy counts to get T chla of counted functional type
-    mutate(micro_conc = micro_count * avg_cf, log_mic_conc = log(micro_conc + 1), log_conc = log(conc + 1)) %>% 
-    select(indx, func_type, log_mic_conc, log_conc) %>% 
-    pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(log_conc, log_mic_conc))
+    
+    # conversion factors * microscopy counts to get [chla] per PFT
+    mutate(
+        micro_conc   = micro_count * avg_cf,
+        log_mic_conc = log(micro_conc + 1e-6),
+        log_conc     = log(conc + 1e-6)
+    ) # %>%
+    
+    # pivot_wider(
+    #     id_cols     = indx,
+    #     names_from  = func_type,
+    #     values_from = c(log_conc, log_mic_conc)
+    # )
 
 ```
 
 
-```{r looking-at-proportion-of-vague-classifications}
-view(micro_longer %>% 
-    filter(!(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
-                          "globigerinidae", "nauplii", "choanoflagellate",
-                         "strombidium_like", "vorticella_sp", "vorticella_spp"
-                          ))) %>% 
-    group_by(indx) %>% 
-    mutate(total = sum(count)) %>% 
-    filter(func_type == "other") %>% 
-    summarise(fraction_of_other = sum(count)/total) %>% 
-    dplyr::distinct(fraction_of_other))
-
-vague = c("ciliates", "flagellate_unidentified", "microflagellates", "nanoflagellates",
-          "nanoplankton", "other_plankton", "phytoplankton", "picoflagellates",
-          "picoplankton")
-view(micro_longer %>% 
-    filter(!(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
-                          "globigerinidae", "nauplii", "choanoflagellate",
-                         "strombidium_like", "vorticella_sp", "vorticella_spp"
-                          ))) %>% 
-    group_by(indx) %>% 
-    mutate(total = sum(count)) %>% 
-    filter(taxa %in% vague) %>% 
-    summarise(fraction_of_vague = sum(count)/total,
-              totals = sum(count)) %>% 
-    dplyr::distinct(fraction_of_vague,totals, fraction_of_vague))
-
-view(micro_longer %>%
-    filter(func_type == "other" | is.na(func_type),
-           !(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
-                          "globigerinidae", "nauplii", "choanoflagellate",
-                         "strombidium_like", "vorticella_sp", "vorticella_spp"
-                          ))) %>%
-    distinct(taxa))
-
-View(
-    micro_longer %>% 
-        filter(
-            !taxa %in% vague,
-            func_type == "other",
-            count > 0
-        )
-)
-micro_longer %>% 
-        filter(
-            !taxa %in% vague,
-            func_type == "other",
-            !taxa %in% c("pseudonitzschia_spp", "pseudonitzschia_sp"),
-            count > 0
-        ) %>% 
-    group_by(indx) %>% 
-    summarise(count = n())
+```{r view-prop-vague-class}
+# view(micro_longer %>% 
+#     filter(!(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
+#                           "globigerinidae", "nauplii", "choanoflagellate",
+#                          "strombidium_like", "vorticella_sp", "vorticella_spp"
+#                           ))) %>% 
+#     group_by(indx) %>% 
+#     mutate(total = sum(count)) %>% 
+#     filter(func_type == "other") %>% 
+#     summarise(fraction_of_other = sum(count)/total) %>% 
+#     dplyr::distinct(fraction_of_other))
+# 
+# vague <- c("ciliates", "flagellate_unidentified", "microflagellates", "nanoflagellates",
+#           "nanoplankton", "other_plankton", "phytoplankton", "picoflagellates",
+#           "picoplankton")
+# 
+# view(micro_longer %>% 
+#     filter(!(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
+#                           "globigerinidae", "nauplii", "choanoflagellate",
+#                          "strombidium_like", "vorticella_sp", "vorticella_spp"
+#                           ))) %>% 
+#     group_by(indx) %>% 
+#     mutate(total = sum(count)) %>% 
+#     filter(taxa %in% vague) %>% 
+#     summarise(fraction_of_vague = sum(count)/total,
+#               totals = sum(count)) %>% 
+#     dplyr::distinct(fraction_of_vague,totals, fraction_of_vague))
+# 
+# view(micro_longer %>%
+#     filter(func_type == "other" | is.na(func_type),
+#            !(taxa %in% c("copepods", "detritus", "zooplankton", "foraminifera_unidentified",
+#                           "globigerinidae", "nauplii", "choanoflagellate",
+#                          "strombidium_like", "vorticella_sp", "vorticella_spp"
+#                           ))) %>%
+#     distinct(taxa))
+# 
+# View(
+#     micro_longer %>% 
+#         filter(
+#             !taxa %in% vague,
+#             func_type == "other",
+#             count > 0
+#         )
+# )
+# micro_longer %>% 
+#         filter(
+#             !taxa %in% vague,
+#             func_type == "other",
+#             !taxa %in% c("pseudonitzschia_spp", "pseudonitzschia_sp"),
+#             count > 0
+#         ) %>% 
+#     group_by(indx) %>% 
+#     summarise(count = n())
 ```
 
-```{r cmtx-vs-micro-plots}
-# relation <- lm(conc_diat~micro_conc_diat, cmtx_micro)
-# print(summary(relation))
-# cmtx_micro <- conv_facts %>% 
-#     left_join(cf_avgs, by = "func_type") %>%
-#     # multiply conversion factors by microscopy counts to get T chla of counted functional type
-#     mutate(micro_conc = micro_count * avg_cf) %>%
-#     filter(micro_conc > 0 & conc > 0) %>% 
-#     pivot_wider(id_cols = c(indx), names_from= func_type, values_from = c(conc, micro_conc)) %>% 
-#     filter(indx != "17-3" & indx != "3-35" & indx != "4-39")
-
-
-plot_micro_cmtx <- function(.data, .func_type) {
-    ggplot(.data, aes_string(paste0("conc_",.func_type), paste0("micro_conc_",.func_type))) +
-        geom_point(aes(color = "indx")) +
-        geom_smooth(method = "lm", se = F) +
-        geom_abline(slope = 1, intercept = 0) +
-        labs(title = .func_type)
+```{r cmtx-vs-micro-plots, fig.height=9.7, fig.width=19}
+plot_micro_cmtx <- function(.data, .group, pig_val, mic_val, ...) {
+    
+    group <- unique(.data[[.group]])
+    for (i in seq(group)) {
+        (.data %>%
+             filter(func_type == group[i]) %>%
+             ggplot(aes(x = !!sym(pig_val),
+                        y = !!sym(mic_val),)) +
+             
+             geom_point(aes(!!!ensyms(...)), show.legend = FALSE) +
+             geom_smooth(formula = y ~ x,
+                         method  = "lm",
+                         se      = FALSE) +
+             geom_abline(slope = 1, intercept = 0) +
+             labs(title = group[i])
+        ) %T>% 
+        print()
+    }
 }
 
-plot_micro_cmtx(cmtx_micro, "cyano")
-plot_micro_cmtx(cmtx_micro, "crypto")
-plot_micro_cmtx(cmtx_micro, "chloro")
-plot_micro_cmtx(cmtx_micro, "pras")
-plot_micro_cmtx(cmtx_micro, "hapt")
-plot_micro_cmtx(cmtx_micro, "dino")
-plot_micro_cmtx(cmtx_micro, "diat") 
-
-
-
+plot_micro_cmtx(
+    .data   = cmtx_micro,
+    .group  = "func_type",
+    pig_val = "conc",
+    mic_val = "micro_conc",
+    color   = "indx"
+)
+plot_micro_cmtx(
+    .data   = cmtx_micro,
+    .group  = "func_type",
+    pig_val = "log_conc",
+    mic_val = "log_micro_conc",
+    color   = "indx"
+)
 ```
-```{r Bland-Altman}
+```{r bland-altman}
+nams <- c("Chlorophytes", "Cryptophytes", "Cyanobacteria", "Diatoms", 
+          "Dinoflagellates", "Haptophytes", "Prasinophytes"
+          )
 
-# ggplot(cmtx_micro, aes_string(x="conc_cyano", y="micro_conc_cyano")) +
-#     blandr.draw()
+pft_bland <- 
+    cmtx_micro %>%
+    group_by(func_type) %>%
+    nest() %>% 
+    ungroup() %>%
+    bind_cols(nam = nams) %>%
+    mutate(
+        plt = map2(.x = data, 
+                   .y = nams,
+                   ~ blandr.draw(.x$conc, .x$micro_conc, plotTitle = .y)),
+        info = map(.x = data, 
+                   ~ blandr.statistics(.x$conc, .x$micro_conc)),
+        shapiro = map(.x = info, 
+                      ~ .x  %>%
+                         as_tibble()  %>%
+                         rstatix::shapiro_test(differences))
+    ) %>%
+    unnest(shapiro) 
 
-blandr.draw(cmtx_micro$conc_cyano, cmtx_micro$micro_conc_cyano, plotTitle = "Cyanobacteria")
-blandr.draw(cmtx_micro$conc_crypto, cmtx_micro$micro_conc_crypto, plotTitle = "Cryptophytes")
-blandr.draw(cmtx_micro$conc_chloro, cmtx_micro$micro_conc_chloro, plotTitle = "Chlorophytes")
-blandr.draw(cmtx_micro$conc_pras, cmtx_micro$micro_conc_pras, plotTitle = "Prasinophytes")
-blandr.draw(cmtx_micro$conc_hapt, cmtx_micro$micro_conc_hapt, plotTitle = "Haptophytes")
-blandr.draw(cmtx_micro$conc_dino, cmtx_micro$micro_conc_dino, plotTitle = "Dinoflagellates")
-blandr.draw(cmtx_micro$conc_diat, cmtx_micro$micro_conc_diat, plotTitle = "Diatoms")
-
-blandr.output.text(cmtx_micro$conc_cyano, cmtx_micro$micro_conc_cyano)
-
-cyano_stat <- blandr.statistics(cmtx_micro_log$log_conc_din, cmtx_micro_log$log_mic_conc_dino)
-# cyano_stat <- blandr.statistics(micro_conc_cyano ~ conc_cyano, data = cmtx_micro)
-# blandr::blandr.plot.normality(cyano_stat)
-hist(cyano_stat$differences)
-
-cyano_dif <- as.data.frame(cyano_stat$differences)
-
-cyano_dif %>% 
-    shapiro_test(cyano_stat$differences)
+pft_bland$plt
 ```
 
-```{r}
-blandr.draw(cmtx_micro$conc_cyano, cmtx_micro$micro_conc_cyano, plotTitle = "Cyanobacteria")
-blandr.draw(cmtx_micro$conc_crypto, cmtx_micro$micro_conc_crypto, plotTitle = "Cryptophytes")
-blandr.draw(cmtx_micro$conc_chloro, cmtx_micro$micro_conc_chloro, plotTitle = "Chlorophytes")
-blandr.draw(cmtx_micro$conc_pras, cmtx_micro$micro_conc_pras, plotTitle = "Prasinophytes")
-blandr.draw(cmtx_micro$conc_hapt, cmtx_micro$micro_conc_hapt, plotTitle = "Haptophytes")
-blandr.draw(cmtx_micro$conc_dino, cmtx_micro$micro_conc_dino, plotTitle = "Dinoflagellates")
-blandr.draw(cmtx_micro$conc_diat, cmtx_micro$micro_conc_diat, plotTitle = "Diatoms")
+```{r save-alt-blan}
+if (FALSE) {
+    for (i in seq(pft_bland$plt)) {
+        ggsave(filename = here("data", "processed", "altman-bland", Sys.Date(),
+                               glue("{pft_bland$func_type[i]}",
+                                    "{format(Sys.time(), '_%Y%m%d_%H%M%S')}",
+                                    ".jpeg")), 
+               height   = 7, 
+               width    = 14
+               )
+      Sys.sleep(0.05)
+        
+        }
+}
 ```
 
