@@ -4,65 +4,90 @@ author: "Anna Finch"
 date: "6/16/2022"
 output: html_document
 ---
-
+# ---- Load Libraries ----
 ```{r setup, include=FALSE}
-library("dplyr")
-library("ggplot2")
-library("tidyverse")
-library("huxtable")
-library("magrittr")
-library("gt")
-library("cowplot")
-library("ggthemes")
-library("vegan")
-root <- rprojroot::find_rstudio_root_file()
-dir2 <- "//data//processed//"
-path_out = paste0(root,dir2)
-pig_dat <- read.csv(paste0(path_out,"combined_pig_dat.csv")) %>% 
-           mutate(season = factor(season, levels = c("Winter", "Spring", "Summer", "Autumn")))
+librarian::shelf(
+    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    # broom # optional
+    
+    # additional
+    huxtable, gt, cowplot, ggthemes, vegan
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+
+# load data
+pig_dat <-
+    here("data", "processed", "combined_pig_dat.csv") %>%
+    read_csv(show_col_types = FALSE) %>%
+    mutate(
+        season = fct_relevel(season, levels = c("W", "Sp", "Su", "F")),
+        season = fct_relabel(season, ~ c("Winter", 
+                                         "Spring", 
+                                         "Summer", 
+                                         "Autumn")
+                             )
+        )
 ```
 
-```{r concentration vs time}
-ggplot(pig_dat, aes(x=date_time_utc, y=allo)) +
-    geom_point(size=2) +
+```{r concentration-vs-time}
+ggplot(pig_dat, 
+       aes(x = date_time_utc, y = allo)) +
+    geom_point(size = 2) +
     theme_classic()
 ```
 
-```{r scatter plots}
-ggplot(pig_dat, aes(x=tot_chl_a, y=fuco)) +
+```{r scatter-plot}
+ggplot(pig_dat, 
+       aes(x = tot_chl_a, y = fuco)) +
     geom_point(color = "red") +
-    facet_wrap(~season)
+    facet_wrap( ~ season)
 ```
 
 ```{r histogram}
-# # hist_dat <- 
-#     pig_dat %>%
-#     pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
-#                  values_to = "value") %>%
-#     group_by(pigment) %>%
-#     ggplot(aes(value)) +
-#     geom_histogram() 
-#     # scale_x_continuous(limits = c(0,1)) +
-#     # scale_y_continuous(limits = c(0,500)) 
-#     # facet_wrap(~pigment)
-pig_long <- pig_dat %>%
-    pivot_longer(cols = tot_chl_a:tchl_a_tpg, names_to = "pigment",
-                 values_to = "value") %>%
-    dplyr::select(season, pigment, value)
- pig_hist <- lapply(unique(pig_long$pigment), function(i) {
-  ggplot(pig_long[pig_long$pigment==i,], aes(value, fill = season)) +
-    geom_histogram(position = "dodge") +
-    labs(title=i) +
-    scale_x_continuous(trans='log10')
-})
- pig_hist
+pig_long <-
+    pig_dat %>%
+    pivot_longer(
+        cols      = tot_chl_a:tchl_a_tpg, 
+        names_to  = "pigment",
+        values_to = "conc") %>%
+    select(season, pigment, conc) %>%
+    group_by(pigment) %>%
+    nest() %>%
+    mutate(
+        plt_hist = map2(
+            .x = data, 
+            .y = pigment,
+            ~ .x  %>%
+                ggplot(aes(conc, fill = season)) +
+                geom_histogram(position = "dodge") +
+                labs(
+                    title = .y,
+                    x     = "Frequency",
+                    y     = "Count",
+                    fill  = "Season") +
+                scale_x_continuous(trans = "log10") 
+    ))
+
+pig_long$plt[[5]]
+
+ # pig_hist <- 
+ #     lapply(unique(pig_long$pigment), function(i) {
+ #  
+ #         ggplot(pig_long[pig_long$pigment == i, ], 
+ #                aes(value, fill = season)) +
+ #             geom_histogram(position = "dodge") +
+ #             labs(title = i) +
+ #             scale_x_continuous(trans = ~ log10(. + 1e-6))
+ #         })
+
+pig_hist
  
-log_pig_stat %>% 
-    filter(pigment == "allo") %>% 
-    ggplot(aes(x=))
- 
-ggplot(aes())
- 
+
 #chemtax histograms
 # TODO: fix this, the var should be available, but its not here
 cmtx_longer2 %>% 
@@ -80,15 +105,17 @@ cmtx_longer2 %>%
 ```
 
 ```{r violin, boxplot, jitter}
-p <- pig_dat %>% 
-    # filter(month == "December") %>%
-    ggplot(aes(x=season, y=zea))+
+pig_dat %>% 
+
+    ggplot(aes(x = season, y = zea)) +
     geom_violin(trim = TRUE) +
-    geom_jitter(width = 0.1, size=0.5, alpha = 0.5) +
+    geom_jitter(width = 0.1,
+                size = 0.5,
+                alpha = 0.5) +
     theme_bw() +
-    scale_y_continuous(expand = c(0,0)) +
-    facet_wrap(facet = ~name_of_water_body)
-p
+    scale_y_continuous(expand = c(0, 0)) +
+    facet_wrap(facet = ~ name_of_water_body)
+
 p2 <-ggplot(filter(pig_dat, month == "December"), 
             aes(x=month, y=tot_chl_a)) +
     geom_jitter()
@@ -96,64 +123,84 @@ p2
 ggplot(pig_dat, aes(x = season, y=fuco/tot_chl_a, color = name_of_water_body)) +
     geom_violin()     
 
-chl_a_box <- pig_dat %>% 
+chl_a_box <- pig_dat %>%
     filter(name_of_water_body == "Florida Keys", tot_chl_a < 4) %>%
-    ggplot(aes(x=season, y=tot_chl_a))+
+    
+    ggplot(aes(x = season, y = tot_chl_a)) +
     geom_boxplot(outlier.shape = NA) +
-    stat_summary(fun.y=mean, geom="point", shape=20, size=8) +
+    stat_summary(
+        fun.y = mean,
+        geom = "point",
+        shape = 20,
+        size = 8
+    ) +
     # geom_jitter(width = 0.1, size=0.5, alpha = 0.5) +
     theme_classic() +
     theme(text = element_text(size = 24, family = "serif")) +
     # ggthemes::theme_tufte() +
-    scale_y_continuous(expand = c(0,0), limits = c(0, 0.7)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, 0.7)) +
     # facet_wrap(facet = ~name_of_water_body) +
     labs(x = "Season",
-        y= expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")))
+         y = expression(paste(
+             "Concentration of Chlorophyll-a (mg  ", m ^ -3, ")"
+         )))
 
-save_plot(filename = paste0(root,"/data/plots/chla", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
+save_plot(
+    filename = here("data", "plots", 
+                    glue("chla",
+                         "{format(Sys.time(), '_%Y%m%d_%H%M%S')}",
+                         ".jpeg")), 
           plot = last_plot(),
-          base_height = 8,
-          base_width = 10,
+          # plot = chl_a_box,
+          base_height = 7,
+          base_width = 14,
           dpi = 600, units = "in", device='png')
     
 ```
 
 
 ```{r size-fractionation-boxplots}
-ggplot(pig_dat, aes(x=season, y=micro, color=name_of_water_body)) +
+ggplot(pig_dat, aes(x = season, y = micro, color = name_of_water_body)) +
     geom_boxplot() +
-    ylim(0,5)
-ggplot(pig_dat, aes(x=season, y=nano, color=name_of_water_body)) +
+    ylim(0, 5)
+ggplot(pig_dat, aes(x = season, y = nano, color = name_of_water_body)) +
     geom_boxplot() +
-    ylim(0,0.5)
-ggplot(pig_dat, aes(x=season, y=pico, color=name_of_water_body)) +
+    ylim(0, 0.5)
+ggplot(pig_dat, aes(x = season, y = pico, color = name_of_water_body)) +
     geom_boxplot() +
-    ylim(0,1.5)
+    ylim(0, 1.5)
 ```
 
 ```{r size-fractionation-stacked-bar}
 pig_dat %>% 
-    filter(name_of_water_body == "Florida Keys") %>% 
-    pivot_longer(cols = f_micro:f_pico, names_to = "size_category", values_to = "fraction") %>% 
-    ggplot(aes(fill = size_category, y=fraction, x=station))+ 
-    geom_bar(position="fill", stat="identity") +
-    facet_wrap(~season) +
-    ggthemes::theme_tufte() + 
+    filter(name_of_water_body == "Florida Keys") %>%
+    pivot_longer(cols = f_micro:f_pico,
+                 names_to = "size_category",
+                 values_to = "fraction") %>%
+    ggplot(aes(fill = size_category, y = fraction, x = station)) +
+    geom_bar(position = "fill", stat = "identity") +
+    facet_wrap( ~ season) +
+    ggthemes::theme_tufte() +
     theme(plot.background = element_rect(fill = "white", colour = "white")) +
-    labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Size Class") +
-    scale_fill_discrete(labels=c(expression(italic("f")["micro"]),
-                                 expression(italic("f")["nano"]),
-                                 expression(italic("f")["pico"])))
-save_plot(filename = paste0(root,"/data/plots/size_fract_type_bar", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 6,
-          base_width = 10,
-          dpi = 600, units = "in", device='png')
-    
+    labs(x = "Station", y = "Relative Ratio", fill = "Phytoplankton Size Class") +
+    scale_fill_discrete(labels = c(
+        expression(italic("f")["micro"]),
+        expression(italic("f")["nano"]),
+        expression(italic("f")["pico"])
+    ))
+
+save_plot(
+    filename    = here("data", "plots", 
+                    glue("size_fract_type_bar",
+                    format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                    ".jpeg")), 
+    plot        = last_plot(),
+    base_height = 7,
+    base_width  = 14,
+    dpi         = 600, 
+    units       = "in", 
+    device      = 'png')
+
 ```
 
 ```{r size-fractionation-table}
@@ -185,9 +232,13 @@ fract_dat %>%
         stub.border.width = 0
     ) %>%
     opt_table_font("serif") %>% 
-    gtsave(filename = paste0(root,"/data/plots/fract_table", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".html"))
+    
+    gtsave(
+        filename = here("data", "plots", 
+                        glue("fract_table", 
+                             format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                              ".html"))
+        )
     
 ```
 
@@ -240,52 +291,83 @@ Tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
 #chemtax stacked bar graph with ratio to total chlorophyll a, organized by station
 cmtx_longer2 %>% 
 mutate(station = forcats::fct_reorder(station, lon))%>% 
-ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
+    ggplot(aes(
+        fill  = func_type,
+        color = func_type,
+        y     = conc,
+        x     = station
+    )) +
     geom_bar(position = "fill", stat = "identity") +
-    facet_wrap(~season_year, ncol = 4) +
+    facet_wrap( ~ season_year, ncol = 4) +
     theme_classic() +
-    theme(text=element_text(family="serif", size = 16),
-          axis.title=element_text(size=18),
-          legend.position = c(0.6, 0.05),
-          legend.direction = "horizontal") +
-    labs(x = "Station", y= "Relative Ratio", fill = "Phytoplankton Functional Type",
+    theme(
+        text             = element_text(family = "serif", size = 16),
+        axis.title       = element_text(size = 18),
+        legend.position  = c(0.6, 0.05),
+        legend.direction = "horizontal"
+    ) +
+    labs(x     = "Station",
+         y     = "Relative Ratio",
+         fill  = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type") +
     scale_fill_manual(values = Tol_muted) +
     scale_color_manual(values = Tol_muted)
-save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar_ratio", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 8,
-          base_width = 15,
-          dpi = 600, units = "in", device='png')
 
-#chemtax stacked bar graph (not ratio), organized by station
+save_plot(
+    filename    = here("data", "plots",
+                       glue("phyto_func_type_bar_ratio",
+                            format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                            ".jpeg")),
+    plot        = last_plot(),
+    base_height = 7,
+    base_width  = 14,
+    dpi         = 600, 
+    units       = "in", 
+    device      = 'png'
+    )
+
+# chemtax stacked bar graph (not ratio), organized by station
 
 cmtx_longer2 %>% 
-    mutate(station = forcats::fct_reorder(station, lon))%>% 
-    group_by(season_year, station, func_type) %>% 
+    mutate(station = forcats::fct_reorder(station, lon)) %>%
+    group_by(season_year, station, func_type) %>%
     summarize(conc = mean(conc)) %>% 
-ggplot(aes(fill = func_type, color = func_type, y=conc, x=station)) +
+    ggplot(aes(
+        fill  = func_type,
+        color = func_type,
+        y     = conc,
+        x     = station
+    )) +
     geom_bar(stat = "identity") +
-    facet_wrap(~season_year, ncol = 4) +
-    theme_bw()+
-    theme(text=element_text(family="serif", size=12)) +
+ 
     labs(
-        x = "Station",
-        y= expression(paste("Concentration of Chlorophyll-a (mg  ", m^-3, ")")),
-        fill = "Phytoplankton Functional Type",
-        color = "Phytoplankton Functional Type") +
-    scale_fill_manual(values = Tol_muted) +
-    scale_color_manual(values = Tol_muted)
+        x     = "Station",
+        # y     = expression(paste("Concentration of Chlorophyll-a (mg  ", m ^ -3, ")")),
+        y     = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)",
+    
+        fill  = "Phytoplankton Functional Type",
+        color = "Phytoplankton Functional Type"
+    ) +
+    
+    scale_fill_manual(values  = Tol_muted) +
+    scale_color_manual(values = Tol_muted) +
+    facet_wrap( ~ season_year, ncol = 4) +
+    
+    # theme
+    theme_bw() +
+    theme(text = element_text(family = "serif", size = 12),
+          axis.title.y = element_markdown(size = 10),) 
 
-save_plot(filename = paste0(root,"/data/plots/phyto_func_type_bar", 
+save_plot(
+    filename = here("data", "plots", glue("phyto_func_type_bar", 
            format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 8,
-          base_width = 15,
-          dpi = 600, units = "in", device='png')
+           ".jpeg")), 
+    plot = last_plot(),
+    base_height = 8,
+    base_width = 15,
+    dpi = 600,
+    units = "in",
+    device = 'png')
 
 
 
@@ -298,15 +380,22 @@ ggplot(cmtx_avgs2, aes(x = lubridate::ymd_hms(date_time_utc), y=dino/total_chl_a
 
 
 #time series for diatom at specific stations
-cmtx_longer3 <- cmtx_avgs %>% 
-    filter(station == "10" | station == "WS" | station == "16") %>% 
-    mutate(diat = diat1 + diat2,
+cmtx_longer3 <- 
+    cmtx_avgs %>%
+    filter(str_detect(station, "10|WS|16")) %>%
+    mutate(diat  = diat1  + diat2,
            cyano = cyano2 + cyano4,
-           hapt = hapt6 + hapt8) %>% 
-    subset(select = -c(diat1, diat2, cyano2, cyano4, hapt6, hapt8)) %>% 
-    pivot_longer(cols = (chloro:hapt), names_to = "func_type", values_to = "conc") %>% 
-    group_by(station,func_type, date_time_utc) %>% 
-    summarize(avg_conc = mean(conc), .keep = c(season = season)) %>% 
+           hapt  = hapt6  + hapt8) %>%
+    
+    # remove columns
+    select(-c(diat1, diat2, cyano2, cyano4, hapt6, hapt8)) %>%
+    pivot_longer(
+        cols      = chloro:hapt,
+        names_to  = "func_type",
+        values_to = "conc") %>%
+    group_by(station, func_type, date_time_utc) %>%
+    summarize(avg_conc = mean(conc), 
+              .keep    = c(season = season)) %>%
     distinct()
 
 #station 16
@@ -318,16 +407,19 @@ ggplot(aes(x=lubridate::ymd_hms(date_time_utc), y = avg_conc, color = func_type,
     facet_wrap(facets = "station")
     
     
-    # geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))
-#point plot with smoothing line for all functional groups
+# geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))
+# point plot with smoothing line for all functional groups
 cmtx_longer2 %>%
     group_by(hplc_gsfc_id) %>%
-    mutate(
-        total_chl_a = sum(conc)
-    ) %>%
+    mutate(total_chl_a = sum(conc)) %>%
     filter(year < 2019) %>%
-    ggplot(aes(x = lubridate::ymd_hms(date_time_utc), y = conc/total_chl_a, color = func_type)) +
-    geom_smooth(se=F) +
+    ggplot(
+        aes(
+        x     = lubridate::ymd_hms(date_time_utc),
+        y     = conc / total_chl_a,
+        color = func_type
+    )) +
+    geom_smooth(se = FALSE) +
     geom_point() +
     geom_line()
 
@@ -337,13 +429,15 @@ cmtx_longer2 %>%
 #     summary
 
 cmtx_kruskal2 <- cmtx_longer %>%
-    mutate(season_year = case_when(season == "Autumn"~ paste0(season," ",as.character(year)),
-                                   season == "Spring"~ paste0(season," ",as.character(year)),
-                                   season == "Summer" ~ paste0(season," ",as.character(year)),
-                                   month == "Jan" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
-                                   month == "Feb" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
-                                   month == "Dec" ~ paste0(season," ",as.character(year),"-",as.character(year + 1))),
-            season_year = factor(season_year, levels = seasonyr_order),                     
+    mutate(
+        season_year = case_when(
+            season == "Autumn" ~ paste0(season," ",as.character(year)),
+            season == "Spring" ~ paste0(season," ",as.character(year)),
+            season == "Summer" ~ paste0(season," ",as.character(year)),
+            month == "Jan" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
+            month == "Feb" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
+            month == "Dec" ~ paste0(season," ",as.character(year),"-",as.character(year + 1))),
+        season_year = factor(season_year, levels = seasonyr_order),                     
            .after = season) %>% 
     group_by(func_type) %>% 
     kruskal_test(value ~ season_year)
@@ -378,13 +472,18 @@ ggplot(pigm_pi, aes(x=season, y=pi, fill = season)) +
     theme_classic() +
     theme(legend.position = "none", text=element_text(family="serif", size=12)) +
     labs(y = "Photoprotection Index (PI)", x= "Season")
-save_plot(filename = paste0(root,"/data/plots/pi_bar", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 6,
-          base_width = 10,
-          dpi = 600, units = "in", device='png')
+save_plot(
+    filename    = here("data", "plots",
+                       glue("pi_bar",
+                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                       ".jpeg")),
+    plot        = last_plot(),
+    base_height = 6,
+    base_width  = 10,
+    dpi         = 600,
+    units       = "in",
+    device      = 'png'
+    )
 ggplot(pigm_pi, aes(x=psc, y=ppc, shape = season, color=season)) +
     geom_point(size =4, alpha = 0.8) +
     geom_abline(slope=1, intercept=0) +
@@ -394,13 +493,18 @@ ggplot(pigm_pi, aes(x=psc, y=ppc, shape = season, color=season)) +
           legend.position = c(0.8,0.8)) +
     scale_y_continuous(expand = c(0,0)) +
     scale_x_continuous(expand = c(0,0))
-save_plot(filename = paste0(root,"/data/plots/psc_vs_ppc", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 6,
-          base_width = 10,
-          dpi = 600, units = "in", device='png')
+save_plot(
+    filename    = here("data", "plots",
+                       glue("psc_vs_ppc",
+                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                       ".jpeg")),
+    plot        = last_plot(),
+    base_height = 6,
+    base_width  = 10,
+    dpi         = 600,
+    units       = "in",
+    device      = 'png'
+)
 
 ```
 ```{r kruskal-dunn-pi}
@@ -469,8 +573,12 @@ lat_lon_dat %>%
         stub.border.width = 0
     ) %>%
     opt_table_font("serif") %>% 
-    gtsave(filename = paste0(root,"/data/plots/lat_lon_table", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".html"))
+    
+    gtsave(
+        filename = here("data", "plots", 
+                        glue("lat_lon_table", 
+                        format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                        ".html"))
+        )
     
 ```
