@@ -307,7 +307,7 @@ box_lg <- cmtx_avgs %>%
           axis.text       = element_markdown(size = 10),
           axis.title.y    = element_markdown(size = 10),
           legend.position = "none") 
-    
+
 box_lg
 ```
 
