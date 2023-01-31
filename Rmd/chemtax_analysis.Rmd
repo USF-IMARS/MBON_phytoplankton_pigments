@@ -195,19 +195,19 @@ cmtx_avgs_raw <-
 
 meta_data <-
     here("data", "processed", "combined_pig_dat.csv") %>%
-    read.csv() %>% 
+    read_csv(show_col_types = FALSE) %>% 
     select(
         hplc_gsfc_id:filter_storage_before_shipment_to_gfsc,
         comments, season
         ) %>%
-    filter(name_of_water_body == "Florida Keys") %>%
     mutate(
-        season = fct_inorder(season),
+        season = fct_relevel(season, levels = c("W", "Sp", "Su", "F")),
         season = fct_relabel(season, ~ c("Winter", 
                                          "Spring", 
                                          "Summer", 
                                          "Autumn"))
-    )
+    ) %>%
+    filter(name_of_water_body == "Florida Keys") 
     
 
 cmtx_avgs <-
