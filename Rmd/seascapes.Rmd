@@ -9,19 +9,14 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
     librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
-    forcats, lubridate, glue, fs, magrittr, here, conflicted,
+    forcats, lubridate, glue, fs, magrittr, here,
     # broom # optional
+    
+    # additional
+    raster, sp, rgdal, maptools, rgeos, vegan, ggord
 )
 
 library("conflicted")
-
-library("raster")
-library("sp")
-library("rgdal")
-library("maptools")
-library("rgeos")
-library("vegan")
-library("ggord")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -236,47 +231,95 @@ nmds <- metaMDS(as.matrix(sea_matrix), distance = "bray")
 data.scores = as.data.frame(scores(nmds)$sites)
 
 #add columns to data frame 
-data.scores$sample = cmtx_sea2$sample
-data.scores$season = cmtx_sea2$season
+data.scores$sample   = cmtx_sea2$sample
+data.scores$season   = cmtx_sea2$season
 data.scores$seascape = cmtx_sea2$seascape
  
 head(data.scores)
-Tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933','#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
 
-xx = ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
-    geom_point(size = 4, aes(shape = season, color = factor(seascape)))+
-    # geom_point(size = 4, aes(color = factor(seascape)))+ 
-    theme(axis.text.y = element_text(colour = "black", size = 12, face = "bold"), 
-    axis.text.x = element_text(colour = "black", face = "bold", size = 12), 
-    legend.text = element_text(size = 12, face ="bold", colour ="black"), 
-    legend.position = c(0.87, 0.3), axis.title.y = element_text(face = "bold", size = 14), 
-    axis.title.x = element_text(face = "bold", size = 14, colour = "black"), 
-    legend.title = element_text(size = 14, colour = "black", face = "bold"), 
-    panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
-    legend.key=element_blank()) + 
-    labs(x = "NMDS1", color = "Seascape Class", y = "NMDS2", shape = "Season")  +
-    scale_shape_manual(values = c(0, 1, 2, 5, 3))+
+Tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
+               '#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
+
+xx <- 
+    ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) +
+    geom_point(size = 4, aes(shape = season, color = factor(seascape))) +
+    # geom_point(size = 4, aes(color = factor(seascape)))+
+    # 
+    theme(
+        axis.text.y = element_text(
+            colour = "black",
+            size   = 12,
+            face   = "bold"
+        ),
+        axis.text.x = element_text(
+            colour = "black",
+            face   = "bold",
+            size   = 12
+        ),
+        legend.text = element_text(
+            size   = 12,
+            face   = "bold",
+            colour = "black"
+        ),
+        legend.position = c(0.87, 0.3),
+        axis.title.y = element_text(face = "bold", size = 14),
+        axis.title.x = element_text(
+            face   = "bold",
+            size   = 14,
+            colour = "black"
+        ),
+        legend.title = element_text(
+            size   = 14,
+            colour = "black",
+            face   = "bold"
+        ),
+        panel.background = element_blank(),
+        panel.border     = element_rect(
+            colour = "black",
+            fill   = NA,
+            size   = 1.2
+        ),
+        legend.key = element_blank()
+    ) +
+    labs(
+        x     = "NMDS1",
+        color = "Seascape Class",
+        y     = "NMDS2",
+        shape = "Season"
+    )  +
+    scale_shape_manual(values = c(0, 1, 2, 5, 3)) +
     # labs(x = "NMDS1", colour = "Seascape Class", y = "NMDS2") +
     scale_colour_manual(values = Tol_muted) 
  
 xx
 
-cowplot::save_plot(filename = paste0(root,"/data/plots/seascape_nmds", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 8,
-          base_width = 14,
-          dpi = 600, units = "in", device='png')
-
+cowplot::save_plot(
+    filename    = here("data", "plots",
+                       glue("seascape_nmds",
+                        format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                        ".jpg")),
+    plot        = last_plot(),
+    base_height = 8,
+    base_width  = 14,
+    dpi         = 600,
+    units       = "in",
+    device      = 'png'
+    )
+    
 
 ```
 
 ```{r ANONISM}
-ano1 <- anosim(as.matrix(sea_matrix), factor(cmtx_sea2$seascape), distance = "bray", permutations = 100)
-ano1
+ano1 <- anosim(as.matrix(sea_matrix), 
+               factor(cmtx_sea2$seascape), 
+               distance = "bray", 
+               permutations = 100)
 
-ano2 <- anosim(as.matrix(sea_matrix), factor(cmtx_sea2$season), distance = "bray", permutations = 100)
+ano2 <- anosim(as.matrix(sea_matrix), 
+               factor(cmtx_sea2$season), 
+               distance = "bray", 
+               permutations = 100)
+ano1
 ano2
 
 ```
@@ -287,18 +330,21 @@ ano2
 sea_type_avgs <- cmtx_sea2 %>% 
     group_by(season, seascape) %>% 
     summarize_at(vars(chloro:pras), mean) %>% 
-    mutate(total = chloro + crypto + diat1 + diat2 + dino + hapt6 + hapt8 + 
-               pras + cyano2 + cyano4,
-           frac_chloro = chloro/total,
-           frac_crypto = crypto/total,
-           frac_cyano2 = cyano2/total,
-           frac_cyano4 = cyano4/total,
-           frac_diat1 = diat1/total,
-           frac_diat2 = diat2/total,
-           frac_dino = dino/total,
-           frac_hapt6 = hapt6/total,
-           frac_hapt8 = hapt8/total,
-           frac_pras = pras/total)
+    mutate(
+        total       = chloro + crypto + diat1 + diat2 + dino + hapt6 + hapt8 +
+            pras + cyano2 + cyano4,
+        frac_chloro = chloro / total,
+        frac_crypto = crypto / total,
+        frac_cyano2 = cyano2 / total,
+        frac_cyano4 = cyano4 / total,
+        frac_diat1  = diat1  / total,
+        frac_diat2  = diat2  / total,
+        frac_dino   = dino   / total,
+        frac_hapt6  = hapt6  / total,
+        frac_hapt8  = hapt8  / total,
+        frac_pras   = pras   / total
+    )
+
 sea_type_frac <- sea_type_avgs %>% 
     select(season, seascape, frac_chloro:frac_pras) %>% 
     mutate(sum = frac_chloro + frac_crypto + frac_diat1 + frac_diat2 + 
@@ -315,13 +361,13 @@ sea_type_avgs2 <- cmtx_sea2 %>%
     mutate(#year = year,
              # season = season,
               #station = station,
-        frac_chloro = chloro/total,
-           frac_crypto = crypto/total,
-           frac_cyano = cyano/total,
-           frac_diat = diat/total,
-           frac_dino = dino/total,
-           frac_hapt = hapt/total,
-           frac_pras = pras/total) %>% 
+        frac_chloro    = chloro/total,
+       frac_crypto = crypto/total,
+       frac_cyano  = cyano/total,
+       frac_diat   = diat/total,
+       frac_dino   = dino/total,
+       frac_hapt   = hapt/total,
+       frac_pras   = pras/total) %>% 
     select(season, seascape, frac_chloro:frac_pras)
 
 ```
