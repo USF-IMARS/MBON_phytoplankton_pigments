@@ -18,15 +18,19 @@ output: html_document
 
 # Load libraries
 ```{r setup}
-library("purrr")    # used to loop through lists
-library("rerddap")  # used to access different ERDDAPs
-library("dplyr")    # used to manipulate variables
-library("here")     # used to get relative directory location to a project
-library("glue")
-library("fs")
-library("readr")
-library("tidyr")
-library("stringr")
+librarian::shelf(
+    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    # broom # optional
+    
+    # additional
+    rerddap # used to access different ERDDAPs
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
 ```
 
 # Set database
@@ -129,7 +133,7 @@ file.ctd <-
     # extract cruise and station names from files
     mutate(
         cruise_id = dirname(file) %>% basename(.),
-        stations = basename(file)  %>%                      # extract file name
+        stations = basename(file)  %>%                       # extract file name
                    tools::file_path_sans_ext() %>%          # rm extension
                    str_remove(., ".*((?i)stn|(?i)sta)") %>% # rm sta/stn
                    str_remove(., "Savannah_SAV1803_SAV1803") %>%
@@ -188,20 +192,21 @@ if (FALSE) {
 ```
 
 
-# TODO: remove tjos tp another location
+# TODO: remove to another location
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
 if (FALSE) {
-
     env_cmtx <- cmtx_avgs %>% 
+        
         mutate(cruise_code = substr(sample, 1, 7), 
-               season = as.character(season)) %>% 
+               season      = as.character(season)) %>% 
+        
         left_join(ctd_dat_summary, 
-                  by = c("cruise_code" = "cruise_id", "station" = "stations")) %>% 
+                  by = c("cruise_code" = "cruise_id", 
+                         "station"     = "stations")) %>% 
         mutate_all(~ifelse(is.nan(.), NA, .)) 
     
-    
-    write.csv(env_cmtx, 
-              file = here(loc, "..", "processed","cmtx_env_data.csv"))}
+    write_csv(env_cmtx, 
+              file = here("data", "processed", "cmtx_env_data.csv"))}
 ```
 
