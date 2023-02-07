@@ -100,7 +100,7 @@ pig_long <-
                     x     = "Log<sub>sub</sub>(Pigment + 1)",
                     y     = "Frequency",
                     fill  = "Season") +
-                scale_x_continuous(trans =log1p_trans()) +
+                scale_x_continuous(trans = log1p_trans()) +
                 facet_wrap(facet = ~ name_of_water_body) +
                 theme_tufte(base_family = "serif") +
                 theme(
@@ -644,12 +644,13 @@ cmtx_avgs %>%
     ) %>%
     select(func_type, date_time_utc, season, conc_ratio) %>%
 
-    ggplot(aes(x = date_time_utc, y = conc_ratio)) +
-    geom_point(aes(color = season)) +
+    ggplot(aes(x = date_time_utc, y = conc_ratio, color = season)) +
+    geom_point() +
     geom_smooth(
         formula = y ~ x,
-        method = "loess", 
-        span = 0.3, se = FALSE) +
+        method = "loess",
+        span = 1,
+        se = FALSE) +
     labs(
         x = NULL,
         y = "Pigment:Chlorophyll-a",
@@ -690,9 +691,9 @@ cmtx_longer3 <-
 
 
 ```{r diat-ts}
-#station 16
+# station 16
 cmtx_longer3 %>% 
-    filter(str_detect(func_type, "diat|cyano")) %>% 
+    filter(str_detect(func_type, "diat|cyano") & station == "16") %>% 
     ggplot(aes(x     = date_time_utc, 
                y     = avg_conc, 
                color = func_type, 
@@ -702,9 +703,6 @@ cmtx_longer3 %>%
     geom_line() +
     facet_wrap(facets = ~ "station")
     
-    
-# geom_vline(data = data.frame(x = lubridate::year(seq(2016, 2021))), aes(xintercept = x))
-# 
 # point plot with smoothing line for all functional groups
 cmtx_long %>%
     filter(year < 2019) %>%
@@ -728,136 +726,153 @@ cmtx_long %>%
 
 
 ```{r diat-ts1}
+# was commented out
 aov(dino ~ season+ as.factor(year) + season:as.factor(year), data = cmtx_avgs) %>%
             summary()
-lm(scale(crypto) ~ season+ (year), data = cmtx_avgs) %>%
+lm(scale(crypto) ~ season + (year), data = cmtx_avgs) %>%
     summary
 
 # this doesnt exists here `cmtx_longer`
-cmtx_kruskal2 <- cmtx_longer %>%
-    mutate(
-        season_year = case_when(
-            season == "Autumn" ~ paste0(season," ",as.character(year)),
-            season == "Spring" ~ paste0(season," ",as.character(year)),
-            season == "Summer" ~ paste0(season," ",as.character(year)),
-            month == "Jan" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
-            month == "Feb" ~ paste0(season," ",as.character(year - 1),"-",as.character(year)),
-            month == "Dec" ~ paste0(season," ",as.character(year),"-",as.character(year + 1))),
-        season_year = factor(season_year, levels = seasonyr_order),
-           .after = season) %>%
+# cmtx_kruskal2 <- 
+    cmtx_long %>%
+    filter(!is.na(func_type)) %>%
     group_by(func_type) %>%
-    kruskal_test(value ~ season_year)
+    kruskal_test(conc ~ season_year)
 ```
 
 
 ```{r manova}
-cmtx_dunn2 <- cmtx_long %>%
+# cmtx_dunn2 <- 
+    cmtx_long %>%
     group_by(func_type) %>%
     dunn_test(conc ~ season_year, p.adjust.method = "bonferroni")
 
 
-#MANOVA test
-manova(cbind(cmtx_avgs$chloro, cmtx_avgs$crypto, cmtx_avgs$cyano2, cmtx_avgs$cyano4, 
-             cmtx_avgs$diat1, cmtx_avgs$diat2, cmtx_avgs$dino, cmtx_avgs$hapt6, 
-             cmtx_avgs$hapt8, cmtx_avgs$pras)
-       ~ season, data = cmtx_avgs) %>% 
+# MANOVA test
+cmtx_man <- cmtx_avgs %>%
+    select(chloro:last_col()) %>%
+    as.matrix() 
+
+manova(cmtx_man ~ season, data = cmtx_avgs) %>%
     summary()
 ```
 # Photoprotective Index
 ```{r photoprotective-index}
-str(pigm_pi)
-pigm_pi <- pig_dat %>% 
-    mutate(pi = ppc/tot_chl_a)
-ggplot(pigm_pi, aes(x = lubridate::ymd_hms(date_time_utc), y = pi, color = season)) +
+pigm_pi <- mutate(pig_dat, pi = ppc/tot_chl_a)
+
+ggplot(pigm_pi, 
+       aes(x = date_time_utc, 
+           y = pi, 
+           color = season)) +
     geom_point()
 
-# with Seabass calculation for PPC
-ggplot(pigm_pi, aes(x=season, y=pi, fill = season)) +
+# with SeaBass calculation for PPC
+ggplot(pigm_pi, 
+       aes(
+           x = season, 
+           y = pi,
+           fill = season)) +
+    
     geom_boxplot() +
+    labs(
+        x = "Season",
+        y = "Photoprotection Index (PI)") +
+    
     theme_classic() +
-    theme(legend.position = "none", text=element_text(family="serif", size=12)) +
-    labs(y = "Photoprotection Index (PI)", x= "Season")
-save_plot(
-    filename    = here("data", "plots",
-                       glue("pi_bar", 
-                             "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg")
-                       ),
-    plot        = last_plot(),
-    base_height = 6,
-    base_width  = 10,
-    dpi         = 600,
-    units       = "in",
-    device      = 'png'
-    )
-ggplot(pigm_pi, aes(x=psc, y=ppc, shape = season, color=season)) +
-    geom_point(size =4, alpha = 0.8) +
-    geom_abline(slope=1, intercept=0) +
-    theme_classic() +
-    labs(y= "PPCs", x="PSCs", color = "Season", shape = "Season")+
-    theme(text=element_text(family="serif", size= 20),
-          legend.position = c(0.8,0.8)) +
-    scale_y_continuous(expand = c(0,0)) +
-    scale_x_continuous(expand = c(0,0))
-save_plot(
-    filename    = here("data", "plots",
-                       glue("psc_vs_ppc", 
-                             "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg")
-                       ),
-    plot        = last_plot(),
-    base_height = 6,
-    base_width  = 10,
-    dpi         = 600,
-    units       = "in",
-    device      = 'png'
-)
+    theme(legend.position = "none", 
+          text = element_text(family = "serif", size = 12)
+          )
 
+if (FALSE) {
+    save_plot(
+        filename    = here("data", "plots",
+                           glue("pi_bar", 
+                                 "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg")
+                           ),
+        plot        = last_plot(),
+        base_height = 6,
+        base_width  = 10,
+        dpi         = 600,
+        units       = "in",
+        device      = 'png'
+    )
+    }
+```
+
+
+```{r photoprotective-index}
+ggplot(pigm_pi, 
+       aes(
+           x = psc,
+           y = ppc,
+           shape = season,
+           color = season
+           )) +
+    geom_point(size = 4, alpha = 0.8) +
+    geom_abline(slope = 1, intercept = 0) +
+    theme_classic() +
+    labs(
+        y = "PPCs",
+        x = "PSCs",
+        color = "Season",
+        shape = "Season"
+    ) +
+    theme(text = element_text(family = "serif", size = 20),
+          legend.position = c(0.8, 0.8)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_x_continuous(expand = c(0, 0))
+
+if (FALSE) {
+    save_plot(
+        filename    = here("data", "plots",
+                           glue("psc_vs_ppc", 
+                                 "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg")
+                           ),
+        plot        = last_plot(),
+        base_height = 6,
+        base_width  = 10,
+        dpi         = 600,
+        units       = "in",
+        device      = 'png'
+    )
+}
 ```
 ```{r kruskal-dunn-pi}
-pi_kruskal <- pigm_pi %>% 
-    kruskal_test(pi ~ season + year)
+# pi_kruskal <- 
+    pigm_pi %>% 
+    # kruskal_test(pi ~ season + year)
+    kruskal_test(pi ~ season)
 
-
-pi_dunn <- pigm_pi %>%
-    dunn_test(pi ~ season, p.adjust.method = "bonferroni")
+# pi_dunn <- 
+    pigm_pi %>%
+    dunn_test(pi ~ season, 
+              p.adjust.method = "bonferroni")
 
 ```
 
 ```{r station-seasonally-yearly-avgs}
-cmtx_stat <- cmtx_avgs %>% 
+cmtx_avgs_new <- cmtx_avgs %>% 
     mutate(
         diat  = diat1  + diat2,
         cyano = cyano2 + cyano4,
         hapt  = hapt6  + hapt8,
         total = chloro + crypto + diat + dino + hapt + pras + cyano
-           ) %>% 
-    # group_by(year, season, station) %>% 
-    # summarise_at(vars(chloro:hapt),
-    #              list(avg = mean, sd = sd, var = var),
-    #              na.rm = TRUE)
-    summarise(vars(chloro:hapt),
+           )
+
+cmtx_stat <-  cmtx_avgs_new %>% 
+    summarise(across(chloro:hapt,
                  list(avg = mean, sd = sd, var = var),
-                 na.rm = TRUE,
+                 na.rm = TRUE),
               .by = c(year, season, station))
 
-cmtx_fract <- cmtx_avgs %>% 
-    mutate(
-        diat  = diat1  + diat2,
-        cyano = cyano2 + cyano4,
-        hapt  = hapt6  + hapt8,
-        total = chloro + crypto + diat + dino + hapt + pras + cyano) %>% 
+cmtx_fract <-
+    cmtx_avgs_new %>% 
     mutate(
         season,
         station,
-        across(chloro:pras, ~ .x / total, .names = "frac_{.col}")
-        # frac_chloro = chloro/total,
-        # frac_crypto = crypto/total,
-        # frac_cyano  = cyano/total,
-        # frac_diat   = diat/total,
-        # frac_dino   = dino/total,
-        # frac_hapt   = hapt/total,
-        # frac_pras   = pras/total
+        across(chloro:hapt, ~ .x / total, .names = "frac_{.col}")
         ) %>% 
-    select(hplc_gsfc_id:season, frac_chloro:frac_pras) %>% 
+    select(date_time_utc:season, frac_chloro:frac_pras) %>% 
     pivot_longer(
         frac_chloro:frac_pras,
         names_to     = "func_type",
@@ -867,9 +882,8 @@ cmtx_fract <- cmtx_avgs %>%
 
 max_fract <- 
     cmtx_fract %>%
-    # group_by(hplc_gsfc_id) %>% 
     summarise(max_frac = max(frac),
-              .by = hplc_gsfc_id) %>% 
+              .by = sample) %>% 
     left_join(cmtx_fract, 
               by = c("max_frac" = "frac"))
 ```
@@ -880,26 +894,33 @@ lat_lon_dat <- pig_dat %>%
     dplyr::select(station, lat, lon) %>% 
     distinct(station, lat, lon)
 
-lat_lon_dat %>% 
+lat_lon_tbl <- lat_lon_dat %>% 
     gt(
-        rowname_col = "station",
+        rowname_col   = "station",
         groupname_col = NULL
-    ) %>% 
+    ) %>%
+    
     cols_label(
         lat = md("Latitude (&deg;)"),
         lon = md("Longitude (&deg;)")) %>% 
+    
     tab_options(
         table_body.hlines.width = 0,
         table_body.vlines.width = 0,
-        stub.border.width = 0
+        stub.border.width       = 0
     ) %>%
-    opt_table_font("serif") %>% 
     
+    opt_table_font("serif")
+
+lat_lon_tbl 
+
+if (FALSE) {
     gtsave(
+        lat_lon_tbl,
         filename = here("data", "plots", 
                         glue("lat_lon_table", 
                              "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.html")
                         )
         )
-    
+    }
 ```
