@@ -25,8 +25,6 @@ conflict_prefer("select", "dplyr")
 ```
 # Set paths
 ```{r paths}
-root <- rprojroot::find_rstudio_root_file()
-
 # pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
 env_cmtx <- 
     read_csv(here("data", "processed", "cmtx_env_data.csv")) %>%
