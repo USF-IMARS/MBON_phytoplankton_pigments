@@ -1,17 +1,97 @@
-map_data <- function(
+map.data <- function(
                     .data,
                     conc_name,
+                    col_name,
+                    loc_name,
                     .title,
                     resolution = 0.01, 
                     adj        = 0.1, 
                     base_map   = NULL, 
                     colr       = "data",
-                    sav_loc    = here("data", "plots", "map"),
+                    sav_loc    = here("data", "plots", Sys.Date(), "map"),
                     sav        = FALSE,
-                    sv_name    = NA,
+                    sv_name    = NULL,
                     verbose    = FALSE) {
+##%######################################################%##
+#                                                          #
+####          Function to Run Kriging on Data           ####
+#                                                          #
+##%######################################################%##
+# ---- DESCRIPTION: ------
+# This uses the `fields` package to run `spatialProcesses` for a Krigged set of
+# data.
+#
+# ---- INPUTS: -----------
+# .data      = Dataframe or tibble that contains columns of:
+#              - avg_ratio, 
+#              - lat, and 
+#              - lon
+# 
+# col_name   = The column named used to run `spatialProces`
+#              
+# conc_name  = name of pigment or phytoplankton functional type
+#              (ex. "Fucoxanthin")
+# 
+# .title     = name added to the title (i.e. <.title>: <con_name>:TChla)
+#               (ex: "Spring: Fucoxanthin:TChla")
+#              
+# resolution = Resolution of each pixel in degrees 
+#               (default: 0.01)
+#               
+# adj        = Add adjustment to bounding box to make slighlty larger then the
+#              min/max of lat/lon un degrees
+#               (default: 0.1)
+#               
+# base_map   = Optional: supply a base map as a ggplot object to plot data
+#               (default: NULL)
+#               
+# colr       = Setting the number and distance of break points in green color 
+#              palette. 
+#              Options (default: "data"): 
+#              - data:        sets the breaks at 10 locations based on the 
+#                             `avg_conc` column
+#              - vector == 3: low, high and length (i.e. c(1,5,9))
+#              - vector > 3:  sets number and distance of breaks
+#              
+# 
+# sav_loc    = Optional: set location to save plots as `.jpeg`, a default is set 
+#               (default: here("data", "plots", Sys.Date(), "map")
+#                         "~/data/plots/map/<current date>/")
+#               
+# sav        = Optional: set to TRUE if want to save 
+#               (default: FALSE)
+#               
+# sv_name    = Optional: add part of name to file,
+#               (default: NULL; file - MBON_pigm_<title>_<yyymmdd_hhmmss>.png,
+#                optional: file - MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png)
+#               
+# verbose    = Optional: allow the script to be more verbose with print 
+#              statements and plots 
+#               (default: FALSE)
+#
+# ---- OUTPUTS: ----------
+# dat        = A list object with three lists:
+#              - lon   = longitude of prediction grid 
+#              - lat   = latitude of prediction grid
+#              - value = predicted values
+# 
+# Optional:
+# map = Adds a ggplot map to output variable if base_map is given list(plt = plt)
+# 
+# External:
+# If `sav == TRUE`, will save figures to location set in sav_loc with a file 
+# name of "MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png"
+#
+# ---- NOTES: ------------
+# Modified from https://github.com/eqmh/waltonsmith/blob/main/R_code/waltonsmith_hplc.R
+# ---- REFERENCES(s): ----
+#
+# ---- AUTHOR(s): --------
+# Sebastian Di Geronimo (2023-02-08 11:18:54)
     
-    # TODO: add function description
+    
+    cli_alert_info("Working on: {conc_name} for {loc_name}")
+    
     # TODO: fix ggplot
     # TODO: allow to use ratio or not
     set.seed(123)
@@ -24,21 +104,25 @@ map_data <- function(
     # ---- color and contour breaks ----
     # ======================================================================== #
     if (!is.numeric(colr) && str_detect(colr, "data")) {
-        breaks <- pretty(.data$ratio_avg, n = 10)
+        # breaks set as length 10 and a gradient from data column
+        breaks <- pretty(.data[[col_name]], n = 10)
         
     } else if (is.numeric(colr) && length(colr) == 3) {
+        # break is high, low, and length (i.e. c(1,2,3))
         breaks <- seq(colr[1], colr[2], by = colr[3])
         
     } else if (is.numeric(colr) && length(colr) > 3) {
-        breaks <- colr 
+        # sequence of breakpoints (i.e. c(0.1,2,3.5,4,5,6,7))
+        breaks <- sort(colr)
         
     } else {
         rlang::abort(
             cli::cli_abort(
-                c("{.var colr} can to be:",
-                  "{.var data} to select 10 values from the data,", 
-                  "a vector with 3 values for `seq()` (i.e {.var c(1,2,3)}), or",
-                  "a seqence of numbers greater than 3 (i.e {.var c(1,2,3,5,6,7)})" 
+                c("{.var colr} is used to create break points in the data.",
+                  "This can be set to:",
+                  "*" = "{.val data} to select 10 values spaced out using data", 
+                  "*" = "a vector with 3 values (low, high, and length) (i.e {.var c(1,2,3)})",
+                  "*" = "a vector of values with a length >3 (i.e {.var c(1,2,3,5,6,7)})" 
                 ))
             )
     }
@@ -78,7 +162,7 @@ map_data <- function(
     # ---- model spatial process using lon/lat and pigment:chla  ----
     # ======================================================================== #  
     krig_dat     <- spatialProcess(df_loc, 
-                                   .data$ratio_avg)
+                                   .data[[col_name]])
     
     if (verbose) {
         summary(krig_dat)
@@ -88,7 +172,7 @@ map_data <- function(
     }
     
     # prediction surface and standard errors
-    ratio_kriged <- predictSurface(krig_dat, 
+    krig_pred <- predictSurface(krig_dat, 
                                    loc_grid,
                                    extrap = FALSE
     )
@@ -98,32 +182,35 @@ map_data <- function(
                                      extrap = FALSE)
     
     # corrects the kriged min and max to observed min and max observed
-    max_pig <- max(.data$ratio_avg, na.rm = TRUE)
-    min_pig <- min(.data$ratio_avg, na.rm = TRUE)
+    max_pig <- max(.data[[col_name]], na.rm = TRUE)
+    min_pig <- min(.data[[col_name]], na.rm = TRUE)
     
     # corrected
-    ratio_kriged$z <- 
-        as_tibble(ratio_kriged$z) %>%
+    # krig_pred$z <- 
+    dat <- 
+        as_tibble(krig_pred$z) %>%
         mutate(
             across(.fn = ~ case_when(. > max_pig ~ max_pig, 
                                      . < min_pig ~ min_pig,
                                      TRUE ~ .))
         ) %>%
-        as.matrix()
+        as.matrix() %>%
+        t() %>%
+        c() %>%
+        as_tibble() 
     
     
     # ======================================================================== #
     # ---- extract data to map ----
     # ======================================================================== #    
     
-    dat <- t(ratio_kriged$z) %>%
-        c() %>%
-        as_tibble() 
+    # dat <- t(krig_pred$z) %>%
+    #     c() %>%
+    #     as_tibble() 
     
     dat_sp <-
-        expand_grid(lon = ratio_kriged$x,
-                    lat = ratio_kriged$y) %>%
-        # dplyr::bind_cols(as.vector(ratio_kriged_fuco$z) %>%
+        expand_grid(lon = krig_pred$x,
+                    lat = krig_pred$y) %>%
         bind_cols(dat) %>%
         filter(!is.na(value))
     
@@ -134,7 +221,6 @@ map_data <- function(
     dat_se_sp <-
         expand_grid(lon = ratio_SE$x,
                     lat = ratio_SE$y) %>%
-        # dplyr::bind_cols(as.vector(ratio_kriged_fuco$z) %>%
         bind_cols(dat) %>%
         filter(!is.na(value))
     
@@ -151,15 +237,29 @@ map_data <- function(
     
     # ---- plot  ----
     plt <- base_map +
-        geom_point(data = dat_sp, aes(x = lon, y = lat, color = value)) +
-        geom_point(data = .data, aes(x = lon, y = lat), color = "yellow") +
+        geom_contour_fill(data = dat_sp, 
+                          aes(x = lon, 
+                              y = lat, 
+                              z = value), 
+                          binwidth = 0.0001) +
+        # geom_point(data = dat_sp, 
+        #            aes(x = lon, 
+        #                y = lat,  
+        #                color = value)) +
+        geom_point(data = .data,  
+                   aes(x = lon, 
+                       y = lat), 
+                   color = "yellow") +
+        
         labs(color = NULL,
-             title = glue("{.title}: {conc_name}:TChla")) + 
-        scale_color_gradientn(breaks = breaks, colors = cols_fuco) +
-        coord_sf(xlim = xlims, ylim = ylims) +
-        theme(
-            legend.key.height = unit(50, "pt")
-        )
+             title = .title) +
+        
+        scale_fill_gradientn(breaks = breaks, 
+                             colors = cols_fuco) +
+        
+        coord_sf(xlim = xlims, 
+                 ylim = ylims) +
+        theme(legend.key.height = unit(50, "pt"))
     
     # maybe add back?
     # plt_se <- base_map +
@@ -176,9 +276,13 @@ map_data <- function(
     
     # save location and name
     if (sav) {
-        # fs::dir_create(sav_loc)
+        if (is.null(sv_name)) {
+            sv_name <- sv_name <- glue("{conc_name}_{loc_name}") %>%
+                                  janitor::make_clean_names()
+        }
+        
         filename <- here(sav_loc,
-                         glue("MBON_pigm_{sv_name}_{str_to_lower(.title)}_",
+                         glue("{sv_name}_",
                               format(Sys.time(), "%y%m%d_%H%M%S") ,
                               ".png"))
         cat("\n\n")
@@ -194,9 +298,9 @@ map_data <- function(
     # return list of data
     result <- list(
         dat = dat_sp,
-        map = list(plt = plt)#,
-        # map2 = plt_se
+        map = plt
     )
+    
     
     Sys.sleep(1)
     return(result)
