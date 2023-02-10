@@ -256,7 +256,11 @@ loc       <- "Florida Keys"
 
 pigm_dat <-
     pig_dat %>%
-    pivot_longer(tot_chl_b:dp, names_to = "conc_name", values_to = "conc") %>%
+    pivot_longer(
+        tot_chl_b:dp,
+        names_to  = "conc_name", 
+        values_to = "conc"
+        ) %>%
     filter(str_detect(name_of_water_body, loc)) %>%
     select(
         hplc_gsfc_id, sample,                   # id
@@ -289,25 +293,34 @@ pigm_dat <-
               str_detect(season, "(?i)su") ~ "Summer",
               str_detect(season, "^(?i)f") ~ "Autumn",
               str_detect(season, "^(?i)w") ~ "Winter",
-              TRUE ~ season)
+              TRUE ~ season),
+           title    = glue("{szn_name}: {conc_name}:TChla"),
+           title2   = glue("{szn_name}: Average {conc_name}"),
+           sv_name  = glue("MBON_pigm_{conc_name}_{str_to_lower(szn_name)}")
            ) 
 
-pigm_dat <- pigm_dat %>%
+pigm_dat1 <-
+    pigm_dat %>%
+    # slice_sample(n = 2) %>% # TODO: delete
+    # slice_head(n = 1) %>% # TODO: delete
     mutate(
-        krig = pmap(list(data, conc_name, szn_name), 
-                    ~ map_data(
-                               ..1,
+        krig = pmap(list(data, conc_name, szn_name, title, sv_name),
+        # krig = pmap(list(data, conc_name, szn_name, title2, sv_name), 
+                    ~ map.data(
+                               .data     = ..1,
                                conc_name = ..2,
-                               .title    = ..3,
+                               col_name  = "ratio_avg",
+                               # col_name  = "conc_avg",
+                               loc_name  = ..3,
+                               .title    = ..4,
                                base_map  = base_map,
-                               sav       = FALSE,
-                               sv_name   = ..2)
+                               sav       = TRUE,
+                               sv_name   = ..5)
                    )
     ) %>%
-      unnest_wider(krig) 
-
-
-pigm_dat$map
+     unnest_wider(krig) 
+pigm_dat1$map
+pigm_dat1$dat
 ```
 
 # ---- ERROR: tot_chl_a doesn't exist in chemtax_with_metadata ----
