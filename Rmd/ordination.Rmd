@@ -24,39 +24,62 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
 # Set paths
-```{r paths}
-# pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
-env_cmtx <- 
-    read_csv(here("data", "processed", "cmtx_env_data.csv")) %>%
-    mutate(
-        season = fct_relevel(season, 
-                             "Winter", "Spring", "Summer", "Autumn")
-        )
-
+```{r chemtax-ctd}
 # CHEMTAX files
 cmtx_avgs <- 
-    read_csv(here("data", "processed","chemtax_with_metadata.csv")) %>%
+    here("data", "processed","chemtax_w_meta_rm_dup.csv") %>%
+    read_csv(show_col_types = FALSE) %>%
     mutate(
         season = fct_relevel(season, 
                              "Winter", "Spring", "Summer", "Autumn")
         )
 
-cmtx_avgs2 <- cmtx_avgs %>% 
+ctd_dat_summary <- 
+    here("data", "processed", "ctd_all.csv") %>%
+    read_csv(show_col_types = FALSE)
+
+
+env_cmtx <-
+    cmtx_avgs %>% 
+    mutate(
+        cruise_code = str_remove(sample, "(_|-).*"), 
+        # season      = as.character(season)
+        ) %>%
+    relocate(cruise_code, .before = cruise) %>%
+    left_join(ctd_dat_summary, 
+              by = c("cruise_code" = "cruise_id", 
+                     "station"     = "stations")) 
+
+if (FALSE) {   
+    write_csv(
+        env_cmtx, 
+        file = here("data", "processed", "cmtx_env_data.csv")
+        )
+    }
+```
+
+
+```{r paths}
+# pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
+
+cmtx_avgs2 <- 
+    cmtx_avgs %>% 
     rownames_to_column(var = "row_num") %>% 
     unite("sample_code", 
           row_num, 
           season, 
           remove = FALSE)
-
-ggplot(data = env_cmtx, 
-       aes(y = sal, 
-           x = season)) +
-    geom_path()
+# ggplot(data = env_cmtx, 
+#        aes(y = sal, 
+#            x = season)) +
+#     geom_path()
 
 cmtx_data_matrix <- cmtx_avgs2 %>%
     select(sample_code, chloro:pras) %>% 
     column_to_rownames(var = "sample_code")
 ```
+
+
 
 ```{r Bray-Curtis-Dissimilarity-Matrix}
 # cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray")
@@ -111,18 +134,27 @@ cmtx_data_matrix <- cmtx_avgs2 %>%
 
 
 ```{r func-ord-plot}
-ggPCoA2 <- function(data, pc = 12, level = 0.68) {
-    
-  dis  <- vegdist(data[, -1], method = "bray", na.rm = TRUE)
+ggPCoA2 <- function(data, pc = 12, level = 0.68, dist_meth = "bray") {
+  
+  # calc distance matrix  
+  dis  <- vegdist(data[, -1], 
+                  method = dist_meth, 
+                  na.rm  = TRUE)
+  
+  # PCoA
   pcoa <- pcoa(dis, correction = "none", rn = NULL)
+  
+  # Extract eignvalues
   eig  <- round(100*pcoa$values[1:3, 2], 2)
+  
+  # site info?
   site <- pcoa$vectors[, 1:3]
   
   if (all(rownames(site) == rownames(data))) {
       
     pca.data <- data.frame(group = data$group, site)
     
-    colnames(pca.data)[2:4] <- paste0("PCoA", 1:3)
+    colnames(pca.data)[2:4] <- glue("PCoA{1:3}")
   }
   
   label <- data.frame(min = apply(pca.data[, 2:4], 2, min),
@@ -156,10 +188,10 @@ ggPCoA2 <- function(data, pc = 12, level = 0.68) {
   p <- 
       ggplot(
           data = pca.data, 
-          aes_string(
+          aes(
               x     = x,
               y     = y, 
-              color = "group")
+              color = group)
           ) +
       geom_point(
           aes(color = group),
@@ -211,7 +243,7 @@ env_pca <- prcomp(env_data_matrix[1:3], scale. = TRUE)
 # plot PCoA and PCA
 pcoa_plt <- ggPCoA2(cmtx_data_matrix2)
 
-plt_pca <- 
+# plt_pca <- 
     autoplot(env_pca, 
              data   = env_data_matrix, 
              colour = "season") +
@@ -260,92 +292,151 @@ all_test_env <- adonis2(env_data_matrix[1:3] ~ season,
                     data   = env_data_matrix, 
                     method = "bray")
 
-set.seed(1082002)
 all_test <- adonis2(cmtx_data_matrix ~ season, 
                     data   = cmtx_avgs, 
                     method = "bray")
    
-pairwise_p <- numeric()
-
-# ---- Spring vs. Summer ----
-sp_su <- cmtx_avgs %>% 
-    filter(str_detect(season, "Spring|Summer"))
-
-sp_su_dm <- sp_su %>%
-    select(chloro:pras)
-
-sp_su_test <- adonis2(sp_su_dm ~ season*station, data = sp_su, method = "bray")
-
-pairwise_p["sp_su"] <- sp_su_test[["Pr(>F)"]][1]
-
-# ---- Spring vs. Winter ----
-sp_w <- cmtx_avgs %>% 
-    filter(str_detect(season, "Spring|Winter"))
-
-sp_w_dm <- sp_w %>%
-    select(chloro:pras)
-
-sp_w_test <- adonis2(sp_w_dm ~ season, 
-                     data   = sp_w, 
-                     method = "bray")
-
-pairwise_p["sp_w"] <- sp_w_test[["Pr(>F)"]][1]
-
-# ---- Spring vs. Autumn ----
-sp_a <- cmtx_avgs %>% 
-    filter(str_detect(season, "Spring|Autumn"))
-
-sp_a_dm <- sp_a %>%
-    select(chloro:pras)
-
-sp_a_test <- adonis2(sp_a_dm ~ season, 
-                     data   = sp_a, 
-                     method = "bray")
-
-pairwise_p["sp_a"] <- sp_a_test[["Pr(>F)"]][1]
 
 
-# ---- Summer vs. Autumn ----
-su_a <- cmtx_avgs %>% 
-    filter(str_detect(season, "Summer|Autumn"))
 
-su_a_dm <- su_a %>%
-    select(chloro:pras)
+szn_adonis2 <- function(.data, pair_col, pairs, 
+                        formula = NULL, # something like "season * station" 
+                        dist_method = "bray") {
+    pair_name <- str_flatten(pairs, collapse = "|")
+    dat_pair  <- filter(.data, 
+                        str_detect(!!sym(pair_col), 
+                                   pair_name))
+    
+    value <- select(dat_pair, chloro:pras)
 
-su_a_test <- adonis2(su_a_dm ~ season, 
-                     data   = su_a, 
-                     method = "bray")
+    adon_test <- adonis2(
+        formula = as.formula(paste("value ~", formula)), 
+        data   = dat_pair, 
+        method = dist_method)   
+    
+    pairwise_p <- adon_test[["Pr(>F)"]][1]
+    pairwise_p
+}
 
-pairwise_p["su_a"] <- su_a_test[["Pr(>F)"]][1]
+{
+    set.seed(1234)
+    pairwise_p <- numeric()
+    pairwise_p[["spsu"]] <- 
+        szn_adonis2(cmtx_avgs, "season", c("Spring", "Summer"), "season * station")
+    
+    pairwise_p[["spw"]] <- 
+        szn_adonis2(cmtx_avgs, "season", c("Spring", "Winter"), "season")
+    
+    pairwise_p[["spa"]] <- 
+        szn_adonis2(cmtx_avgs, "season", c("Spring", "Autumn"), "season")
+    
+    pairwise_p[["sua"]] <- 
+        szn_adonis2(cmtx_avgs, "season", c("Summer", "Autumn"), "season")
+    
+    pairwise_p[["suw"]] <- 
+        szn_adonis2(cmtx_avgs, "season", c("Summer", "Winter"), "season")
+    
+    pairwise_p[["aw"]] <- 
+        szn_adonis2(cmtx_avgs, "season", c("Autumn", "Winter"), "season")
 
-# ---- Summer vs. Winter ----
-su_w <- cmtx_avgs %>% 
-    filter(str_detect(season, "Summer|Winter"))
+    # ---- correct p-values ----
+    p.adjust(pairwise_p, method = "bonferroni")    
+}
 
-su_w_dm <- su_w %>%
-    select(chloro:pras)
+```
 
-su_w_test <- adonis2(su_w_dm ~ season, 
-                     data   = su_w, 
-                     method = "bray")
 
-pairwise_p["su_w"] <- su_w_test[["Pr(>F)"]][1]
-
-# ---- Winter vs. Autumn ----
-w_a <- cmtx_avgs %>% 
-    filter(str_detect(season, "Winter|Autumn"))
-
-w_a_dm <- w_a %>%
-    select(chloro:pras)
-
-w_a_test <- adonis2(w_a_dm ~ season, 
-                    data   = w_a, 
-                    method = "bray")
-
-pairwise_p["w_a"] <- w_a_test[["Pr(>F)"]][1]
-
-# ---- correct p-values ----
-p.adjust(pairwise_p, method = "bonferroni")
+```{r permanova}
+# # ============================================================================ #
+# # ---- Spring vs. Summer -----
+# # ============================================================================ #    
+# sp_su <- cmtx_avgs %>% 
+#     filter(str_detect(season, "Spring|Summer"))
+# 
+# sp_su_dm <- select(sp_su, chloro:pras)
+# 
+# sp_su_test <- adonis2(sp_su_dm ~ season*station, data = sp_su, method = "bray")
+# 
+# pairwise_p["sp_su"] <- sp_su_test[["Pr(>F)"]][1]
+# 
+# # ============================================================================ #
+# # ---- Spring vs. Winter ----
+# # ============================================================================ #    
+# sp_w <- cmtx_avgs %>% 
+#     filter(str_detect(season, "Spring|Winter"))
+# 
+# sp_w_dm <- sp_w %>%
+#     select(chloro:pras)
+# 
+# sp_w_test <- adonis2(sp_w_dm ~ season, 
+#                      data   = sp_w, 
+#                      method = "bray")
+# 
+# pairwise_p["sp_w"] <- sp_w_test[["Pr(>F)"]][1]
+# 
+# # ============================================================================ #
+# # ---- Spring vs. Autumn ----
+# # ============================================================================ #    
+# sp_a <- cmtx_avgs %>% 
+#     filter(str_detect(season, "Spring|Autumn"))
+# 
+# sp_a_dm <- sp_a %>%
+#     select(chloro:pras)
+# 
+# sp_a_test <- adonis2(sp_a_dm ~ season, 
+#                      data   = sp_a, 
+#                      method = "bray")
+# 
+# pairwise_p["sp_a"] <- sp_a_test[["Pr(>F)"]][1]
+# 
+# 
+# # ============================================================================ #
+# # ---- Summer vs. Autumn  ----
+# # ============================================================================ #    
+# su_a <- cmtx_avgs %>% 
+#     filter(str_detect(season, "Summer|Autumn"))
+# 
+# su_a_dm <- su_a %>%
+#     select(chloro:pras)
+# 
+# su_a_test <- adonis2(su_a_dm ~ season, 
+#                      data   = su_a, 
+#                      method = "bray")
+# 
+# pairwise_p["su_a"] <- su_a_test[["Pr(>F)"]][1]
+# 
+# # ============================================================================ #
+# # ---- Summer vs. Winter ----
+# # ============================================================================ #    
+# su_w <- cmtx_avgs %>% 
+#     filter(str_detect(season, "Summer|Winter"))
+# 
+# su_w_dm <- su_w %>%
+#     select(chloro:pras)
+# 
+# su_w_test <- adonis2(su_w_dm ~ season, 
+#                      data   = su_w, 
+#                      method = "bray")
+# 
+# pairwise_p["su_w"] <- su_w_test[["Pr(>F)"]][1]
+# 
+# # ============================================================================ #
+# # ---- Winter vs. Autumn  ----
+# # ============================================================================ #    
+# w_a <- cmtx_avgs %>% 
+#     filter(str_detect(season, "Winter|Autumn"))
+# 
+# w_a_dm <- w_a %>%
+#     select(chloro:pras)
+# 
+# w_a_test <- adonis2(w_a_dm ~ season, 
+#                     data   = w_a, 
+#                     method = "bray")
+# 
+# pairwise_p["w_a"] <- w_a_test[["Pr(>F)"]][1]
+# 
+# # ---- correct p-values ----
+# p.adjust(pairwise_p, method = "bonferroni")
 ```
 # CCA Analysis 
 ```{r cca}
@@ -356,14 +447,7 @@ cmtx_cca <- cca(cca_matrix ~ temp +sal + par,
                 data      = env_cmtx, 
                 na.action = na.omit)
 
-# summary(cmtx_cca, scaling = 1)
-
-
 plot(cmtx_cca, scaling = 1)
-
-# autoplot(cmtx_cca, axes = c(1,2)) +
-#     theme_classic() 
-#     
 
 new_lab <- list(temp = "Temp",
                 sal  = "Sal", 
@@ -395,6 +479,14 @@ cca_plt <-
     theme(text = element_text(family = "serif", size = 20),
           legend.position = c(0.15, 0.9))
 
+cca_plt
+
+library(ggordiplots)
+gg_ordiplot(cmtx_cca, 
+            env_cmtx %>% 
+                drop_na(temp,par:sal) %$% as.factor(season),
+            scaling = 1)
+
 if (FALSE) {
         save_plot(
         filename = 
@@ -409,23 +501,22 @@ if (FALSE) {
         units       = "in", 
         device      = "png")
 }
+```
 
 
+```{r ctd-plt}
 ggplot(env_cmtx) +
     geom_boxplot(aes(y = par)) +
     facet_wrap(facet =  ~ season)
 
 env_cmtx %>%
-    select(-c(cruise_code, indx, cruise.y)) %>%
+    # select(-c(cruise_code, indx, cruise.y)) %>%
     ggpairs(columns = 27:41, 
             mapping = aes(color = season))
-
-library(ggordiplots)
-gg_ordiplot(cmtx_cca, env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
-            scaling = 1)
 ```
 
 ```{r func-ord-plot}
+
 neword <- function(ord_in, grp_in = NULL, axes = c("1", "2"), ...) {
     axes       <- glue("CCA {axes}")
     obs        <- data.frame(ord_in$CCA$wa[, axes])
