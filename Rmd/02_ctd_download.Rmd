@@ -90,7 +90,7 @@ ctd_downloads <- function(IDS, path, verbose = TRUE) {
       
       # skip already downloaded files
       if (fs::file_exists(file_path)) {
-        if (verbose) cat("Skipping file file:", filename, "\n--------\n\n")
+        if (verbose) cat("Skipping file:", filename, "\n--------\n\n")
         next
       }
       
@@ -114,12 +114,10 @@ ctd_downloads <- function(IDS, path, verbose = TRUE) {
 # Run ctd_downloads function and try each cruise ID for existing data
 This will take some time, ~ 30 - 60 min
 ```{r download-ctd-data}
-if (FALSE) {
-    for (i in seq(cruiseID)) {
-        try(ctd_downloads(cruiseID[i], loc, TRUE), silent = TRUE)
-        }
-    rm(i, cruiseID)
-}
+for (i in seq(cruiseID)) {
+    try(ctd_downloads(cruiseID[i], loc, TRUE), silent = TRUE)
+    }
+rm(i, cruiseID)
 ```
 
 # Read CTD files and average top 5 meters
