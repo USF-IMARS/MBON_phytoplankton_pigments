@@ -57,16 +57,27 @@ rm(subDir)
 
 ```{r file-paths}
 # find pigment data
+dir <- here("data", "raw", "hplc")
 path_out <- here("data", "processed")
 
 # pigment files
 file.pig <-
-    here("data", "raw", "hplc")
-    fs::dir_ls(path = dir,
+    dir %>%
+    fs::dir_ls(
                recurse = FALSE,
+               type = "file",
                # included ^[^~]* to not match ~, means that a file is opened
                regexp = "^[^~]*\\.xlsx$") %>% 
     str_sort()
+    
+if (identical(file.pig, character(0))) {
+    message(glue("You may need to put raw HPLC data into a ", 
+                 "newly created directory for raw HPLC data in ",
+                 "{dir} (as of Jan 2023)"))
+} else {
+    file.pig
+}
+    
 ```
 
 # HPLC data is loaded and cleanup
