@@ -45,6 +45,7 @@ subDir <-
       "data/metadata",
       "data/raw/seascapes",
       "data/raw/chemtax",
+      "data/raw/hplc",
       "data/raw/microscopy",
       "Rmd",
       "scripts")
@@ -56,15 +57,15 @@ rm(subDir)
 
 ```{r file-paths}
 # find pigment data
-dir      <- here("data", "raw")
 path_out <- here("data", "processed")
 
 # pigment files
 file.pig <-
-  fs::dir_ls(path = dir,
-             recurse = TRUE,
-             # included ^[^~]* to not match ~, means that a file is opened
-             regexp = "^[^~]*\\.xlsx$") %>% 
+    here("data", "raw", "hplc")
+    fs::dir_ls(path = dir,
+               recurse = FALSE,
+               # included ^[^~]* to not match ~, means that a file is opened
+               regexp = "^[^~]*\\.xlsx$") %>% 
     str_sort()
 ```
 
