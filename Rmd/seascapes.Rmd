@@ -7,42 +7,59 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library("raster")
-library("dplyr")
+library("ggplot2")
 library("tibble")
 library("tidyr")
 library("readr")
 library("purrr")
 library("stringr")
-library("ggplot2")
+library("forcats")
+library("lubridate")
+library("glue")
+library("fs")
 library("magrittr")
+# library("broom") # optional
+library("raster")
 library("sp")
 library("rgdal")
 library("maptools")
 library("rgeos")
 library("vegan")
 library("ggord")
+library("dplyr")
 
-root <- rprojroot::find_rstudio_root_file()
 
+# ---- set path variables ----
+root       <- rprojroot::find_rstudio_root_file()
+seasc.path <- paste0(root, "/data/raw/seascapes/")
+path_out   <- paste0(root, "/data/processed/")
+
+# ---- source extract function ----
 source(paste0(root, "/scripts/seascapes_extract.R"))
+
 
 dirsea <- "/data/raw/seascapes/"
 seasc.path = paste0(root, dirsea)
 dir2 <- "//data//processed//"
 dir3 <- "//data//raw//"
 
+# ---- unzip seascapes file ----
 # get "fknms_global_monthly.zip" from https://shiny.marinebon.app/seascapes/. 
 # select "Florida Keys" in the region pull-down tab and click "all grids (.zip)"
 # to download Sanctuary files. 
 unzip(paste0(seasc.path, "fknms_global_monthly.zip"), exdir = seasc.path)
 
+<<<<<<< HEAD
 # to download timeseries, select "timeseries.csv"
 seasc_tmser <- read.csv(paste0(root, dir3, "fknms_global_monthly_CLASS.csv")) %>% 
     filter(date > '2016-01-01',
            date < '2021-12-31') %>% 
     mutate(date = as.Date(date))
 
+=======
+# ---- load chemtax data ----
+dir2 <- "//data//processed//"
+>>>>>>> cd19a0c9cfa6b9b57b3439c1f83f1cae43963356
 path_out <-  paste0(root,dir2)
 # cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
 env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv")) %>% 
@@ -53,19 +70,32 @@ env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv")) %>%
 ```{r}
 # making new column in df with year and month in format "YYYY.MM" to match how
 # the seascapes .tif files are named
-cmtx_sea <- env_cmtx %>% 
-    mutate(yr_mth = substring(env_cmtx$date_time_utc, 1, 7),
-           yr_mth = gsub(pattern = "-", replacement = ".", x = yr_mth))
-mth_yr_df <- base::as.data.frame(unique(cmtx_sea$yr_mth)) %>% 
-    rename("yr_mth" = "unique(cmtx_sea$yr_mth)")
+
+# cmtx_sea <- env_cmtx %>% 
+#    mutate(yr_mth = substring(env_cmtx$date_time_utc, 1, 7),
+#           yr_mth = gsub(pattern = "-", replacement = ".", x = yr_mth))
+# mth_yr_df <- base::as.data.frame(unique(cmtx_sea$yr_mth)) %>% 
+#   rename("yr_mth" = "unique(cmtx_sea$yr_mth)")
+
+cmtx_sea <-
+    cmtx_avgs %>%
+    mutate(yr_mth = as_date(date_time_utc) %>% format("%Y.%m"))
+           
+# ---- extract year month col ----
+mth_yr_df <- cmtx_sea %>%
+    select(yr_mth) %>%
+    distinct()
+
+
 
 # making df. one column is the file names and the other column is the year and
 # month for the file in format "YYYY.MM" to match with the other list
 file.seascapes <-
-  fs::dir_ls(path =seasc.path,
+  fs::dir_ls(path = seasc.path,
              # included ^[^~]* to not match ~, means that a file is opened
              regexp = "^[^~]*\\.tif$") %>% 
-    as.data.frame() %>% 
+    as.data.frame() %>%
+    # as_tibble() %>% 
     mutate(yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = .),
            yr_mth = gsub(pattern = ".15.tif", replacement = "", x = yr_mth))
 
@@ -82,16 +112,19 @@ file.sea <- seascapes_match$. %>%
 
 ```{r }
 # making empty data frame to be filled with seascapes values
-seascapes_df <- data.frame(matrix(ncol = 4, nrow = 0))
-colnames(seascapes_df) <- c('lon', 'lat', 'seascape', "yr_mth")
+seascapes_df <-
+    as_tibble(matrix(ncol = 4, nrow = 1),
+              .name_repair = ~ c('lon', 'lat', 'seascape', "yr_mth"))
+
 
 # going through each seascapes file and extracting seascapes for each station
 # and adding them to a dataframe
-for (i in 1:length(file.sea)) {
-    filename = file.sea[i]
+# for (i in 1:length(file.sea)) {
+for (i in seq(file.sea)) {
+    filename <- file.sea[i]
     
     #extract month and year in format "YYYY.MM"
-    yr_mth = gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = filename) %>% 
+    yr_mth <- gsub(pattern = paste0(seasc.path, "grd_CLASS_"), replacement = "", x = filename) %>% 
         gsub(pattern = ".15.tif", replacement = "")
     
     #make temporary dataframe with seascapes, coordinates, and year+month for cruise
