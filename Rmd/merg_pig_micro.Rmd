@@ -12,7 +12,7 @@ librarian::shelf(
     # broom # optional
     
     # additional
-    blandr
+    blandr, iobis/obistools
 )
 
 library("conflicted")
