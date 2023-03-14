@@ -85,13 +85,15 @@ Cleans name for tidying, renames some, creates date_time column, replace -9999 t
 NA, -8888 to 0 (is LOD), corrects formatting issues,
 ```{r load-data}
 # ---- M-K 06-12 report_may_and_sept_2016 ----
-
+# fix date and add datetime
 df <-
     readxl::read_xlsx(
         file.pig[1],
         sheet = 2,
         skip = 8,
-        na = "-9999",
+        # -9999 = missing
+        # -8888 = below Limit of Detection (LOD)
+        na = c("-9999", "-8888"),
         .name_repair = janitor::make_clean_names
     ) %>%
 
@@ -111,19 +113,20 @@ df <-
             tz = "utc"
         ),
         .before = lon
-
-    ) %>%
-    
-    # set -8888 to 0, represent below Limit of Detection (LOD)
-    replace(., . == -8888, 0)
+    )
 
 # ---- M-K 09-02 report_nov16_mar17_jun17_oct17_jan18 ----
+# fix date and add datetime
+# convert indicate_if_filters_are_replicates to character
+# fix gfc to gsfc 
 df2 <-
     readxl::read_xlsx(
         file.pig[2],
         sheet = 2,
         skip = 8,
-        na = "-9999",
+        # -9999 = missing
+        # -8888 = below Limit of Detection (LOD)
+        na = c("-9999", "-8888"),
         .name_repair = janitor::make_clean_names
     ) %>%
     
@@ -135,30 +138,33 @@ df2 <-
         .before = lon
     ) %>%
     
-    #converted to character, b/c is logical
-    mutate(indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates)) %>%
+    # converted to character, b/c is logical
+    mutate(indicate_if_filters_are_replicates = 
+               as.character(indicate_if_filters_are_replicates)) %>%
     
-    rename(filter_storage_before_shipment_to_gsfc = filter_storage_before_shipment_to_gfc) %>%
+    # fix gfc to gsfc
+    rename(filter_storage_before_shipment_to_gsfc = 
+               filter_storage_before_shipment_to_gfc) %>%
     
     # one station was included in metadata, but does not exist
-    filter(!is.na(station)) %>%
-    
-    # set -8888 to 0, represent below Limit of Detection (LOD)
-    replace(., . == -8888, 0)
+    filter(!is.na(station))
 
 # ---- M-K 10-11 part1 report ----
-
+# fix date and add datetime
+# fix water depth
+# fix indicate_if_filters_are_replicates as character
 df3 <-
     readxl::read_xlsx(
         file.pig[3],
         sheet = "Report",
         skip = 8,
-        na = "-9999",
+        # -9999 = missing
+        # -8888 = below Limit of Detection (LOD)
+        na = c("-9999", "-8888"),
         .name_repair = janitor::make_clean_names
     ) %>%
-
     
-
+    # fix date and datetime
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S",
                                      tz = "utc")),
@@ -166,25 +172,28 @@ df3 <-
                                 tz = "utc"),
         .before = lon
     ) %>%
-
     
     mutate(
-        indicate_if_filters_are_replicates = as.character(indicate_if_filters_are_replicates),
+        indicate_if_filters_are_replicates =
+            as.character(indicate_if_filters_are_replicates),
+        
         # matches any digit or decimal and convert to numeric (issue with format)
         water_depth = as.numeric(str_extract(water_depth, "\\d*\\.{0,1}\\d")),
         water_depth = replace_na(water_depth, 0)
-    ) %>%
-    
-    # set -8888 to 0, represent below Limit of Detection (LOD)
-    replace(., . == -8888, 0)
+    )
 
 # ---- M-K 10-11 part2 report ----
+# fix misspelled month
+# fix depth
+# fix date and add datetime
 df4 <-
     readxl::read_xlsx(
         file.pig[4],
         sheet = "Report",
         skip = 8,
-        na = "-9999",
+        # -9999 = missing
+        # -8888 = below Limit of Detection (LOD)
+        na = c("-9999", "-8888"),
         .name_repair = janitor::make_clean_names
     )  %>%
     
@@ -194,7 +203,7 @@ df4 <-
         TRUE ~ month
     )) %>%
     
-
+    # fix date and add datetime
     mutate(
         time = hms::as_hms(strftime(time, format = "%H:%M:%S",
                                      tz = "utc")),
@@ -203,24 +212,26 @@ df4 <-
         .before = lon
     ) %>%
     
-    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d"))) %>%
-    
-    # set -8888 to 0, represent below Limit of Detection (LOD)
-    replace(., . == -8888, 0)
+    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d")))
 
 # ---- M-K_05-17_report_mar16 ----
+# fix date and add datetime
+# date_extracted_month_day_year numeric to date, replace str to NA
 df5 <-
     readxl::read_xlsx(
         file.pig[5],
         sheet = "Report",
         skip = 8,
-        na = "-9999",
+        # -9999 = missing
+        # -8888 = below Limit of Detection (LOD)
+        na = c("-9999", "-8888"),
         .name_repair = janitor::make_clean_names
     ) %>%
     
     rename(lon = longitude,
            lat = latitude) %>%
     
+    # fix date and add datetime
     mutate(
         gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S",
                                          tz = "utc")),
@@ -245,11 +256,7 @@ df5 <-
         ),
         TRUE ~ NA_character_),
         date_extracted_month_day_year = ymd(date_extracted_month_day_year, tz = "utc")
-    ) %>%
-    
-    # set -8888 to 0, represent below Limit of Detection (LOD)
-    replace(., . == -8888, 0)
-
+    )
 ```
 
 # Merge data
@@ -273,26 +280,41 @@ df_merg2 <- full_join(df, df5)
 
 # ---- full merge ----
 # select variables that match data sets
-params <- c("hplc_gsfc_id"="gsfc_lab_sample_code", "pi", "station", "sample" = "original_pi_sample_label", 
-            "cruise"="cruise_name", "indicate_if_filters_are_replicates",
-            "volfilt" = "volume_filtered_ml", "bottle" ="bottle_number", 
-            "depth" = "sampling_depth_meters", "water_depth" = "total_water_depth_meters",
-            "name_of_water_body", "year" = "year_of_sample", "month"= "gregorian_month",
-            "day" = "day_of_gregorian_month", "sdy" = "sequential_day_of_year", 
-            "time"="gmt_time", "date_time_utc","lon", "lat", "filter_type",
-            "filter_diameter_mm", "filter_storage_before_shipment_to_gfsc"="filter_storage_before_shipping_to_gsfc",
-            "tot_chl_a", "tot_chl_b", "tot_chl_c", "alpha_beta_car","but_fuco", 
-            "hex_fuco", "allo", "diadino", "diato", "fuco", "perid", "zea", "mv_chl_a", 
-            "dv_chl_a", "chlide_a", "mv_chl_b", "dv_chl_b", "chl_c1c2" = "chl_c12",
-            "chl_c3", "lut", "neo", "viola", "phytin_a", "phide_a", "pras", "gyro", 
-            "tchl"="t_chl", "ppc", "psc", "psp", "tcar"="t_caro", "tacc" = "t_acc",
-            "tpg" = "t_pg", "dp", "tacc_tchla" = "t_acc_tchla", "psc_tcar" = "psc_t_caro",
-            "ppc_tcar" = "ppc_t_caro", "tchl_tcar"="t_chl_t_caro", "ppc_tpg" = "ppc_tpig",
-            "psp_tpg" = "psp_t_pg", "tchl_a_tpg" = "t_chl_a_t_pig",
-            "comments", "sequential_sample_number")
+params <- c(
+    # meta
+    "hplc_gsfc_id" = "gsfc_lab_sample_code", "pi", "station", 
+    "sample" = "original_pi_sample_label", "cruise" = "cruise_name",
+    "indicate_if_filters_are_replicates",
+    "volfilt" = "volume_filtered_ml", "bottle" = "bottle_number", 
+    "depth" = "sampling_depth_meters", 
+    "water_depth" = "total_water_depth_meters",
+    "name_of_water_body", 
+    
+    # time 
+    "year" = "year_of_sample", "month" = "gregorian_month",
+    "day" = "day_of_gregorian_month", "sdy" = "sequential_day_of_year", 
+    "time" = "gmt_time", "date_time_utc","lon", "lat", 
+    
+    # sample type
+    "filter_type", "filter_diameter_mm", 
+    "filter_storage_before_shipment_to_gfsc" = 
+        "filter_storage_before_shipping_to_gsfc",
+    
+    # pigments
+    "tot_chl_a", "tot_chl_b", "tot_chl_c", "alpha_beta_car","but_fuco", 
+    "hex_fuco", "allo", "diadino", "diato", "fuco", "perid", "zea", "mv_chl_a", 
+    "dv_chl_a", "chlide_a", "mv_chl_b", "dv_chl_b", "chl_c1c2" = "chl_c12",
+    "chl_c3", "lut", "neo", "viola", "phytin_a", "phide_a", "pras", "gyro", 
+    "tchl" = "t_chl", "ppc", "psc", "psp", "tcar" = "t_caro", "tacc" = "t_acc",
+    "tpg" = "t_pg", "dp", "tacc_tchla" = "t_acc_tchla", "psc_tcar" = "psc_t_caro",
+    "ppc_tcar" = "ppc_t_caro", "tchl_tcar" = "t_chl_t_caro", "ppc_tpg" = "ppc_tpig",
+    "psp_tpg" = "psp_t_pg", "tchl_a_tpg" = "t_chl_a_t_pig",
+    
+    "comments", "sequential_sample_number")
 
 
-df_all <- full_join(df_merg, df_merg2, by = params)  %>%
+df_all <- 
+    full_join(df_merg, df_merg2, by = params)  %>%
     
     # fix small errors with negative values
     mutate(lat = case_when(lat < 0 ~ lat * (-1),
@@ -306,8 +328,10 @@ df_all <- full_join(df_merg, df_merg2, by = params)  %>%
         station = stringr::str_to_upper(station),
         
         # specifically TB1 was off, need to use NOAA AOML for coords
-        lat = case_when(station == "TB1" ~ 27.8013, TRUE~lat),
-        lon = case_when(station == "TB1" ~ -82.8819, TRUE~lon)
+        lat = case_when(station == "TB1" ~ 27.8013, 
+                        TRUE ~ lat),
+        lon = case_when(station == "TB1" ~ -82.8819, 
+                        TRUE ~ lon)
     ) 
 
 # ---- fix lat long ----
