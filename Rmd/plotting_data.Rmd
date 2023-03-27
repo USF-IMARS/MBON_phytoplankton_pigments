@@ -314,10 +314,10 @@ plt_stack <- pig_dat %>%
                 # labels
                 labs(
                     title = .y,
-                    x     = "Station", 
-                    y     = "Percent (%)", 
+                    x     = "Station",
+                    y     = "Percent (%)",
                     fill  = "Phytoplankton Size Class") +
-                
+
                 scale_fill_discrete(
 
                     labels = c("*f*<sub>micro</sub> (>20 &mu;m)",
@@ -325,9 +325,9 @@ plt_stack <- pig_dat %>%
                                "*f*<sub>pico</sub> (<2 &mu;m)")
                 ) +
                 scale_y_continuous(labels = label_percent()) +
-                
+
                 facet_wrap( ~ season) +
-                ggthemes::theme_tufte() +
+                # ggthemes::theme_tufte() +
                 theme(
                     legend.text = element_markdown()
                       )
@@ -392,8 +392,8 @@ frac_gt <-
         table_body.hlines.width = 0,
         table_body.vlines.width = 0,
         stub.border.width = 0
-    ) %>%
-    opt_table_font("serif") 
+    ) #%>%
+    #opt_table_font("serif") 
 
 frac_gt
 

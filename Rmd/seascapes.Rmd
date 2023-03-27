@@ -40,7 +40,8 @@ unzip(here(seasc_path, "fknms_global_monthly.zip"), exdir = seasc_path)
 # path_out <-  paste0(root,dir2)
 cmtx_avgs <- read.csv(here(path_out, "chemtax_w_meta_rm_dup.csv"))
 env_cmtx <- read.csv(here(path_out, "cmtx_env_data.csv")) %>% 
-    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
+    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"),
+           date_time_utc = janitor::excel_numeric_to_date(date_time_utc)) 
 
 ```
 
@@ -54,8 +55,9 @@ env_cmtx <- read.csv(here(path_out, "cmtx_env_data.csv")) %>%
 # mth_yr_df <- base::as.data.frame(unique(cmtx_sea$yr_mth)) %>% 
 #   rename("yr_mth" = "unique(cmtx_sea$yr_mth)")
 
-cmtx_sea <-
-    cmtx_avgs %>%
+# cmtx_sea <-
+    # env_cmtx %>%
+    env_cmtx %>% 
     mutate(yr_mth = as_date(date_time_utc) %>% format("%Y.%m"))
            
 # ---- extract year month col ----
@@ -85,7 +87,7 @@ seascapes_match <- left_join(mth_yr_df,
                              file.seascapes,
                              by = c("yr_mth")) %>%
     na.omit() %>%
-    arragne(yr_month)
+    arrange(yr_mth)
 file.sea <- seascapes_match$yr_mth %>% 
     str_sort()
 

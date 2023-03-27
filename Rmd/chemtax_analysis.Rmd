@@ -201,7 +201,6 @@ meta_data <-
         comments, season
         ) %>%
     mutate(
-        season = fct_relevel(season, levels = c("W", "Sp", "Su", "F")),
         season = fct_relabel(season, ~ c("Winter", 
                                          "Spring", 
                                          "Summer", 
