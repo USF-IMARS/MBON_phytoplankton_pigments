@@ -36,10 +36,10 @@ source(here("scripts", "seascapes_extract.R"))
 unzip(here(seasc_path, "fknms_global_monthly.zip"), exdir = seasc_path)
 
 # ---- load chemtax data ----
-dir2 <- "//data//processed//"
-path_out <-  paste0(root,dir2)
-# cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
-env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv")) %>% 
+# dir2 <- "//data//processed//"
+# path_out <-  paste0(root,dir2)
+cmtx_avgs <- read.csv(here(path_out, "chemtax_w_meta_rm_dup.csv"))
+env_cmtx <- read.csv(here(path_out, "cmtx_env_data.csv")) %>% 
     mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 
 ```
@@ -71,10 +71,13 @@ file.seascapes <-
   fs::dir_ls(path = seasc_path,
              # included ^[^~]* to not match ~, means that a file is opened
              regexp = "^[^~]*\\.tif$") %>% 
-    as.data.frame() %>%
+    tibble(file = .) %>%
+    mutate(yr_mth = stringr::str_remove(file, "\\.15\\.tif$"),
+        yr_mth = str_extract(yr_mth, "[0-9]{4}\\.[0-9]{2}$")
+           )
     # as_tibble() %>% 
-    mutate(yr_mth = gsub(pattern = paste0(seasc_path, "grd_CLASS_"), replacement = "", x = .),
-           yr_mth = gsub(pattern = ".15.tif", replacement = "", x = yr_mth))
+    # mutate(yr_mth = gsub(pattern = paste0(seasc_path, "grd_CLASS_"), replacement = "", x = .),
+    #        yr_mth = gsub(pattern = ".15.tif", replacement = "", x = yr_mth))
 
 # selecting the file names that correspond to the year and month combos that the 
 # cruises had
@@ -82,7 +85,7 @@ seascapes_match <- left_join(mth_yr_df,
                              file.seascapes,
                              by = c("yr_mth")) %>%
     na.omit()
-file.sea <- seascapes_match$. %>% 
+file.sea <- seascapes_match$yr_mth %>% 
     str_sort()
 
 ```
