@@ -84,7 +84,8 @@ file.seascapes <-
 seascapes_match <- left_join(mth_yr_df,
                              file.seascapes,
                              by = c("yr_mth")) %>%
-    na.omit()
+    na.omit() %>%
+    arragne(yr_month)
 file.sea <- seascapes_match$yr_mth %>% 
     str_sort()
 
@@ -103,13 +104,18 @@ seascapes_df <-
 for (i in seq(file.sea)) {
     filename <- file.sea[i]
     
+    temp_dat <- seascapes_match[i,]
+    
+    
     #extract month and year in format "YYYY.MM"
-    yr_mth <- gsub(pattern = paste0(seasc_path, "grd_CLASS_"), replacement = "", x = filename) %>% 
-        gsub(pattern = ".15.tif", replacement = "")
+    # yr_mth <- gsub(pattern = paste0(seasc_path, "grd_CLASS_"), replacement = "", x = filename) %>% 
+    #     gsub(pattern = ".15.tif", replacement = "")
     
     #make temporary dataframe with seascapes, coordinates, and year+month for cruise
-    seascapes_temp <- extract_seascapes(filename, cmtx_sea) %>% 
-        mutate(yr_mth = yr_mth)
+    # seascapes_temp <- extract_seascapes(filename, cmtx_sea) %>% 
+    #     mutate(yr_mth = yr_mth)
+    seascapes_temp <- extract_seascapes(temp_dat$file, cmtx_sea) %>% 
+        mutate(yr_mth = temp_dat$yr_mth)
     
     #combine the dataframes with seascapes for each cruise
     seascapes_df <- rbind(seascapes_df, seascapes_temp)
