@@ -36,10 +36,8 @@ source(here("scripts", "seascapes_extract.R"))
 unzip(here(seasc_path, "fknms_global_monthly.zip"), exdir = seasc_path)
 
 # ---- load chemtax data ----
-dir2 <- "//data//processed//"
-path_out <-  paste0(root,dir2)
 # cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
-env_cmtx <- read.csv(paste0(path_out, "cmtx_env_data.csv")) %>% 
+env_cmtx <- read.csv(here(path_out, "cmtx_env_data.csv")) %>% 
     mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
 
 ```
