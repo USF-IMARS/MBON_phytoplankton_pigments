@@ -213,7 +213,7 @@ if (FALSE) {
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
 if (FALSE) {
-    
+    # cmtx_avgs created in chemtax_analysis.Rmd
     cmtx_avgs <- 
         here("data", "processed", "chemtax_w_meta_rm_dup.csv")  %>%
         read_csv(show_col_types = FALSE) %>%
