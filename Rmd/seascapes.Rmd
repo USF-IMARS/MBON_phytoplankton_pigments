@@ -21,24 +21,28 @@ library("conflicted")
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 
-# ---- set path variables ----
-
+# ---- set path variables
 seasc_path <- here("data", "raw", "seascapes")
-path_out   <- here("data", "processed")
 
-# ---- source extract function ----
+# ---- source extract function
 source(here("scripts", "seascapes_extract.R"))
 
-# ---- unzip seascapes file ----
+# ---- unzip seascapes file
 # get "fknms_global_monthly.zip" from https://shiny.marinebon.app/seascapes/. 
 # select "Florida Keys" in the region pull-down tab and click "all grids (.zip)"
 # to download Sanctuary files. 
-unzip(here(seasc_path, "fknms_global_monthly.zip"), exdir = seasc_path)
+here(seasc_path, "fknms_global_monthly.zip") %>%
+    unzip(., exdir = seasc_path)
 
-# ---- load chemtax data ----
+# ---- load chemtax data 
+# env_cmtx created in Rmd/02_ctd_download.Rmd
 # cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
-env_cmtx <- read.csv(here(path_out, "cmtx_env_data.csv")) %>% 
-    mutate(season= forcats::fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"))
+env_cmtx <- 
+    here("data", "processed", "cmtx_env_data.csv") %>%
+    read_csv(show_col_types  = FALSE) %>% 
+    mutate(
+        season = fct_relevel(season, "Winter", "Spring", "Summer", "Autumn")
+        )
 
 ```
 
@@ -65,7 +69,7 @@ mth_yr_df <- cmtx_sea %>%
 
 # making df. one column is the file names and the other column is the year and
 # month for the file in format "YYYY.MM" to match with the other list
-file.seascapes <-
+file_seascape <-
   fs::dir_ls(path = seasc_path,
              # included ^[^~]* to not match ~, means that a file is opened
              regexp = "^[^~]*\\.tif$") %>% 
@@ -77,7 +81,7 @@ file.seascapes <-
 # selecting the file names that correspond to the year and month combos that the 
 # cruises had
 seascapes_match <- left_join(mth_yr_df,
-                             file.seascapes,
+                             file_seascape,
                              by = c("yr_mth")) %>%
     na.omit()
 file.sea <- seascapes_match$. %>% 
