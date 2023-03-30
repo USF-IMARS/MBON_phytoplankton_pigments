@@ -25,7 +25,7 @@ librarian::shelf(
     
     # additional
     rerddap # used to access different ERDDAPs
-)
+    )
 
 library("conflicted")
 
@@ -38,6 +38,7 @@ Once you find an ERDDAP with the data you want, you can change the location here
 ```{r set-database}
 # this database contains CTD data from Walton Smith Cruises
 database <- "https://gcoos5.geos.tamu.edu/erddap/"
+database <- "https://upwell.pfeg.noaa.gov/erddap/"
 Sys.setenv(RERDDAP_DEFAULT_URL = database)
 rm(database)
 ```
@@ -56,7 +57,7 @@ cruiseID <- c("WS16074", "WS16130", "WS16263", "WS16319", "WS17086", "WS17170",
 
 # create folder if doesn't exist
 here(loc, cruiseID) %>%
-  fs::dir_create()
+  dir_create()
 ```
 
 # Function to query and download CTD data from each cruise
@@ -72,7 +73,7 @@ ctd_downloads <- function(IDS, path, verbose = TRUE) {
     ed_search_adv(query = IDS)
   }, error = function(e) {
     if (verbose) message("Did not find any files!")
-    return(NULL)
+    invisible(return())
     break
   })
   
@@ -123,72 +124,88 @@ rm(i, cruiseID)
 # Read CTD files and average top 5 meters
 ```{r query-ctd-files}
 # get all CTD file names
-file.ctd <- 
-    fs::dir_ls(loc,
-               recurse = TRUE,
-               regexp = "\\.csv$") %>% 
+file_ctd <- 
+    dir_ls(loc,
+           recurse = TRUE,
+           regexp = "\\.csv$") %>% 
     str_sort() %>%
     tibble(file = .) %>%
     filter(!str_detect(file, "(?i)(deck|test|tst)")) %>%
     # extract cruise and station names from files
     mutate(
         cruise_id = dirname(file) %>% basename(.),
-        stations = basename(file)  %>%                       # extract file name
-                   tools::file_path_sans_ext() %>%          # rm extension
-                   str_remove(., ".*((?i)stn|(?i)sta)") %>% # rm sta/stn
-                   str_remove(., "Savannah_SAV1803_SAV1803") %>%
-                   str_remove(., "^_") %>%                  # rm leading "_"
-                   str_remove(., "^0+")  %>%                # rm leading zeros
-                   str_replace(., "21LK", "LK") %>% 
-                   str_replace(., "215", "21.5"), 
+        station   = basename(file)  %>%                      # extract file name
+                    path_ext_remove() %>%                    # rm extension
+                    str_remove(., ".*((?i)stn|(?i)sta)") %>% # rm sta/stn
+                    str_remove(., "Savannah_SAV1803_SAV1803") %>%
+                    str_remove(., "^_") %>%                  # rm leading "_"
+                    str_remove(., "^0+")  %>%                # rm leading zeros
+                    str_replace(., "21LK", "LK") %>% 
+                    str_replace(., "215", "21.5"), 
         
         # fix cruise IDs
-        cruise_id = case_when(cruise_id == "SAV18173" ~ "SV18173",
-                            cruise_id == "SAV1803" ~ "SV18067",
-                            cruise_id == "WS20231" ~ "WS20230",
-                            TRUE ~ cruise_id)
+        cruise_id = case_when(
+            cruise_id == "SAV18173" ~ "SV18173",
+            cruise_id == "SAV1803" ~ "SV18067",
+            cruise_id == "WS20231" ~ "WS20230",
+            .default = cruise_id)
             )
 ```
 ```{r load-ctd-data}
 # read all files and average columns
 ctd_dat_summary <-
-    file.ctd %>%
+    file_ctd %>%
     mutate(
-        data = map(file,
-                   function(x) {
-                       # read file
-                       readr::read_csv(x, 
-                                       show_col_types = FALSE,
-                                       name_repair = "unique_quiet") %>% 
-                          
-                       # filter depth
-                       filter(depth <= 5) %>% 
-                           
-                       # select cols and rename
-                       select(
-                         time, lat = latitude, lon = longitude, depth,
-                         pressure = sea_water_pressure,
-                         temp = sea_water_temperature, 
-                         o_sat = oxygen_saturation, do = dissolved_oxygen,
-                         par = any_of("photosynthetically_available_radiation"), 
-                         sal = sea_water_salinity) %>%
-                   
-                        # calc average
-                        summarise(across(.fn = mean, na.rm = TRUE))
-                       }
-               )
-    ) %>%
+        data = map(
+            .progress = TRUE,
+            file,
+            function(x) {
+                cruise <- 
+                    basename(x) %>%
+                    path_ext_remove()   
+                
+                cli::cli_alert_info("Cruise File: {cruise}")
+                
+                read_csv(
+                    x,
+                    show_col_types = FALSE,
+                    name_repair = "unique_quiet")  %>%
+                    
+                    # filter depth
+                    filter(depth <= 5) %>% 
+                        
+                    # select cols and rename
+                    select(
+                      time, 
+                      lat = latitude, 
+                      lon = longitude, depth,
+                      pressure = sea_water_pressure,
+                      temp = sea_water_temperature, 
+                      o_sat = oxygen_saturation, do = dissolved_oxygen,
+                      par = any_of("photosynthetically_available_radiation"), 
+                      sal = sea_water_salinity) %>%
+                
+                    # calc average
+                    summarise(across(.fn = \(x) mean(x, na.rm = TRUE)))
+                }
+            )
+        ) %>%
     unnest(cols = data)
+    
 ```
 ```{r save-ctd-all}
 if (FALSE) {
     ctd_dat_summary %>%
         select(-1) %>%
         arrange(time) %>%
-        vroom::vroom_write(., 
-                           here("data", "processed", "ctd_all.csv"),
-                           delim = ",")
-}
+        write_csv(
+            here("data", "processed", 
+                 glue("ctd_all_", 
+                      "{Sys.Date()}",
+                      ".csv")
+                 )
+            )
+    }
 ```
 
 
@@ -196,17 +213,24 @@ if (FALSE) {
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
 if (FALSE) {
-    env_cmtx <- cmtx_avgs %>% 
-        
-        mutate(cruise_code = substr(sample, 1, 7), 
-               season      = as.character(season)) %>% 
-        
+    
+    cmtx_avgs <- 
+        here("data", "processed", "chemtax_w_meta_rm_dup.csv")  %>%
+        read_csv(show_col_types = FALSE) %>%
+        mutate(cruise_id = str_extract(sample, "[A-Z]{2,3}[0-9]{4,5}"), 
+               season    = as.character(season)) %>%
+        relocate(cruise_id, .before = 1)
+    
+    env_cmtx <- 
+        cmtx_avgs %>% 
         left_join(ctd_dat_summary, 
-                  by = c("cruise_code" = "cruise_id", 
-                         "station"     = "stations")) %>% 
-        mutate_all(~ifelse(is.nan(.), NA, .)) 
+                  by = join_by(
+                      "cruise_id", 
+                      "station")
+                  )
     
     write_csv(env_cmtx, 
-              file = here("data", "processed", "cmtx_env_data.csv"))}
+              file = here("data", "processed", "cmtx_env_data.csv"))
+    }
 ```
 
