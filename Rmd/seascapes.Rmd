@@ -100,29 +100,31 @@ seascapes_df <-
     as_tibble(matrix(ncol = 4, nrow = 1),
               .name_repair = ~ c('lon', 'lat', 'seascape', "yr_mth"))
 
-
 # going through each seascapes file and extracting seascapes for each station
 # and adding them to a dataframe
 # for (i in 1:length(file.sea)) {
-for (i in seq(file.sea)) {
-    filename <- file.sea[i]
-    
-    #extract month and year in format "YYYY.MM"
-    yr_mth <-
-        gsub(pattern     = paste0(seasc_path, "grd_CLASS_"), 
-             replacement = "", 
-             x           = filename) %>% 
-        
-        gsub(pattern     = ".15.tif", 
-             replacement = "")
-    
-    #make temporary dataframe with seascapes, coordinates, and year+month for cruise
-    seascapes_temp <- 
-        extract_seascapes(filename, env_cmtx) %>% 
-        mutate(yr_mth = yr_mth)
-    
-    #combine the dataframes with seascapes for each cruise
-    seascapes_df <- rbind(seascapes_df, seascapes_temp)
+# for (i in seq(file.sea)) {
+#  filename <- file.sea[i]
+for (idx in seascapes_match$yr_mth[[1]]) {
+   
+    # # extract month and year in format "YYYY.MM" ----
+    # yr_mth <-
+    #     gsub(pattern     = paste0(seasc_path, "grd_CLASS_"), 
+    #          replacement = "", 
+    #          x           = filename) %>% 
+    #     
+    #     gsub(pattern     = ".15.tif", 
+    #          replacement = "")
+    # ----
+    # make temporary dataframe with seascapes, coordinates, 
+    # and year + month for cruise
+    seascapes_temp <-
+        filter(seascapes_match, yr_mth == idx)  %>%
+        pull(1) %>%
+        extract_seascapes(.,  filter(env_cmtx, yr_mth == idx)) 
+    # 
+    # # combine the dataframes with seascapes for each cruise
+    # seascapes_df <- rbind(seascapes_df, seascapes_temp)
 }
 
 # join the chemtax and seascapes data
