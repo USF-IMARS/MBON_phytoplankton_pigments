@@ -177,18 +177,23 @@ extract_seascapes <- function(filename, df) {
     
     conflict_prefer("filter", "dplyr")
     conflict_prefer("select", "dplyr")
+
+    cat("\n\n\n-----\n", filename, "\n", unique(df$yr_mth), "\n---\n")
+
     
+    # ---- read raster file and filter for non-NA values
     sea <- 
         raster(filename) %>%
         tabularaster::as_tibble(xy = TRUE) %>%
         drop_na(cellvalue)
     
+    # ---- extract lat and lon
     coord_df <- 
         df %>%
         distinct(station, .keep_all = TRUE) %>%
         select(lon, lat)
     
-    #extract coordinates for every station
+    # ---- extract coordinates for every station
     coord <- 
         coord_df %>%
         SpatialPointsDataFrame(
