@@ -41,10 +41,15 @@ env_cmtx <-
         season = fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"),
         yr_mth = format(date_time_utc, "%Y.%m")
         ) %>%
-    relocate(yr_mth, .after = 2)
+    relocate(yr_mth, .after = 2) %>%
+    rename("lon" = lon.x, "lat" = lat.x)
 ```
 
 # Download Seascape Data using `seascapeR`
+Information on the seascapes classes: 
+    https://shiny.marinebon.app/seascapes/classes.html
+
+
 ## Info for versioning of `raster` and `seascapeR`
 NOTE: as of March 30, 2023
       - you will need to use the development version of `raster` because of some
@@ -59,7 +64,8 @@ You will need to restart R and run: pacman::p_install_gh("rspatial/raster")
 
 If `seasscapeR` version is not "0.4.1"     
 You will need to restart R and run: pacman::p_install_gh("marinebon/seascapeR") 
-## Download
+
+## Download Seascape Raster
 ```{r scp-dwnld}
 # ---- set location and temporal scale for each image
 map_loc <- "fknms" # FL Keys
@@ -93,173 +99,292 @@ seascapes_match
 #     unzip(., exdir = seasc_path)
 ```
 
-# 
-```{r }
+
+# Extract Seascape Class
+This is based on the highest proportion for each seascape with the closer the 
+center of the seascape is, the more weight given to it.
+
+The radius around each point is 12 km as a 6 x 6 grid (4km x 4km per cell)
+Steps:
+1. Calculate distance for each stations to all seascape cells
+2. Filter for distances bewlow 12 km
+3. Caclulate inverse disance weighted per seascape class for that station
+    - (1 / dist)/# of cells in seascape
+    - sum all IDW per class
+    - sum all IDWs 
+4. Select the seascape with the highest proportion as the represenative  
+5. Join seascape classes with original CTD/CHEMTAX data
+```{r sc-extract}
+cmtx_sea <-
+    env_cmtx %>%
+    nest(.by = yr_mth) %>%
+    left_join(seascapes_match, 
+              by = "yr_mth") %>%
+    mutate(
+        sc = map2(
+            .x = files,
+            .y = data,
+            ~ extract_seascapes(.x, .y, verb = FALSE),
+            .progress = TRUE)) %>%
+    unnest(sc) %>%
+    select(-data) %>% 
+    drop_na(seascape, temp, par:sal) 
+
+# ---- remove? ----
 # making empty data frame to be filled with seascapes values
-seascapes_df <-
-    as_tibble(matrix(ncol = 4, nrow = 1),
-              .name_repair = ~ c('lon', 'lat', 'seascape', "yr_mth"))
+# seascapes_df <-
+#     as_tibble(matrix(ncol = 4, nrow = 1),
+#               .name_repair = ~ c('lon', 'lat', 'seascape', "yr_mth"))
+
+
 
 # going through each seascapes file and extracting seascapes for each station
 # and adding them to a dataframe
 # for (i in 1:length(file.sea)) {
 # for (i in seq(file.sea)) {
 #  filename <- file.sea[i]
-for (idx in seascapes_match$yr_mth[[1]]) {
-   
-    # # extract month and year in format "YYYY.MM" ----
-    # yr_mth <-
-    #     gsub(pattern     = paste0(seasc_path, "grd_CLASS_"), 
-    #          replacement = "", 
-    #          x           = filename) %>% 
-    #     
-    #     gsub(pattern     = ".15.tif", 
-    #          replacement = "")
-    # ----
-    # make temporary dataframe with seascapes, coordinates, 
-    # and year + month for cruise
-    seascapes_temp <-
-        filter(seascapes_match, yr_mth == idx)  %>%
-        pull(1) %>%
-        extract_seascapes(.,  filter(env_cmtx, yr_mth == idx)) 
-    # 
-    # # combine the dataframes with seascapes for each cruise
-    # seascapes_df <- rbind(seascapes_df, seascapes_temp)
+# for (idx in seascapes_match$yr_mth[[1]]) {
+#    
+#     # # extract month and year in format "YYYY.MM"
+#     # yr_mth <-
+#     #     gsub(pattern     = paste0(seasc_path, "grd_CLASS_"), 
+#     #          replacement = "", 
+#     #          x           = filename) %>% 
+#     #     
+#     #     gsub(pattern     = ".15.tif", 
+#     #          replacement = "")
+#     # make temporary dataframe with seascapes, coordinates, 
+#     # and year + month for cruise
+#     seascapes_temp <-
+#         filter(seascapes_match, yr_mth == idx)  %>%
+#         pull(1) %>%
+#         extract_seascapes(.,  filter(env_cmtx, yr_mth == idx)) 
+#     # 
+#     # # combine the dataframes with seascapes for each cruise
+#     # seascapes_df <- rbind(seascapes_df, seascapes_temp)
+# }
+#
+# # join the chemtax and seascapes data
+# cmtx_sea <-
+#     env_cmtx %>% 
+#     left_join(seascapes_df) %>% 
+#     drop_na(seascape)
+```
+
+# CAP with Bray-Curtis?
+```{r sc-cap}
+seascspec <-
+    cmtx_sea %>% 
+    select(chloro:pras)
+
+seasc_cap <- capscale(seascspec ~ seascape, 
+                      cmtx_sea, 
+                      dist = "bray")
+
+plot(seasc_cap)
+
+autoplot(seasc_cap, show.legend = F) +
+    theme_bw() 
+```
+
+# CCA
+```{r sc-cca, fig.width=15, fig.height=10}
+sea_cca <- cca(seascspec ~ temp + sal + par, 
+               data      = cmtx_sea, 
+               na.action = na.omit)
+
+new_lab <- list(temp = "Temp", 
+                sal  = "Sal", 
+                par  = "PAR")
+
+plt_ord <- 
+    ggord(
+        sea_cca,
+        size      = 4,
+        grp_in    = as.character(cmtx_sea$seascape),
+        ellipse   = FALSE,
+        ptslab    = TRUE,
+        addsize   = 6,
+        ylim      = c(-6.25, 6.25),
+        xlim      = c(-4, 5),
+        repel     = TRUE,
+        txt       = 6,
+        vec_lab   = new_lab,
+        grp_title = "Seascape Class"
+        ) +
+    theme_classic() +
+    theme(text = element_text(family = "serif", size = 20),
+          legend.position = c(0.15, 0.9))
+
+plt_ord
+
+if (FALSE) { 
+    cowplot::save_plot(
+        filename = 
+            here("data", "plots",
+                 glue("seascape_cca",
+                      format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                      "jpeg")
+                 ),
+        plot        = plt_ord,
+        base_height = 10,
+        base_width  = 8,
+        dpi         = 600, 
+        units       = "in", 
+        device      = "png")
 }
 
-# join the chemtax and seascapes data
-cmtx_sea2 <- 
-    env_cmtx %>% 
-    left_join(seascapes_df) %>% 
-    drop_na(seascape)
 ```
 
-# next thing
-```{r}
-#CAP with Bray-Curtis
-
-seascspec <- cmtx_sea2 %>% 
-    select(chloro:pras)
-
-seasc.cap <- capscale(seascspec ~ seascape, cmtx_sea2, dist = "bray")
-
-plot(seasc.cap)
-```
-
-
-```{r seascapes cca}
-sea_matrix <- cmtx_sea2 %>% 
-    select(chloro:pras)
-
-sea_cca <- cca(sea_matrix ~ temp +sal + par, data = cmtx_sea2, na.action = na.omit)
-new.lab <- list(temp = "Temp", sal = "Sal", par = "PAR")
-
-ggord(sea_cca, size = 4, grp_in = cmtx_sea2 %>% drop_na(temp,par:sal) %$% as.character(seascape),
-      ellipse = F, ptslab = T, addsize = 6, ylim = c(-6.25, 6.25), xlim = c(-4, 5),
-      repel = T, txt = 6, vec_lab = new.lab, grp_title = "Seascape Class"
-      ) +
-    theme_classic()+
-    theme(text=element_text(family="serif", size=20), legend.position = c(0.15, 0.9)) 
-
-cowplot::save_plot(filename = paste0(root,"/data/plots/seascape_cca", 
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".jpg"), 
-          plot = last_plot(),
-          base_height = 10,
-          base_width = 8,
-          dpi = 600, units = "in", device='png')
-
-```
-
-```{r seasonal seascapes cca}
+# Seasonal CCA
+```{r sc-season-cca, fig.width=15, fig.height=10}
 seasons <- c("Winter", "Spring", "Summer", "Autumn")
-for (i in 1:length(seasons)) {
-    temp_sea_df <-  cmtx_sea2 %>% 
-        filter(season == seasons[i])
-    temp_sea_mat <- temp_sea_df %>% 
-        select(chloro:pras)
+
+for (szn in seasons) {
+     
+     # filter for season
+     temp_sea_df <-  
+        filter(cmtx_sea, str_detect(season, szn))
+     
+     # filtered df and select PFTs
+     temp_sea_mat <- 
+        select(temp_sea_df, chloro:pras)
     
-    temp_cca <- cca(temp_sea_mat ~ temp +sal + par, data = temp_sea_df, na.action = na.omit)
-    ggord(temp_cca, size = 4, grp_in = temp_sea_df %>% drop_na(temp,par:sal) %$% as.character(seascape),
-          ellipse = F, ptslab = T, addsize = 6, ylim = c(-6.25, 6.25), xlim = c(-4, 5),
-          repel = T, txt = 6, vec_lab = new.lab, grp_title = "Seascape Class"
-          ) +
-        theme_classic()+
-        theme(text=element_text(family="serif", size=20), legend.position = c(0.15, 0.9))
+     # run CCA
+     temp_cca <-
+        cca(temp_sea_mat ~ temp + sal + par,
+            data      = temp_sea_df,
+            na.action = na.omit)
     
-    # cowplot::save_plot(filename = paste0(root,"/data/plots/seascape_cca", seasons[i], 
-    #            format(Sys.time(), '_%Y%m%d_%H%M%S'),
-    #            ".jpg"), 
-    #           plot = last_plot(),
-    #           base_height = 10,
-    #           base_width = 8,
-    #           dpi = 600, units = "in", device='png')
+    cca_szn <- 
+        ggord(
+        temp_cca,
+        size      = 4,
+        grp_in    = as.character(temp_sea_df$seascape),
+        ellipse   = FALSE,
+        ptslab    = TRUE,
+        addsize   = 6,
+        ylim      = c(-6.25, 6.25),
+        xlim      = c(-4, 5),
+        repel     = TRUE,
+        txt       = 6,
+        vec_lab   = new.lab,
+        grp_title = "Seascape Class"
+        ) +
+        theme_classic() +
+        theme(text = element_text(family = "serif", 
+                                  size   = 20),
+              legend.position = c(0.15, 0.9))
+    
+    print(cca_szn)
+    
+    if (FALSE) {
+        cowplot::save_plot(
+            filename = 
+                here("data", "plots",
+                     glue("seascape_cca_{str_to_lower(szn)}",
+                          format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                          ".jpeg")
+                          ),
+            plot        = cca_szn,
+            base_height = 10,
+            base_width  = 8,
+            dpi         = 600, 
+            units       = "in", 
+            device      = "png")
+        
+    }
 }
 
 ```
 
+# Examine which Seascape and PFT Correlate
+information on the seascapes classes: https://shiny.marinebon.app/seascapes/classes.html
+
+## Calculate Fractions of PFT to Total Chlor-a
 ```{r}
-#doing some calculations
-#information on the seascapes classes: https://shiny.marinebon.app/seascapes/classes.html
+# sum each seascape class
+# sc_cnt <- 
+    cmtx_sea %>% 
+    summarize(count = n(), .by = seascape)
 
-#looking at the number of samples that are dominated by each class
-seasc_summary <- cmtx_sea2 %>% 
-    group_by(seascape) %>% 
-    summarize(n())
+# sum each season and seascape class
+# sc_szn_cnt <-
+    cmtx_sea %>% 
+    summarize(count = n(), .by = c(seascape, season))
 
-#looking at the number of samples that are dominated by each class per season
-seasc_summary2 <- cmtx_sea2 %>% 
-    group_by(seascape, season) %>% 
-    summarize(n())
+# calc fraction of PFT for each samples
+sea_fract <-
+    cmtx_sea %>%
+    mutate(
+        # combine certain PFTs
+        diat  = diat1  + diat2,
+        cyano = cyano2 + cyano4,
+        hapt  = hapt6  + hapt8,
+        total = chloro + crypto + diat + dino + hapt + pras + cyano,
+        
+        # calc fraction of PFT
+        across(
+            .cols  = c(chloro, crypto, cyano, diat, dino, hapt, pras),
+            .fns   = (\(x) x / total),
+            .names = "frac_{.col}"
+            )
+        ) %>%
+    
+    select(hplc_gsfc_id:season, seascape, frac_chloro:frac_pras) %T>% 
+    View(title = "Fractions") 
 
-# too look at what seascape dominated samples with high and low chlorophyll-a values
-view(cmtx_sea2 %>% 
-         mutate(diat = diat1 + diat2,
-           cyano = cyano2 + cyano4,
-           hapt = hapt6 + hapt8,
-           total = chloro + crypto + diat + dino + hapt + pras + cyano))
+```
+## nMDS
+```{r nmds}
+set.seed(1355453)
+nmds <- metaMDS(seascspec, distance = "bray")
+# Call:
+# metaMDS(comm = as.matrix(seascspec), distance = "bray")
+# 
+# global Multidimensional Scaling using monoMDS
+# 
+# Data:     as.matrix(seascspec)
+# Distance: bray
+# 
+# Dimensions: 2
+# Stress:     0.1336686
+# Stress type 1, weak ties
+# Best solution was repeated 16 times in 20 tries
+# The best solution was from try 4 (random start)
+# Scaling: centring, PC rotation, halfchange scaling
+# Species: expanded scores based on ‘as.matrix(seascspec)
 
-#look at what PFTs dominate each seascape class
-sea_fract <- cmtx_sea2 %>% 
-    mutate(diat = diat1 + diat2,
-           cyano = cyano2 + cyano4,
-           hapt = hapt6 + hapt8,
-           total = chloro + crypto + diat + dino + hapt + pras + cyano) %>% 
-    mutate(year = year,
-              season = season,
-              station = station,
-              frac_chloro = chloro/total,
-           frac_crypto = crypto/total,
-           frac_cyano = cyano/total,
-           frac_diat = diat/total,
-           frac_dino = dino/total,
-           frac_hapt = hapt/total,
-           frac_pras = pras/total)%>% 
-    select(hplc_gsfc_id:season, seascape, frac_chloro:frac_pras)
+
+# extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
+data_scores <-
+    as_tibble(scores(nmds)$sites) %>%
+    
+    # add columns to data frame
+    bind_cols(select(cmtx_sea, sample, season, seascape)) %T>% 
+    print(slice_head(n = 10))
 ```
 
-```{r NDMS}
-set.seed(1355453)
-nmds <- metaMDS(as.matrix(sea_matrix), distance = "bray")
-
-#extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
-data.scores = as.data.frame(scores(nmds)$sites)
-
-#add columns to data frame 
-data.scores$sample   = cmtx_sea2$sample
-data.scores$season   = cmtx_sea2$season
-data.scores$seascape = cmtx_sea2$seascape
- 
-head(data.scores)
-
-Tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
+## nMDS Plot
+```{r nmds-plt, fig.width=15, fig.height=10}
+tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
                '#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
 
-xx <- 
-    ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) +
+xx <-
+    ggplot(data_scores, aes(x = NMDS1, y = NMDS2)) +
     geom_point(size = 4, aes(shape = season, color = factor(seascape))) +
     # geom_point(size = 4, aes(color = factor(seascape)))+
-    # 
+    #
+    labs(
+        x     = names(data_scores)[1],
+        color = "Seascape Class",
+        y     = names(data_scores)[2],
+        shape = "Season"
+        )  +
+    scale_shape_manual(values = c(0, 1, 2, 5, 3)) +
+    # labs(x = "NMDS1", colour = "Seascape Class", y = "NMDS2") +
+    scale_colour_manual(values = tol_muted) +
+    ggthemes::theme_tufte() +
     theme(
         axis.text.y = element_text(
             colour = "black",
@@ -292,46 +417,38 @@ xx <-
         panel.border     = element_rect(
             colour = "black",
             fill   = NA,
-            size   = 1.2
+            linewidth = 1.2
         ),
         legend.key = element_blank()
-    ) +
-    labs(
-        x     = "NMDS1",
-        color = "Seascape Class",
-        y     = "NMDS2",
-        shape = "Season"
-    )  +
-    scale_shape_manual(values = c(0, 1, 2, 5, 3)) +
-    # labs(x = "NMDS1", colour = "Seascape Class", y = "NMDS2") +
-    scale_colour_manual(values = Tol_muted) 
+    ) 
  
 xx
 
-cowplot::save_plot(
-    filename    = here("data", "plots",
-                       glue("seascape_nmds",
-                        format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                        ".jpg")),
-    plot        = last_plot(),
-    base_height = 8,
-    base_width  = 14,
-    dpi         = 600,
-    units       = "in",
-    device      = 'png'
-    )
-    
-
+if (FALSE) {
+    cowplot::save_plot(
+        filename    = here("data", "plots",
+                           glue("seascape_nmds",
+                            format(Sys.time(), '_%Y%m%d_%H%M%S'),
+                            ".jpg")),
+        plot        = xx,
+        base_height = 8,
+        base_width  = 14,
+        dpi         = 600,
+        units       = "in",
+        device      = "png"
+        )
+}
 ```
-
-```{r ANONISM}
-ano1 <- anosim(as.matrix(sea_matrix), 
-               factor(cmtx_sea2$seascape), 
+## ANONISM
+```{r anonism}
+# ano1 <- 
+    anosim(as.matrix(seascspec), 
+               factor(cmtx_sea$seascape), 
                distance = "bray", 
                permutations = 100)
 
-ano2 <- anosim(as.matrix(sea_matrix), 
-               factor(cmtx_sea2$season), 
+ano2 <- anosim(as.matrix(seascspec), 
+               factor(cmtx_sea$season), 
                distance = "bray", 
                permutations = 100)
 ano1
@@ -340,50 +457,58 @@ ano2
 ```
 
 ```{r}
-#which functional types dominated each seascape class by season?
-
-sea_type_avgs <- cmtx_sea2 %>% 
-    group_by(season, seascape) %>% 
-    summarize_at(vars(chloro:pras), mean) %>% 
+# which functional types dominated each seascape class by season?
+# sea_type_avgs <-
+    cmtx_sea %>% 
+    summarise(
+        .by = c(season, seascape),
+        across(
+            .cols = chloro:pras,
+            (\(x) mean(x, na.rm = TRUE))
+            )) %>% 
     mutate(
-        total       = chloro + crypto + diat1 + diat2 + dino + hapt6 + hapt8 +
+        .keep = "none",
+        season,
+        seascape,
+        total = chloro + crypto + diat1 + diat2 + dino + hapt6 + hapt8 +
             pras + cyano2 + cyano4,
-        frac_chloro = chloro / total,
-        frac_crypto = crypto / total,
-        frac_cyano2 = cyano2 / total,
-        frac_cyano4 = cyano4 / total,
-        frac_diat1  = diat1  / total,
-        frac_diat2  = diat2  / total,
-        frac_dino   = dino   / total,
-        frac_hapt6  = hapt6  / total,
-        frac_hapt8  = hapt8  / total,
-        frac_pras   = pras   / total
-    )
+        # calc fraction of PFT
+        across(
+            .cols  = 3:last_col(1),
+            .fns   = (\(x) x / total),
+            .names = "frac_{.col}"
+            )
+    ) #%>%
+    # not sure what this part is for, `sum_avg` would be a sum of fraction  
+    # which is 1
+    # select(-total) %>%
+    # rowwise() %>%
+    # mutate(avg_sum = sum(c_across(starts_with("frac")))) %>%
+    # ungroup() 
 
-sea_type_frac <- sea_type_avgs %>% 
-    select(season, seascape, frac_chloro:frac_pras) %>% 
-    mutate(sum = frac_chloro + frac_crypto + frac_diat1 + frac_diat2 + 
-               frac_dino + frac_hapt6 + frac_hapt8 + 
-               frac_pras + frac_cyano2 + frac_cyano4)
-
-sea_type_avgs2 <- cmtx_sea2 %>% 
-    group_by(seascape, season) %>% 
-    summarize_at(vars(chloro:pras), mean) %>% 
-    mutate(diat = diat1 + diat2,
-           cyano = cyano2 + cyano4,
-           hapt = hapt6 + hapt8,
-           total = chloro + crypto + diat + dino + hapt + pras + cyano) %>% 
-    mutate(#year = year,
-             # season = season,
-              #station = station,
-        frac_chloro    = chloro/total,
-       frac_crypto = crypto/total,
-       frac_cyano  = cyano/total,
-       frac_diat   = diat/total,
-       frac_dino   = dino/total,
-       frac_hapt   = hapt/total,
-       frac_pras   = pras/total) %>% 
-    select(season, seascape, frac_chloro:frac_pras)
+# sea_type_avgs2 <-
+    cmtx_sea %>% 
+    summarise(
+        .by = c(season, seascape),
+        across(
+            .cols = chloro:pras,
+            (\(x) mean(x, na.rm = TRUE))
+            )) %>%
+    mutate(
+        .keep = "none",
+        season, 
+        seascape,
+        diat = diat1 + diat2,
+        cyano = cyano2 + cyano4,
+        hapt = hapt6 + hapt8,
+        total = chloro + crypto + diat + dino + hapt + pras + cyano,
+        across(
+            .cols  = 3:last_col(1),
+            .fns   = (\(x) x / total),
+            .names = "frac_{.col}"
+         )
+       )
+    
 
 ```
 
