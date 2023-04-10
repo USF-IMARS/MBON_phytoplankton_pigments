@@ -165,6 +165,7 @@ dwnld_seascp <- function(
 #'               (default: 4 km)
 #' @param grd_num The expected number of cells. The radius will be calculated.
 #'                (default: 6 x 6)
+#' @param verb return output in the console
 #'
 #' @return RETURN_DESCRIPTION
 #' 
@@ -172,10 +173,11 @@ dwnld_seascp <- function(
 #'
 #' @examples
 #' # ADD_EXAMPLES_HERE
-extract_seascapes <- function(filename, df, 
-                              cell_w = list(4, "km"), 
+extract_seascapes <- function(filename, 
+                              df, 
+                              cell_w  = list(dist = 4, unit = "km"), 
                               grd_num = 6,
-                              verb = TRUE) {
+                              verb    = TRUE) {
    
     
     # ---- load libraries
@@ -194,13 +196,28 @@ extract_seascapes <- function(filename, df,
     conflict_prefer("filter", "dplyr", quiet = TRUE)
     conflict_prefer("select", "dplyr", quiet = TRUE)
     
+    # check if unit is in length
+    units_possible <- conv_unit_options$length
+    if (!str_to_lower(cell_w$unit) %in% units_possible) {
+        message(c(
+            sprintf("The units in `cell_w` is not a length!\n"),
+            sprintf("You gave: %s\n", cell_w$unit),
+            sprintf("Avaiable options:\n---\n%s\n",
+                    paste(units_possible,
+                          collapse = ", ")),
+            "---\nPlease change `cell_w$unit` to one of the available ",
+            "options and try again!")
+            )
+        return(invisible(NULL))
+    }
+    
     if (verb) {
         cat("\n\n------\nFile Name\n------\n", basename(filename))
         cat("\n\n------\nCruise ID:\n------\n", unique(df$cruise_id), "\n")
     }
     
     # ---- calc radius to filter around each point
-    rad <- conv_unit(cell_w[[1]], cell_w[[2]], "m") * grd_num / 2
+    rad <- conv_unit(cell_w$dist, cell_w$unit, "m") * grd_num / 2
     
     # ---- read raster file and filter for non-NA values
     sea <- 
