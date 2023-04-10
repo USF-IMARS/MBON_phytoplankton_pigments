@@ -89,10 +89,9 @@ ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
                    "\nThe server is probably down!\n---\n"))
         }
     
-    message(paste("\n-------------------------",
-                  "\nStarting cruise: ", IDS,
-                  "\n-------------------------\n")
-            )
+   if (verbose) message(paste("\n-------------------------",
+                              "\nStarting cruise: ", IDS,
+                              "\n-------------------------\n"))
     
     # create folder if doesn't exist
     here::here(path, IDS) %>%
@@ -196,7 +195,7 @@ ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
             )
     
     # ---- skipped files
-    if (nrow(skips > 0)) 
+    if (nrow(skips > 0) & verbose) 
         cat("\n-------------------------", 
             sprintf("\n%d Skipped:\n-------------------------",
                     nrow(skips)
@@ -230,7 +229,7 @@ for (cr_id in seq(all_cruise)) {
     cat(sprintf("%2.2-d of %2.2-d Cruises", cr_id, length(all_cruise)))
     try(ctd_downloads(IDS       = all_cruise[cr_id],
                       path      = loc,
-                      verbose   = TRUE,
+                      verbose   = FALSE,
                       overwrite = FALSE),
         silent = FALSE)
     }
