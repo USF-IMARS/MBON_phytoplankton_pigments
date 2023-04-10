@@ -38,7 +38,7 @@ Once you find an ERDDAP with the data you want, you can change the location here
 ```{r set-database}
 # this database contains CTD data from Walton Smith Cruises
 database <- "https://gcoos5.geos.tamu.edu/erddap/"
-database <- "https://upwell.pfeg.noaa.gov/erddap/"
+# database <- "https://upwell.pfeg.noaa.gov/erddap/" 
 Sys.setenv(RERDDAP_DEFAULT_URL = database)
 rm(database)
 ```
@@ -52,146 +52,368 @@ loc      <- here("data", "raw", "ctd")
 cruiseID <- c("WS16074", "WS16130", "WS16263", "WS16319", "WS17086", "WS17170",
               "WS17282", "WS18008", "SAV1803", "WS18120", "SAV18173", "WS18218",
               "WS18285", "WS18351", "WS19028", "WS19119", "WS19210", "WS19266",
-              "WS19322", "WS20006", "WS20231", "WS20278", "WS20342", "WS21032",
-              "WS21093")
+              "WS19322", "WS20006", "WS20231", "WS20278", "WS20279", "WS20342",
+              "WS21032", "WS21093")
 
-# create folder if doesn't exist
-here(loc, cruiseID) %>%
-  dir_create()
+
+# all cruises since 2016
+all_cruise <- 
+    ed_search_adv(query = "Walton Smith",
+              minTime = "2016-01-01T01:00:00Z",
+              page_size = 3000) 
+
+num_stns <- length(all_cruise$info$title)
+
+all_cruise <-
+    str_extract(all_cruise$info$title, "(WS|SAV|WB)\\d{3,5}") %>%
+    unique()
+
+# shows cruises that don't exists
+cruiseID[!cruiseID %in% all_cruise]
+
+# shows cruises that are not in our cruiseID list between 2016 and current
+# NOTES: I prefer this one as it will have extra data if needed
+all_cruise[!all_cruise %in% cruiseID]
 ```
 
 # Function to query and download CTD data from each cruise
 This takes in cruise IDs and queries the ERDDAP to find data. Next, it will
 download if CTD files don't exist
 ```{r query-function}
-ctd_downloads <- function(IDS, path, verbose = TRUE) {
-  
-  message(paste("Starting cruise:", IDS))
-  
-  # query cruise ID 
-  results <- tryCatch({
-    ed_search_adv(query = IDS)
-  }, error = function(e) {
-    if (verbose) message("Did not find any files!")
-    invisible(return())
-    break
-  })
-  
-  # show results of cruise
-  if (verbose) print(results)
+ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
 
-  # loop through each station for the cruise and download if doesn't exist
-  for (j in seq(results$info$dataset_id)) {
+    # ---- check if ERDDAP is able to be connected to
+    if (!RCurl::url.exists(eurl())) {
+        cat("\n")
+        stop(paste("\b\b----\nCannot reach", eurl(),
+                   "\nThe server is probably down!\n---\n"))
+        }
+    
+    message(paste("\n-------------------------",
+                  "\nStarting cruise: ", IDS,
+                  "\n-------------------------\n")
+            )
+    
+    # create folder if doesn't exist
+    here::here(path, IDS) %>%
+    fs::dir_create()
+    
+    # query cruise ID
+    results <- tryCatch({
+        ed_search_adv(query = IDS)
+      }, error = function(e) {
+        if (verbose) message("Did not find any files!")
+        invisible(return())
+        break
+      })
+    # show results of cruise
+    if (verbose) print(results)
+    
+    result_files <-  results$info$dataset_id
+    
+    # 
+    dwn <- 0
+    skips <- prev_dwn <- dwnld <- tibble() 
+    
+    # loop through each station of cruise and download if doesn't exist
+    for (j in seq(result_files)) {
+        
+        # ---- extract filename from query
+        file_name  <- result_files[j] %>%
+            str_extract("(?i)((WS|SAV|WB)\\d{4,5}).+((stn|sta).*)",
+                        c(1,3)) %>%
+          str_c(collapse = "_")
       
-      # extract filename from query
-      filename  <- results$info$dataset_id[j]
-      
-      # create out file path
-      file_path <- here(path, IDS, glue("{filename}.csv"))
-      
-      # skip already downloaded files
-      if (fs::file_exists(file_path)) {
-        if (verbose) cat("Skipping file:", filename, "\n--------\n\n")
-        next
-      }
-      
-      if (verbose) cat("Downloading file:", filename, "\n--------\n\n")
-      
-      # get data
-      out      <- info(filename)
+        if (is.na(file_name)) {
+            file_name <- result_files[j]
+            
+            if (str_detect(file_name, "SAV1803")) {
+                file_name <-
+                    str_extract(
+                        file_name,
+                        "SAV\\d{4}_[^SAV].*")
+                } else if ((str_detect(file_name, "WS22215"))) {
+                   file_name <- 
+                       str_extract(
+                           file_name,
+                           "CTD_(.*)", 1) %>%
+                       str_c("WB22215", ., sep = "_stn")
+                } else {
+                    skips <- bind_rows(skips, list("skip" = result_files[j]))
+                    # cat("Skipping file:", file_name, "\n--------\n\n")
+                    
+                    next
+                }
+            }
+        
+        # ---- create out file path
+        file_path <- here(path, IDS, glue("{file_name}.csv")) 
 
-      ctd_data <- tabledap(out, url = eurl(), store = disk())
+        # ---- skip already downloaded files
+        if (fs::file_exists(file_path) & !overwrite) {
+         if (verbose) prev_dwn <- bind_rows(prev_dwn, 
+                                            list("skip" = result_files[j])) 
+         
+             # cat("Skipping file:", file_name, "\n--------\n\n")
+            next
+        }
       
-      # save data
-      write.csv(ctd_data, file_path)
-  }
-  
-  if (verbose) {
-  cat("Finished cruise", IDS, "\n\n---------------------------------------\n\n")
-  }
+        if (verbose & dwn < 1) {
+            cat("\n-------------------------",
+                "\nDownloading:", 
+                "\n-------------------------")
+            dwn <- 1
+        }
+        
+        if (verbose) {
+            cat(sprintf("\n%-4.3d%35s as %s", dwn, result_files[j], file_name))
+            dwn <- dwn + 1
+            }
+        
+        # ---- get data
+        out      <- info(result_files[j])
+        
+        suppressMessages(ctd_data <- tabledap(out, url = eurl(), store = disk()))
+      
+        # ---- save data
+        # write.csv(ctd_data, file_path, row.names = FALSE)
+        write_csv(ctd_data, file_path)
+        dwnld <- bind_rows(dwnld, list("download" = result_files[j]))
+    }
+    
+    # ---- print section
+    if (verbose & dwn > 1) 
+            cat("\n")
+    
+    # ---- previously downloaded files
+    if (nrow(prev_dwn > 0)) 
+        cat("\n-------------------------", 
+            sprintf("\n%d Previously Downloaded:\n-------------------------",
+                    nrow(prev_dwn)
+                    ),
+            paste("\n", prev_dwn$skip),
+            "\n"
+            )
+    
+    # ---- skipped files
+    if (nrow(skips > 0)) 
+        cat("\n-------------------------", 
+            sprintf("\n%d Skipped:\n-------------------------",
+                    nrow(skips)
+                    ),
+            paste("\n", skips$skip),
+            "\n"
+            )
+    
+    if (verbose)
+        cat("-------------------------\n\n")
+    
+    return(
+        list(download  = dwnld,
+             prev_down = prev_dwn,
+             skips     = skips)
+    )
+    
+    # ---- end of function ----
 }
 ```
 
 # Run ctd_downloads function and try each cruise ID for existing data
 This will take some time, ~ 30 - 60 min
 ```{r download-ctd-data}
-for (i in seq(cruiseID)) {
-    try(ctd_downloads(cruiseID[i], loc, TRUE), silent = TRUE)
+# for (i in seq(cruiseID)) {
+#     temp <- try(ctd_downloads(cruiseID[i], loc, verbose = FALSE), silent = TRUE)
+#     
+#     }
+tictoc::tic()
+for (cr_id in seq(all_cruise)) {
+    cat(sprintf("%2.2-d of %2.2-d Cruises", cr_id, length(all_cruise)))
+    try(ctd_downloads(IDS       = all_cruise[cr_id],
+                      path      = loc,
+                      verbose   = TRUE,
+                      overwrite = FALSE),
+        silent = FALSE)
     }
-rm(i, cruiseID)
+
+tictoc::toc()
+
+rm(cr_id)
 ```
 
 # Read CTD files and average top 5 meters
+
+    
 ```{r query-ctd-files}
 # get all CTD file names
-file_ctd <- 
+file_ctd <-
     dir_ls(loc,
            recurse = TRUE,
            regexp = "\\.csv$") %>% 
     str_sort() %>%
     tibble(file = .) %>%
-    filter(!str_detect(file, "(?i)(deck|test|tst)")) %>%
+    # filter(!str_detect(file, "(?i)(deck|test|tst)")) %>%
     # extract cruise and station names from files
     mutate(
-        cruise_id = dirname(file) %>% basename(.),
-        station   = basename(file)  %>%                      # extract file name
-                    path_ext_remove() %>%                    # rm extension
-                    str_remove(., ".*((?i)stn|(?i)sta)") %>% # rm sta/stn
-                    str_remove(., "Savannah_SAV1803_SAV1803") %>%
-                    str_remove(., "^_") %>%                  # rm leading "_"
-                    str_remove(., "^0+")  %>%                # rm leading zeros
-                    str_replace(., "21LK", "LK") %>% 
-                    str_replace(., "215", "21.5"), 
-        
         # fix cruise IDs
+        cruise_id = str_extract(basename(file), "\\w{2,3}\\d{4,5}"),
         cruise_id = case_when(
-            cruise_id == "SAV18173" ~ "SV18173",
-            cruise_id == "SAV1803" ~ "SV18067",
-            cruise_id == "WS20231" ~ "WS20230",
-            .default = cruise_id)
-            )
+            str_detect(cruise_id, "SAV18173") ~ "SV18173",
+            str_detect(cruise_id, "SAV1803") ~ "SV18067",
+            str_detect(cruise_id, "WS20231") ~ "WS20230",
+            str_detect(cruise_id, "WS20279") ~ "WS20278",
+            .default = cruise_id),
+        
+        station   = str_extract(file, "(?i)(sta|stn)_*(.*)\\.csv$", 2),
+         station   = if_else(is.na(station),
+                            str_extract(file, "\\d_(.*)\\.csv", 1),
+                            station),
+        station   = str_replace(station, "(\\d)_+(\\d)", "\\1.\\2"),
+        station   = str_to_upper(station),
+        station   = str_remove(station, "^0+"),
+        station   = str_replace(station, "(21).*(LK)*", "LK"),
+        station   = str_replace(station, "21-5", "21.5"),
+        station   = str_replace(station, "(57-)(\\d)", "57.\\2"),
+        station   = str_replace(station, "-", "_"),
+       
+    )
+    
+filter(file_ctd, str_detect(cruise_id, "WS2027"))
+
+    # mutate(
+    #     cruise_id = dirname(file) %>% basename(.),
+    #     station   = basename(file)  %>%                      # extract file name
+    #                 path_ext_remove() %>%                    # rm extension
+    #                 # str_remove(., ".*((?i)stn|(?i)sta)") %>% # rm sta/stn
+    #                 str_remove(., "(?i).*(stn|sta)") %>% # rm sta/stn
+    #                 str_remove(., "Savannah_SAV1803_SAV1803") %>%
+    #                 str_remove(., "^_") %>%                  # rm leading "_"
+    #                 str_remove(., "^0+")  %>%                # rm leading zeros
+    #                 str_replace(., "21LK", "LK") %>% 
+    #                 str_replace(., "215", "21.5"), 
+    #     
+    #     # fix cruise IDs
+    #     cruise_id = case_when(
+    #         cruise_id == "SAV18173" ~ "SV18173",
+    #         cruise_id == "SAV1803" ~ "SV18067",
+    #         cruise_id == "WS20231" ~ "WS20230",
+    #         .default = cruise_id)
+    #         )
 ```
+## Summarize CTD Files
+Two version:
+1. Using parallel processing `future_pmap()` (faster)
+    - requires `furrr`, `future`, and `progressr` 
+    - this runs each summarization in parallel using cores within the computure
+    - for mine, its ~2 min in parallel and ~6 min in series
+    
+2. Using normal sequential `pmap()`
+    - slower, but is easier to implement
+    - if not too many loops, this is preferred
 ```{r load-ctd-data}
-# read all files and average columns
-ctd_dat_summary <-
+shelf(furrr, progressr)
+handlers("cli")
+fn <- function(x, y, z, p) {
+    out <- 
+        # ---- read file
+        read_csv(
+            x,
+            show_col_types = FALSE,
+            name_repair = "unique_quiet")  %>%
+        
+        # filter depth
+        filter(depth <= 5) %>% 
+            
+        # select cols and rename
+        select(
+          time, 
+          lat      = latitude, 
+          lon      = longitude, depth,
+          pressure = sea_water_pressure,
+          temp     = sea_water_temperature, 
+          o_sat    = oxygen_saturation, do = dissolved_oxygen,
+          par      = any_of("photosynthetically_available_radiation"), 
+          sal      = sea_water_salinity) %>%
+    
+        # calc average
+        summarise(across(.cols = everything(),
+                         .fn = \(x) mean(x, na.rm = TRUE)))
+    
+    p(glue("Cruise {y}, Station: {z}"))
+    out
+}
+
+tictoc::tic() # <-- start clock
+plan(multisession, workers = 5)
+
+with_progress({
+    
+    p <- progressor(steps = nrow(file_ctd))
+    
+    ctd_dat_summary <-
     file_ctd %>%
+    filter(str_detect(station, "(?i)hex|test", negate = TRUE)) %>%
     mutate(
-        data = map(
-            .progress = TRUE,
-            file,
-            function(x) {
-                cruise <- 
-                    basename(x) %>%
-                    path_ext_remove()   
+        # data = pmap(
+        data = future_pmap(
+            p = p,
+            list(file, cruise_id, station),
+            fn)) %>%
+    unnest(cols = data)
+})
+
+plan(sequential)
+
+tictoc::toc() # <-- end clock
+
+# If `ctd_dat_summary` was not created, run normal
+if (!exists("ctd_dat_summary")) {
+    tictoc::tic() # <-- start clock
+    
+    # ctd_dat_summary <-
+        file_ctd %>%
+        filter(str_detect(station, "(?i)hex|test", negate = TRUE)) %>%
+        slice(1:10) %>%
+        mutate(
+            data = pmap(
+                .progress = TRUE,
                 
-                cli::cli_alert_info("Cruise File: {cruise}")
+                list(file, cruise_id, station),
+                function(x, y, z) {
+                cli::cli_alert_info("Cruise {y}, Station: {z}")
                 
-                read_csv(
+                out <- read_csv(
                     x,
                     show_col_types = FALSE,
                     name_repair = "unique_quiet")  %>%
                     
                     # filter depth
-                    filter(depth <= 5) %>% 
+                    filter(depth <= 5) 
+                
+                message(paste(names(out), "\n"))
+                
+                out <-  out %>% 
                         
                     # select cols and rename
                     select(
                       time, 
-                      lat = latitude, 
-                      lon = longitude, depth,
+                      lat      = latitude, 
+                      lon      = longitude, depth,
                       pressure = sea_water_pressure,
-                      temp = sea_water_temperature, 
-                      o_sat = oxygen_saturation, do = dissolved_oxygen,
-                      par = any_of("photosynthetically_available_radiation"), 
-                      sal = sea_water_salinity) %>%
+                      temp     = sea_water_temperature, 
+                      o_sat    = oxygen_saturation, do = dissolved_oxygen,
+                      par      = any_of("photosynthetically_available_radiation"), 
+                      sal      = sea_water_salinity) %>%
                 
                     # calc average
-                    summarise(across(.fn = \(x) mean(x, na.rm = TRUE)))
+                    summarise(across(.cols = everything(),
+                                     .fn = \(x) mean(x, na.rm = TRUE)))
                 }
-            )
-        ) %>%
-    unnest(cols = data)
+                )
+            ) %>%
+        unnest(cols = data)
     
+    tictoc::toc() # <-- end clock
+}
 ```
 ```{r save-ctd-all}
 if (FALSE) {
@@ -212,6 +434,21 @@ if (FALSE) {
 # TODO: remove to another location
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
+
+# ctd_dat_summary <- 
+#     mutate(ctd_dat_summary,
+#        cruise_id = if_else(str_detect(cruise_id, "WS20279"), "WS20278", cruise_id))
+
+# unique(ctd_dat_summary$cruise_id)[str_detect(unique(ctd_dat_summary$cruise_id), "WS2027")]
+    
+# ctd_dat_summary <- here("data", "processed") %>%
+#     dir_ls(regexp = "2023-04-07") %>%
+#     read_csv(show_col_types = FALSE)
+
+# unique(cmtx_avgs$cruise_id)[!unique(cmtx_avgs$cruise_id) %in% unique(ctd_dat_summary$cruise_id)]
+# unique(ctd_dat_summary$cruise_id)[!unique(ctd_dat_summary$cruise_id) %in% unique(cmtx_avgs$cruise_id)]
+
+
 if (FALSE) {
     # cmtx_avgs created in chemtax_analysis.Rmd
     cmtx_avgs <- 
@@ -221,16 +458,32 @@ if (FALSE) {
                season    = as.character(season)) %>%
         relocate(cruise_id, .before = 1)
     
+    ctd_join <-
+    ctd_dat_summary %>%
+    mutate(time = as_datetime(time)) %>%
+    filter(
+        time < max(cmtx_avgs$date_time_utc) + period("1 month")
+        & time > min(cmtx_avgs$date_time_utc) - period("1 month")
+        ) 
+
+    
+    
     env_cmtx <- 
         cmtx_avgs %>% 
-        left_join(ctd_dat_summary, 
+        left_join(
+        # full_join(
+                  ctd_join, 
                   by = join_by(
                       "cruise_id", 
                       "station")
                   )
     
-    write_csv(env_cmtx, 
-              file = here("data", "processed", "cmtx_env_data.csv"))
+    test <- env_cmtx %>%
+    select(-c(pi, filter_type:pras, indicate_if_filters_are_replicates:bottle)) %>%
+    janitor::get_dupes(cruise_id, station)
+    
+    # write_csv(env_cmtx, 
+    #           file = here("data", "processed", "cmtx_env_data.csv"))
     }
 ```
 
