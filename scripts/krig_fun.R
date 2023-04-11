@@ -1,4 +1,9 @@
-map.data <- function(
+##%######################################################%##
+#                                                          #
+####          Function to Run Kriging on Data           ####
+#                                                          #
+##%######################################################%##
+map_data <- function(
                     .data,
                     conc_name,
                     col_name,
@@ -12,11 +17,6 @@ map.data <- function(
                     sav        = FALSE,
                     sv_name    = NULL,
                     verbose    = FALSE) {
-##%######################################################%##
-#                                                          #
-####          Function to Run Kriging on Data           ####
-#                                                          #
-##%######################################################%##
 # ---- DESCRIPTION: ------
 # This uses the `fields` package to run `spatialProcesses` for a Krigged set of
 # data.

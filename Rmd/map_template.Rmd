@@ -306,7 +306,7 @@ pigm_dat1 <-
     mutate(
         krig = pmap(list(data, conc_name, szn_name, title, sv_name),
         # krig = pmap(list(data, conc_name, szn_name, title2, sv_name), 
-                    ~ map.data(
+                    ~ map_data(
                                .data     = ..1,
                                conc_name = ..2,
                                col_name  = "ratio_avg",
