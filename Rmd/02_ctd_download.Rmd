@@ -58,9 +58,10 @@ cruiseID <- c("WS16074", "WS16130", "WS16263", "WS16319", "WS17086", "WS17170",
 
 # all cruises since 2016
 all_cruise <- 
-    ed_search_adv(query = "Walton Smith",
-              minTime = "2016-01-01T01:00:00Z",
-              page_size = 3000) 
+    ed_search_adv(
+        query     = "Walton Smith",
+        minTime   = "2016-01-01T01:00:00Z",
+        page_size = 3000) 
 
 num_stns <- length(all_cruise$info$title)
 
@@ -220,10 +221,6 @@ ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
 # Run ctd_downloads function and try each cruise ID for existing data
 This will take some time, ~ 30 - 60 min
 ```{r download-ctd-data}
-# for (i in seq(cruiseID)) {
-#     temp <- try(ctd_downloads(cruiseID[i], loc, verbose = FALSE), silent = TRUE)
-#     
-#     }
 tictoc::tic()
 for (cr_id in seq(all_cruise)) {
     cat(sprintf("%2.2-d of %2.2-d Cruises", cr_id, length(all_cruise)))
@@ -245,58 +242,94 @@ rm(cr_id)
 ```{r query-ctd-files}
 # get all CTD file names
 file_ctd <-
-    dir_ls(loc,
-           recurse = TRUE,
-           regexp = "\\.csv$") %>% 
-    str_sort() %>%
-    tibble(file = .) %>%
-    # filter(!str_detect(file, "(?i)(deck|test|tst)")) %>%
-    # extract cruise and station names from files
-    mutate(
-        # fix cruise IDs
-        cruise_id = str_extract(basename(file), "\\w{2,3}\\d{4,5}"),
-        cruise_id = case_when(
-            str_detect(cruise_id, "SAV18173") ~ "SV18173",
-            str_detect(cruise_id, "SAV1803") ~ "SV18067",
-            str_detect(cruise_id, "WS20231") ~ "WS20230",
-            str_detect(cruise_id, "WS20279") ~ "WS20278",
-            .default = cruise_id),
-        
-        station   = str_extract(file, "(?i)(sta|stn)_*(.*)\\.csv$", 2),
-         station   = if_else(is.na(station),
-                            str_extract(file, "\\d_(.*)\\.csv", 1),
-                            station),
-        station   = str_replace(station, "(\\d)_+(\\d)", "\\1.\\2"),
-        station   = str_to_upper(station),
-        station   = str_remove(station, "^0+"),
-        station   = str_replace(station, "(21).*(LK)*", "LK"),
-        station   = str_replace(station, "21-5", "21.5"),
-        station   = str_replace(station, "(57-)(\\d)", "57.\\2"),
-        station   = str_replace(station, "-", "_"),
-       
-    )
-    
-filter(file_ctd, str_detect(cruise_id, "WS2027"))
+  dir_ls(loc,
+    recurse = TRUE,
+    regexp = "\\.csv$"
+  ) %>%
+  str_sort() %>%
+  tibble(file = .) %>%
+  mutate(
+    base = basename(file) %>%
+      path_ext_remove() %>%
+      str_to_upper()
+  ) %>%
+  separate_wider_delim(base, "_",
+    names = c("cruise_id", "stn"),
+    too_many = "merge",
+    cols_remove = FALSE
+  ) %>%
+  mutate(
+    # fix cruise IDs
+    cruise_id = case_when(
+      str_detect(cruise_id, "SAV18173") ~ "SV18173",
+      str_detect(cruise_id, "SAV1803") ~ "SV18067",
+      str_detect(cruise_id, "WS20231") ~ "WS20230",
+      str_detect(cruise_id, "WS20279") ~ "WS20278",
+      .default = cruise_id
+    ),
+    station = str_remove(stn, "(?i)(stn|sta)_?"),
+    station = case_when(
+      !str_detect(station, "Z\\d{2}") ~
+        str_replace(
+          station,
+          "(\\d)(-|/|_)(\\d)",
+          "\\1\\.\\3"
+        ),
+      .default = station
+    ),
+    station = str_remove(station, "^0+"),
+    station = case_when(
+      str_detect(station, "(?i)LK") ~ "LK",
+      str_detect(station, "(?i)^21$") ~ "LK",
+      str_detect(station, "21.+5") ~ "21.5",
+      .default = station
+    ),
+    station = str_replace(station, "-", "_")
+  )
 
-    # mutate(
-    #     cruise_id = dirname(file) %>% basename(.),
-    #     station   = basename(file)  %>%                      # extract file name
-    #                 path_ext_remove() %>%                    # rm extension
-    #                 # str_remove(., ".*((?i)stn|(?i)sta)") %>% # rm sta/stn
-    #                 str_remove(., "(?i).*(stn|sta)") %>% # rm sta/stn
-    #                 str_remove(., "Savannah_SAV1803_SAV1803") %>%
-    #                 str_remove(., "^_") %>%                  # rm leading "_"
-    #                 str_remove(., "^0+")  %>%                # rm leading zeros
-    #                 str_replace(., "21LK", "LK") %>% 
-    #                 str_replace(., "215", "21.5"), 
-    #     
-    #     # fix cruise IDs
-    #     cruise_id = case_when(
-    #         cruise_id == "SAV18173" ~ "SV18173",
-    #         cruise_id == "SAV1803" ~ "SV18067",
-    #         cruise_id == "WS20231" ~ "WS20230",
-    #         .default = cruise_id)
-    #         )
+#     # extract cruise and station names from files
+#     mutate(
+#          station   = if_else(is.na(station),
+#                             str_extract(file, "\\d_(.*)\\.csv", 1),
+#                             station),
+#         station   = str_replace(station, "(\\d)_+(\\d)", "\\1.\\2"),
+#         station   = str_to_upper(station),
+#         
+#         # station   = str_replace(station, "(21).*(LK)*", "LK"),
+#         # station   = str_replace(station, "21-5", "21.5"),
+#         station   = str_replace(station, "(57-)(\\d)", "57.\\2"),
+#         station   = str_replace(station, "-", "_"),
+#        
+#     )
+# 
+# # fixing 21LK, 21_5, 21-5, 21/LK etc
+# dir_ls(loc,
+#            recurse = TRUE,
+#            regexp = "\\.csv$") %>% 
+#     str_sort() %>%
+#     tibble(file = .) %>%
+#     mutate(
+#         base = basename(file) %>%
+#                path_ext_remove()
+#     ) %>%
+#     separate_wider_delim(base, "_",
+#            names = c("cruise", "stn"),
+#            too_many = "merge",
+#            cols_remove = FALSE) %>%
+#     mutate(station = str_remove(stn, "(?i)(stn|sta)_?"),
+#            station = str_replace(station, "-|/", "_")) %>%
+#     filter(str_detect(stn, "(21|LK)"))  %>% # %$% unique(station)  %>% sort() 
+#     mutate(
+#         .keep = "used",
+#         file,
+#         stn,
+#         station = case_when(
+#             str_detect(station, "(?i)LK") ~ "LK",
+#             str_detect(station, "(?i)^21$") ~ "LK",
+#             str_detect(station, "21.+5") ~ "21.5",
+#             .default = station
+#         ) )
+      
 ```
 ## Summarize CTD Files
 Two version:
@@ -352,7 +385,6 @@ with_progress({
     file_ctd %>%
     filter(str_detect(station, "(?i)hex|test", negate = TRUE)) %>%
     mutate(
-        # data = pmap(
         data = future_pmap(
             p = p,
             list(file, cruise_id, station),
@@ -362,13 +394,12 @@ with_progress({
 
 plan(sequential)
 
-tictoc::toc() # <-- end clock
 
 # If `ctd_dat_summary` was not created, run normal
 if (!exists("ctd_dat_summary")) {
     tictoc::tic() # <-- start clock
     
-    # ctd_dat_summary <-
+    ctd_dat_summary <-
         file_ctd %>%
         filter(str_detect(station, "(?i)hex|test", negate = TRUE)) %>%
         slice(1:10) %>%
@@ -410,14 +441,15 @@ if (!exists("ctd_dat_summary")) {
                 )
             ) %>%
         unnest(cols = data)
-    
-    tictoc::toc() # <-- end clock
 }
+
+tictoc::toc() # <-- end clock
+unshelf(furrr, future)
+rm(fn, p)
 ```
 ```{r save-ctd-all}
 if (FALSE) {
     ctd_dat_summary %>%
-        select(-1) %>%
         arrange(time) %>%
         write_csv(
             here("data", "processed", 
@@ -434,19 +466,6 @@ if (FALSE) {
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
 
-# ctd_dat_summary <- 
-#     mutate(ctd_dat_summary,
-#        cruise_id = if_else(str_detect(cruise_id, "WS20279"), "WS20278", cruise_id))
-
-# unique(ctd_dat_summary$cruise_id)[str_detect(unique(ctd_dat_summary$cruise_id), "WS2027")]
-    
-# ctd_dat_summary <- here("data", "processed") %>%
-#     dir_ls(regexp = "2023-04-07") %>%
-#     read_csv(show_col_types = FALSE)
-
-# unique(cmtx_avgs$cruise_id)[!unique(cmtx_avgs$cruise_id) %in% unique(ctd_dat_summary$cruise_id)]
-# unique(ctd_dat_summary$cruise_id)[!unique(ctd_dat_summary$cruise_id) %in% unique(cmtx_avgs$cruise_id)]
-
 
 if (FALSE) {
     # cmtx_avgs created in chemtax_analysis.Rmd
@@ -457,32 +476,49 @@ if (FALSE) {
                season    = as.character(season)) %>%
         relocate(cruise_id, .before = 1)
     
+    
     ctd_join <-
-    ctd_dat_summary %>%
+    (here("data", "processed") %>%
+    dir_ls(regexp = "ctd_all") %>%
+    sort(decreasing = TRUE))[1] %>%
+    read_csv(show_col_types = FALSE) %>%
     mutate(time = as_datetime(time)) %>%
     filter(
-        time < max(cmtx_avgs$date_time_utc) + period("1 month")
-        & time > min(cmtx_avgs$date_time_utc) - period("1 month")
+        between(time, 
+                min(cmtx_avgs$date_time_utc) - period("1 month"),
+                max(cmtx_avgs$date_time_utc) + period("1 month"))
         ) 
+    
+    # join cmtx_avgs with ctd summary
+    env_cmtx <-
+      cmtx_avgs %>%
+      left_join(
+        ctd_join,
+        by = join_by(
+          "cruise_id",
+          "station"),
+        relationship = "many-to-many"
+      ) %>%
+      mutate(
+        time_diff = abs(difftime(date_time_utc, time.y, units = "mins")) %>%
+                    as.numeric(),
+        time_diff = if_else(is.na(time_diff), 1, time_diff)
+      ) %>%
+      filter(
+        .by = c(cruise_id, station, depth.x),
+        time_diff == min(time_diff)
+      ) %>%
+      select(-time_diff)
 
     
-    
-    env_cmtx <- 
-        cmtx_avgs %>% 
-        left_join(
-        # full_join(
-                  ctd_join, 
-                  by = join_by(
-                      "cruise_id", 
-                      "station")
+    write_csv(
+      env_cmtx,
+      file = here("data", "processed", 
+                   glue("cmtx_env_data_", 
+                      "{Sys.Date()}",
+                      ".csv")
                   )
-    
-    test <- env_cmtx %>%
-    select(-c(pi, filter_type:pras, indicate_if_filters_are_replicates:bottle)) %>%
-    janitor::get_dupes(cruise_id, station)
-    
-    # write_csv(env_cmtx, 
-    #           file = here("data", "processed", "cmtx_env_data.csv"))
+    )
     }
 ```
 
