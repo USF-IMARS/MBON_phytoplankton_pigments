@@ -40,6 +40,13 @@ dwnld_seascp <- function(
         seascapeR
     )
     
+    # ---- check if ERDDAP is able to be connected to
+    if (!RCurl::url.exists("cwcgom.aoml.noaa.gov")) {
+        cat("\n")
+        stop(paste("\b\b----\nCannot reach <cwcgom.aoml.noaa.gov>",
+                   "\nThe server is probably down!\n---\n"))
+    }
+    
     # ---- catch if package needs updating
     if (!str_detect(getNamespaceVersion("raster")[[1]], "3.6-21")) {
         stop(glue(
@@ -69,7 +76,7 @@ dwnld_seascp <- function(
     cli::cli_alert_info(
         glue("Downloading Seascape data from: ", 
              "{seascapeR::nms[[which(map_loc == names(seascapeR::nms))]]}\n",
-             "The resolution is {str_remove(ss_dataset, \"global_\")}\n",
+             "The resolution is {str_remove(ss_dataset, \"global_\")}.\n",
              "Start: {date_beg}\n",
              "End: {date_end}\n")
         )
