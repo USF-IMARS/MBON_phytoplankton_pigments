@@ -13,7 +13,8 @@ librarian::shelf(
     # broom # optional
     
     # additional
-    raster, sp, rgdal, maptools, rgeos, vegan, ggord
+    raster, sp, rgdal, maptools, rgeos, vegan, ggord, 
+    gavinsimpson/ggvegan
 )
 
 library("conflicted")
@@ -35,7 +36,9 @@ env_cmtx created in Rmd/02_ctd_download.Rmd
 
 # ---- CHEMTAX with CTD
 env_cmtx <- 
-    here("data", "processed", "cmtx_env_data.csv") %>%
+    (here("data", "processed") %>%
+    dir_ls(regexp = "cmtx_env_data")  %>%
+    sort(decreasing = TRUE))[1] %>%
     read_csv(show_col_types  = FALSE) %>% 
     mutate(
         season = fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"),
@@ -68,15 +71,18 @@ You will need to restart R and run: pacman::p_install_gh("marinebon/seascapeR")
 ## Download Seascape Raster
 ```{r scp-dwnld}
 # ---- set location and temporal scale for each image
-map_loc <- "fknms" # FL Keys
-dataset <- "global_monthly"  # or global_8day
+arg_ls <- 
+    list(
+        map_loc = "fknms", # FL Keys
+        dataset = "global_monthly"  # or global_8day
+        )
 
 # ---- download if needed, will return files list as tibble
 seascapes_match <- 
     dwnld_seascp(
-        map_loc    = map_loc,
+        map_loc    = arg_ls$map_loc,
         path       = seasc_path, 
-        ss_dataset = dataset,   
+        ss_dataset = arg_ls$dataset,   
         ss_var     = "CLASS",         
         date_beg   = floor_date(min(env_cmtx$date_time_utc), 
                                 unit = "year"),
@@ -91,6 +97,8 @@ seascapes_match <-
     filter(yr_mth %in% unique(env_cmtx$yr_mth))
 
 seascapes_match
+
+rm(arg_ls)
 # ---- unzip seascapes file
 # get "fknms_global_monthly.zip" from https://shiny.marinebon.app/seascapes/. 
 # select "Florida Keys" in the region pull-down tab and click "all grids (.zip)"
@@ -183,8 +191,8 @@ seasc_cap <- capscale(seascspec ~ seascape,
 
 plot(seasc_cap)
 
-autoplot(seasc_cap, show.legend = F) +
-    theme_bw() 
+autoplot(seasc_cap,
+         legend.position = 'none') 
 ```
 
 # CCA
