@@ -276,7 +276,7 @@ for (szn in seasons) {
         xlim      = c(-4, 5),
         repel     = TRUE,
         txt       = 6,
-        vec_lab   = new.lab,
+        vec_lab   = new_lab,
         grp_title = "Seascape Class"
         ) +
         theme_classic() +
@@ -374,13 +374,14 @@ data_scores <-
 ```
 
 ## nMDS Plot
-```{r nmds-plt, fig.width=15, fig.height=10}
+```{r nmds-plt, fig.width=25, fig.height=15}
 tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
                '#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
 
 xx <-
     ggplot(data_scores, aes(x = NMDS1, y = NMDS2)) +
-    geom_point(size = 4, aes(shape = season, color = factor(seascape))) +
+    geom_point(size = 4, aes(shape = season, color = factor(seascape)),
+               alpha = 0.75) +
     # geom_point(size = 4, aes(color = factor(seascape)))+
     #
     labs(
@@ -389,7 +390,7 @@ xx <-
         y     = names(data_scores)[2],
         shape = "Season"
         )  +
-    scale_shape_manual(values = c(0, 1, 2, 5, 3)) +
+    # scale_shape_manual(values = c(0, 1, 2, 5, 3)) +
     # labs(x = "NMDS1", colour = "Seascape Class", y = "NMDS2") +
     scale_colour_manual(values = tol_muted) +
     ggthemes::theme_tufte() +
@@ -409,7 +410,8 @@ xx <-
             face   = "bold",
             colour = "black"
         ),
-        legend.position = c(0.87, 0.3),
+        # legend.position = c(0.87, 0.3),
+        legend.position = "right",
         axis.title.y = element_text(face = "bold", size = 14),
         axis.title.x = element_text(
             face   = "bold",
@@ -449,20 +451,34 @@ if (FALSE) {
 ```
 ## ANONISM
 ```{r anonism}
-# ano1 <- 
+ano1 <-
     anosim(as.matrix(seascspec), 
-               factor(cmtx_sea$seascape), 
-               distance = "bray", 
-               permutations = 100)
+           factor(cmtx_sea$seascape), 
+           distance = "bray", 
+           permutations = 100)
 
-ano2 <- anosim(as.matrix(seascspec), 
-               factor(cmtx_sea$season), 
-               distance = "bray", 
-               permutations = 100)
+ano2 <- 
+    anosim(as.matrix(seascspec),
+           factor(cmtx_sea$season), 
+           distance = "bray", 
+           permutations = 100)
 ano1
 ano2
 
 ```
+Seascape
+ANOSIM statistic R: 0.2343 
+      Significance: 0.009901 
+
+Permutation: free
+Number of permutations: 100
+
+Season
+ANOSIM statistic R: 0.1379 
+      Significance: 0.009901 
+
+Permutation: free
+Number of permutations: 100
 
 ```{r}
 # which functional types dominated each seascape class by season?
