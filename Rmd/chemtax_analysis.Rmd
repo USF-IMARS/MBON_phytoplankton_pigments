@@ -4,8 +4,8 @@ author: "Anna Finch"
 date: '2022-06-24'
 output: html_document
 ---
-# ---- Setup ----
-## Load libraries
+# 1.0 ---- Setup ----
+## 1.1 Load libraries
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
@@ -13,8 +13,11 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     # broom # optional
     
+    rlang,
+    
     # additional
-    rstatix, readxl, ggtext
+    rstatix, readxl, ggtext,
+    cowplot
     )
 
 library("conflicted")
@@ -30,7 +33,7 @@ phyto_name <-
                   "Prasinophytes")
         )
 
-file.chem <-
+file_chem <-
   fs::dir_ls(path    = here("data", "raw"),
              recurse = TRUE,
              regexp  = "mbonpig.*\\.xls$") %>% 
@@ -38,7 +41,7 @@ file.chem <-
   tibble(files = .)
 ```
 
-## Custom Plotting Functions 
+## 1.2 Custom Plotting Functions 
 ```{r functions}
 # line plot
 line_plt <- function(.dat, .var, .title) {
@@ -131,11 +134,12 @@ box_plt <- function(.dat, .var, .title) {
 ```
 
 
-# ---- Line Plot ----
-## Load Average Phytoplankton Concentrations from CHEMTAX 
+# 2.0 ---- Average Plot (1 Value per PFT per Season) ----
+## 2.1 Load Average Phytoplankton Concentrations from CHEMTAX 
+This takes each season and averages them together.
 ```{r load-avg-phyto-data}
 cmtx_all <- 
-    file.chem %>%
+    file_chem %>%
     filter(str_detect(files, "cluster")) %>%
     mutate(
       filename = basename(files) %>% tools::file_path_sans_ext(),
@@ -153,7 +157,7 @@ cmtx_all <-
   select(-c(1:ranges))  %>%
   unnest(data)
 
-# ---- phyto full names ----
+# ---- phyto full names
 phyto_name <- 
     phyto_name %>%
     bind_cols(shrt = names(cmtx_all)[-c(1:3)]) %>%
@@ -162,8 +166,8 @@ phyto_name <-
             names = c("Cyanobacteria", "Diatom", "Haptophyte"))
 ```
 
+## 2.2 Line Plots: Average Per Season per PFT
 ```{r line-plt}
-# ---- avg season line plots ----
 cmtx_all <- cmtx_all %>%
     select(-rms) %>%
     pivot_longer(
@@ -181,13 +185,13 @@ cmtx_all <- cmtx_all %>%
     )
 
 cmtx_all$plt
-rm(cmtx_all)
+# rm(cmtx_all)
 ```
-# ---- Box Plots ----
-## Load All Phytoplankton Concentrations
+# 3.0 ---- Box Plots ----
+## 3.1 Load All Phytoplankton Concentrations
 ```{r load-comb-data}
 cmtx_avgs_raw <- 
-    pull(file.chem, files)[5] %>%
+    pull(file_chem, files)[5] %>%
     readxl::read_xls(.,
                      sheet = 1,
                      .name_repair = janitor::make_clean_names
@@ -201,7 +205,7 @@ meta_data <-
         comments, season
         ) %>%
     mutate(
-        season = fct_relevel(season, levels = c("W", "Sp", "Su", "F")),
+        season = fct_relevel(season, c("W", "Sp", "Su", "F")),
         season = fct_relabel(season, ~ c("Winter", 
                                          "Spring", 
                                          "Summer", 
@@ -211,7 +215,7 @@ meta_data <-
     
 
 cmtx_avgs <-
-    full_join(meta_data, cmtx_avgs_raw, by = c("sample" = "sample_id")) 
+    full_join(meta_data, cmtx_avgs_raw, by = join_by("sample" == "sample_id")) 
 
 # removing duplicates
 cmtx_avgs_no_dupes <- 
@@ -224,7 +228,7 @@ cmtx_avgs_no_dupes <-
     distinct(date_time_utc, station, depth, .keep_all = TRUE) %>%
     ungroup()
 
-
+# ---- save chemtax data with metadata
 if (!fs::file_exists(here("data", "processed", "chemtax_w_meta.csv")) |
     !fs::file_exists(here("data", "processed", "chemtax_w_meta_rm_dup.csv"))) {
     
@@ -232,8 +236,8 @@ if (!fs::file_exists(here("data", "processed", "chemtax_w_meta.csv")) |
     
         # pivot longer
         pivot_longer(
-                     cols = chloro:pras,
-                     names_to = "phyto",
+                     cols      = chloro:pras,
+                     names_to  = "phyto",
                      values_to = "conc"
         ) %>%
         left_join(phyto_name, by = c("phyto" = "shrt"))
@@ -262,11 +266,11 @@ cmtx_avgs <- cmtx_avgs_no_dupes %>%
 
 cmtx_avgs_w <- cmtx_avgs_no_dupes
 
-rm(file.chem, meta_data, cmtx_avgs_raw, cmtx_avgs_no_dupes)
+rm(file_chem, meta_data, cmtx_avgs_raw, cmtx_avgs_no_dupes)
 ```
 
-## Plot
-```{r boxplots}
+## 3.2 Box Plot: Individuals Box Plots for Each PFT per Season
+```{r boxplots, fig.height=15, fig.width=20}
 # ---- avg season line plots ----
 cmtx_avgs_plt <-
     cmtx_avgs %>%
@@ -282,8 +286,8 @@ cmtx_avgs_plt <-
 cmtx_avgs_plt$plt
 ```
 
-# ---- PFT multi-plots ----
-## PFTs with a more dynamic range of values
+# 4.0 ---- PFT multi-plots ----
+## 4.1 PFTs with a more dynamic range of values
 ```{r box-lg-dynm, fig.height=6, fig.width=10}
 box_lg <- cmtx_avgs %>%
     filter(!phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
@@ -311,8 +315,8 @@ box_lg <- cmtx_avgs %>%
 box_lg
 ```
 
-## PFTs with a more dynamic range of values
-```{r box-sm-dynm, fig.height=6, fig.width=10}
+## 4.2 PFTs with a more dynamic range of values
+```{r box-sm-dynm, fig.height=15, fig.width=20}
 box_sm <-
     cmtx_avgs %>%
     filter(!phyto %in% c("cyano2", "chloro", "hapt6")) %>%
@@ -344,38 +348,65 @@ box_sm <-
 box_sm
 ```
 
-## Save Large and Small Range Boxplots
+## 4.3 Save Large and Small Range Boxplots
 ```{r save-plt}
-if (FALSE) {
-    save_plot(
-    filename    = here("data", "plots", "boxplots",
-                    glue("cmtx_boxplots_lg", 
-                         format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                          ".jpg")), 
+sv_arg <-
+  list(
+    sv_loc    = here("data", "plots", "boxplots"),
+    overwrite = FALSE
+  ) %>%
+  c(
+    .,
+    list(
+      sm_exist = dir_ls(sv_arg$sv_loc, regexp = "boxplot.*sm") %>% is_empty(),
+      lg_exist = dir_ls(sv_arg$sv_loc, regexp = "boxplot.*lg") %>% is_empty()
+    )
+  )
+
+if (sv_arg$sm_exist | sv_arg$overwrite) {
+  save_plot(
+    filename = here(
+      "data", "plots", "boxplots",
+      glue(
+        "cmtx_boxplots_lg",
+        format(Sys.time(), "_%Y%m%d_%H%M%S"),
+        ".jpeg"
+      )
+    ),
     plot        = box_lg,
     base_height = 6,
     base_width  = 10,
-    dpi         = 600, 
-    units       = "in", 
-    device      = "png")
-
-   save_plot(
-        filename    = here("data", "plots", "boxplots",
-                           glue(
-                               "cmtx_boxplot_sm",
-                               format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                               ".jpg"
-                           )),
-        plot        = box_sm,
-        base_height = 6,
-        base_width  = 10,
-        dpi         = 600,
-        units       = "in",
-        device      = "png"
-    )
+    dpi         = 600,
+    units       = "in",
+    device      = "png"
+  )
 } else {
-    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot} ",
-                          "because set to {.var FALSE}"))
+    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_sm} ",
+                          "because exists ",
+                          "and/or overwrite is set {.var FALSE}"))
+}
+
+if (sv_arg$lg_exist | sv_arg$overwrite) {
+  save_plot(
+    filename = here(
+      "data", "plots", "boxplots",
+      glue(
+        "cmtx_boxplot_sm",
+        format(Sys.time(), "_%Y%m%d_%H%M%S"),
+        ".jpeg"
+      )
+    ),
+    plot        = box_sm,
+    base_height = 6,
+    base_width  = 10,
+    dpi         = 600,
+    units       = "in",
+    device      = "png"
+  )
+} else {
+    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_lg} ",
+                          "because exists ",
+                          "and/or overwrite is set {.var FALSE}"))
 }
 ```
 
