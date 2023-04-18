@@ -13,7 +13,7 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     # broom # optional
     
-    rlang,
+    rlang, cli,
     
     # additional
     rstatix, readxl, ggtext,
@@ -166,7 +166,8 @@ phyto_name <-
             names = c("Cyanobacteria", "Diatom", "Haptophyte"))
 ```
 
-## 2.2 Line Plots: Average Per Season per PFT
+## 2.2 Plot: Average Per Season per PFT (Line)
+Not super useful
 ```{r line-plt}
 cmtx_all <- cmtx_all %>%
     select(-rms) %>%
@@ -185,7 +186,7 @@ cmtx_all <- cmtx_all %>%
     )
 
 cmtx_all$plt
-# rm(cmtx_all)
+rm(cmtx_all)
 ```
 # 3.0 ---- Box Plots ----
 ## 3.1 Load All Phytoplankton Concentrations
@@ -215,22 +216,27 @@ meta_data <-
     
 
 cmtx_avgs <-
-    full_join(meta_data, cmtx_avgs_raw, by = join_by("sample" == "sample_id")) 
+    full_join(
+        meta_data, 
+        cmtx_avgs_raw, 
+        by = join_by("sample" == "sample_id"),
+        relationship = "many-to-many"
+        ) 
 
 # removing duplicates
 cmtx_avgs_no_dupes <- 
     cmtx_avgs %>%
     
-    group_by(date_time_utc, station, depth) %>%
-    summarise(
-        across(1:cluster_code),
-        across(chloro:pras,mean, na.rm = TRUE)) %>%
-    distinct(date_time_utc, station, depth, .keep_all = TRUE) %>%
-    ungroup()
+    reframe(
+        .by = c(date_time_utc, station, depth),
+        pick(1:cluster_code),
+        across(chloro:pras, 
+               \(x) mean(x, na.rm = TRUE))) %>%
+    distinct(date_time_utc, station, depth, .keep_all = TRUE) 
 
 # ---- save chemtax data with metadata
-if (!fs::file_exists(here("data", "processed", "chemtax_w_meta.csv")) |
-    !fs::file_exists(here("data", "processed", "chemtax_w_meta_rm_dup.csv"))) {
+if (!file_exists(here("data", "processed", "chemtax_w_meta.csv")) |
+    !file_exists(here("data", "processed", "chemtax_w_meta_rm_dup.csv"))) {
     
     cmtx_avgs <- cmtx_avgs %>%
     
@@ -255,7 +261,8 @@ if (!fs::file_exists(here("data", "processed", "chemtax_w_meta.csv")) |
                         "because already exists!"))
 }
 
-cmtx_avgs <- cmtx_avgs_no_dupes %>%
+cmtx_avgs <- 
+    cmtx_avgs_no_dupes %>%
     # pivot longer
     pivot_longer(
                  cols = chloro:pras,
@@ -269,9 +276,9 @@ cmtx_avgs_w <- cmtx_avgs_no_dupes
 rm(file_chem, meta_data, cmtx_avgs_raw, cmtx_avgs_no_dupes)
 ```
 
-## 3.2 Box Plot: Individuals Box Plots for Each PFT per Season
+## 3.2 Plot: Individuals for Each PFT per Season (Box)
 ```{r boxplots, fig.height=15, fig.width=20}
-# ---- avg season line plots ----
+# ---- avg season line plots
 cmtx_avgs_plt <-
     cmtx_avgs %>%
     group_by(phyto, names) %>%
@@ -287,8 +294,8 @@ cmtx_avgs_plt$plt
 ```
 
 # 4.0 ---- PFT multi-plots ----
-## 4.1 PFTs with a more dynamic range of values
-```{r box-lg-dynm, fig.height=6, fig.width=10}
+## 4.1 Plot: FTs with a more dynamic range of values (Box)
+```{r box-lg-dynm, fig.height=15, fig.width=20}
 box_lg <- cmtx_avgs %>%
     filter(!phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
     ggplot(aes(x    = season, 
@@ -315,7 +322,7 @@ box_lg <- cmtx_avgs %>%
 box_lg
 ```
 
-## 4.2 PFTs with a more dynamic range of values
+## 4.2 Plot: PFTs with Greater Dynamic Range (Box)
 ```{r box-sm-dynm, fig.height=15, fig.width=20}
 box_sm <-
     cmtx_avgs %>%
@@ -353,22 +360,21 @@ box_sm
 sv_arg <-
   list(
     sv_loc    = here("data", "plots", "boxplots"),
+    sv_nm     = str_c("cmtx_boxplot_", c("sm", "lg")),
     overwrite = FALSE
   ) %>%
   c(
     .,
-    list(
-      sm_exist = dir_ls(sv_arg$sv_loc, regexp = "boxplot.*sm") %>% is_empty(),
-      lg_exist = dir_ls(sv_arg$sv_loc, regexp = "boxplot.*lg") %>% is_empty()
-    )
+    sm_exist = dir_ls(.$sv_loc, regexp = .$sn_nm[1]) %>% is_empty(),
+    lg_exist = dir_ls(.$sv_loc, regexp = .$sn_nm[2]) %>% is_empty()
   )
 
-if (sv_arg$sm_exist | sv_arg$overwrite) {
+if (sv_arg$lg_exist | sv_arg$overwrite) {
   save_plot(
     filename = here(
-      "data", "plots", "boxplots",
+      sv_arg$sv_loc,
       glue(
-        "cmtx_boxplots_lg",
+        sv_arg$sv_nm[2],
         format(Sys.time(), "_%Y%m%d_%H%M%S"),
         ".jpeg"
       )
@@ -381,17 +387,17 @@ if (sv_arg$sm_exist | sv_arg$overwrite) {
     device      = "png"
   )
 } else {
-    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_sm} ",
+    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_lg} ",
                           "because exists ",
                           "and/or overwrite is set {.var FALSE}"))
 }
 
-if (sv_arg$lg_exist | sv_arg$overwrite) {
+if (sv_arg$sm_exist | sv_arg$overwrite) {
   save_plot(
     filename = here(
       "data", "plots", "boxplots",
       glue(
-        "cmtx_boxplot_sm",
+        sv_arg$sv_nm[1],
         format(Sys.time(), "_%Y%m%d_%H%M%S"),
         ".jpeg"
       )
@@ -404,209 +410,308 @@ if (sv_arg$lg_exist | sv_arg$overwrite) {
     device      = "png"
   )
 } else {
-    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_lg} ",
+    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_sm} ",
                           "because exists ",
                           "and/or overwrite is set {.var FALSE}"))
 }
+rm(sv_arg)
 ```
 
-# ---- Perform Kruskal-Wallis and Dunn Test ----
-PFT on season
+# 5.0 ---- Perform Kruskal-Wallis and Dunn Test ----
+## 5.1 K-W Test with PFT on season
 ```{r kruskal-and-dunn}
+# concentration on season grouped by PFT
 cmtx_kruskal <-
     cmtx_avgs %>% 
     group_by(phyto) %>% 
     kruskal_test(conc ~ season)
 
-    filter(cmtx_kruskal, p > 0.05) %>%
-    pull(phyto)
-
+# extract PFT where p value > 0.05
 p_gt_05 <- filter(cmtx_kruskal, p > 0.05) %>% pull(phyto)
 
+# Dunn's test
 cmtx_dunn <-
     cmtx_avgs %>%
-    filter(!(phyto %in% p_gt_05)) %>% 
+    # remove PFT with no signficant difference
+    filter(!(phyto %in% p_gt_05)) %>%
     group_by(phyto) %>%
     dunn_test(conc ~ season, 
               p.adjust.method = "bonferroni") 
+
 p_gt_05
 cmtx_kruskal
 cmtx_dunn
 ```
-
+# 6.0 ---- Combine PFT Sub Groups ----
+i.e. diatom 1 + diatom 2 = diatom
 ```{r station-seasonally-yearly-avgs}
-cmtx_avgs_w <- cmtx_avgs_w %>%
-     # combine group into main group
-    mutate(diat  = diat1 + diat2,
-           cyano = cyano2 + cyano4,
-           hapt  = hapt6 + hapt8,
-           total = chloro + crypto + diat + dino + hapt + pras + cyano
-           ) 
-
+cmtx_avgs_w <- 
+    cmtx_avgs_w %>%
+    
+    # combine group into main group
+    mutate(
+        diat  = diat1 + diat2,
+        cyano = cyano2 + cyano4,
+        hapt  = hapt6 + hapt8,
+        total = chloro + crypto + diat + dino + hapt + pras + cyano
+        ) 
 ```
-# ---- Plot Cyano and Diat vs time and station (10, 16, WS) ----
-```{r plt-cyano-diat, fig.height=8, fig.width=16}
-cmtx_season_avgs <- cmtx_avgs_w %>%
-    group_by(season) %>% 
-    summarise_at(vars(chloro:hapt),
-                 list(avg = mean, 
-                      sd  = sd, 
-                      var = var),
-                 na.rm = TRUE)
+## 6.1  Stations 10, 16, WS: Plot Cyano and Diat vs time and 
+```{r cmtx-summary}
+# cmtx_season_avgs <-
+cmtx_avgs_w %>%
+  group_by(season) %>%
+  summarise(
+    across(
+      chloro:hapt,
+      list(
+        avg = (\(x) mean(x, na.rm = TRUE)),
+        sd  = (\(x) sd(x, na.rm = TRUE)),
+        var = (\(x) var(x, na.rm = TRUE))
+      )
+    )
+  )
+```
 
-cmtx_fract <- 
-    cmtx_avgs_w %>% 
-    transmute(
+## 6.2 Plot: Calculate Fraction and Plot 3 Stations with 2 PFTs (Diatom and Cyano)
+```{r plt-cyano-diat, fig.height=8, fig.width=16}
+cmtx_fract <-
+    cmtx_avgs_w  %>%
+    mutate(
+        .keep = "none",
         date_time_utc, year, season, station,
         across(1:season),
-        across(c(pras:hapt, chloro, crypto, dino), ~ ./total,
-               .names = "frac_{.col}")) 
+        across(
+            c(pras:hapt, chloro, crypto, dino), 
+            (\(x) x/ total),
+           .names = "frac_{.col}")
+        ) 
 
-cmtx_fract %>%
-    pivot_longer(
-        contains("frac"),
-        names_to     = "phyto",
-        values_to    = "frac",
-        names_prefix = "frac_"
-    ) %>%
-    left_join(phyto_name, by = c("phyto" = "shrt")) %>%
-    filter(phyto %in% c("diat", "cyano")) %>%
-    filter(station %in% c("WS", "10", "16")) %>% 
+cmtx_sub_ln_plt <- 
+  cmtx_fract %>%
+  pivot_longer(
+    contains("frac"),
+    names_to     = "phyto",
+    values_to    = "frac",
+    names_prefix = "frac_"
+  ) %>%
+  # add long names
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
     
-    # plot  
-    ggplot(aes(
-        x = lubridate::ymd_hms(date_time_utc),
-        y = frac,
-        color = names,
-        fill = names
-    )) +
-    geom_point() +
-    geom_line() +
-    facet_wrap(facets = "station") +
-    theme_classic() +
-    theme(text = element_text(family = "serif", size = 40),
-          axis.text = element_text(size = 30),
-          legend.position = c(0.5, 0.8)) +
-    labs(x     = NULL, 
-         y     = "Proportion to Total Chl-a",
-         color = "Functional Type", 
-         fill  = "Functional Type"
-         )
+  # filter for 2 PFTs and 3 stations
+  filter(phyto %in% c("diat", "cyano")) %>%
+  filter(station %in% c("WS", "10", "16")) %>%
+  
+  # plot
+  ggplot(aes(
+    x     = lubridate::ymd_hms(date_time_utc),
+    y     = frac,
+    color = names,
+    fill  = names
+  )) +
+  geom_point() +
+  geom_line() +
+  
+  labs(
+    x     = NULL,
+    # y     = "Proportion to Total Chl-a",
+    y     = "PFT:Total Chlorophyll-a (%)",
+    color = "Functional Type",
+    fill  = "Functional Type"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     expand = c(0,0),
+                     limits = c(0,1)) +
+  facet_wrap(facets = "station") +
+  theme_classic() +
+  theme(
+    text            = element_text(family = "serif", size = 40),
+    axis.text       = element_text(size = 30),
+    axis.text.x     = element_text(angle = 45, hjust = 1), 
+    axis.ticks.length.x = unit(10, "pt"),
+    legend.position = c(0.5, 0.8),
+    panel.spacing = unit(20, "pt") 
+  )
+
+cmtx_sub_ln_plt
 ```
+## 6.3 Save Subset of PFT and Stations
 ```{r save-dia-cyano}
-if (FALSE) {
-    cowplot::save_plot(
-        filename    = here("data", "plots", glue("phyto_bloom", ".jpg")), 
-        plot        = last_plot(),
+sv_arg <-
+  list(
+    sv_loc    = here("data", "plots"),
+    sv_nm     = "phyto_bloom",
+    overwrite = FALSE
+  ) %>%
+  c(
+    .,
+    phyto_bl = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+  )
+
+if (sv_arg$phyto_bl | sv_arg$overwrite) {
+    save_plot(
+        filename    = here(sv_arg$sv_loc, glue(sv_arg$sv_nm, ".jpeg")), 
+        plot        = cmtx_sub_ln_plt,
         base_height = 8,
         base_width  = 16,
         dpi         = 600, 
         units       = "in", 
         device      = "png")
 } else {
-    cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot} ",
-                          "because set to {.var FALSE}"))
+   cli_alert_info(c("Skipping saving of {.file phyto_bloom} ",
+                    "because exists ",
+                    "and/or overwrite is set {.var FALSE}"))
 }
+
+rm(sv_arg)
 ```
 
-# ---- View means of season and stations per PFT ----
+# 7.0 ---- Average of Season and Stations per PFT ----
 ```{r view-avgs}
 # by season
-cmtx_fract %>% 
-    group_by(season) %>% 
-    select(season, contains("frac")) %>%
-    summarise(
-        across(.cols  = contains("frac"), 
-               mean, na.rm = TRUE,
-               .names = "{.col}_avg"))  %>%
-    View(title = "phyto_avg_by_season")
+cmtx_fract %>%
+  select(season, contains("frac")) %>%
+  summarise(
+    .by = season,
+    across(
+      .cols  = contains("frac"),
+      .fns   = (\(x) mean(x, na.rm = TRUE)),
+      .names = "{.col}_avg"
+    )
+  ) # %>%
+# View(title = "phyto_avg_by_season")
 
 # by station
-cmtx_fract %>% 
-    mutate(station = forcats::fct_reorder(station, lon)) %>% 
-    group_by(station) %>%
-    summarise(
-        across(.cols  = contains("frac"), 
-               mean, na.rm = TRUE,
-               .names = "{.col}_avg")) %>%
-    View(title = "phyto_avg_by_station") 
+cmtx_fract %>%
+  mutate(station = fct_reorder(station, lon)) %>%
+  group_by(station) %>%
+  summarise(
+    across(
+      .cols  = contains("frac"),
+      .fns   = (\(x) mean(x, na.rm = TRUE)),
+      .names = "{.col}_avg"
+    )
+  ) # %>%
+    # View(title = "phyto_avg_by_station") 
 ```
-# ---- PFT Fractions Plot ----
+# 8.0 ---- PFT Fractions Plot ----
 ```{r config-frac}
-cmtx_fract2 <- 
-    cmtx_fract %>%
-    group_by(season) %>%
-    summarise(
-         across(.cols = contains("frac"), mean, .names = "{.col}_avg")) %>%
-    
-    pivot_longer(
-        contains("frac"),
-        names_to     = "phyto",
-        names_prefix = "frac_",
-        values_to    = "avg_frac"
-    ) %>%
-    mutate(
-        phyto = str_remove(phyto, "_avg")
-    ) %>%
-   left_join(phyto_name, by = c("phyto" = "shrt"))
+cmtx_fract_long <-
+  cmtx_fract %>%
+  group_by(season) %>%
+  summarise(
+    across(
+      .cols = contains("frac"),
+      .fns  = mean,
+    )
+  ) %>%
+  pivot_longer(
+    contains("frac"),
+    names_to     = "phyto",
+    names_prefix = "frac_",
+    values_to    = "avg_frac"
+  ) %>%
+  mutate(
+    phyto = str_remove(phyto, "_avg")
+  ) %>%
+  left_join(phyto_name, 
+            by = join_by("phyto" == "shrt"))
 
-cmtx_fract2
+cmtx_fract_long
 ```
 
-## Plot: Seasonal Fraction of each PFT
-```{r plt-fracs, fig.width=16, fig.height=8}
+## 8.1 Plot: Seasonal Fraction of each PFT (Bar)
+```{r plt-fracs, fig.width=20, fig.height=10}
 # alternate color palette
 # tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
 #                '#CC6677', '#882255', '#AA4499')
 
 tol_muted <- khroma::color("muted", names = FALSE)(9)
 
-cmtx_fract2 %>% 
-    ggplot(aes(
-               fill  = names,
-               color = names,
-               y     = avg_frac,
-               x     = season
-    )) +
-    geom_bar(position = "fill", 
-             stat     = "identity") +
-    
-     labs(x    = "Season",
-         y     = "Proportion to Total Chl-a",
-         fill  = "Phytoplankton Functional Type",
-         color = "Phytoplankton Functional Type") +
-   
-    scale_fill_manual(values  = tol_muted) +
-    scale_color_manual(values = tol_muted) +
-    
-    # theme
-    theme_classic() +
-    theme(
-        text             = element_text(family = "serif", size = 20),
-        axis.title       = element_text(size = 20),
-        legend.position  = "bottom",
-        legend.direction = "horizontal"
-    ) 
+
+cmtx_szn_bar <-
+  cmtx_fract_long %>%
+  ggplot(
+    aes(
+      fill  = names,
+      color = names,
+      y     = avg_frac,
+      x     = season
+    )
+  ) +
+  geom_bar(
+    position = "fill",
+    stat     = "identity"
+  ) +
+  labs(
+    x     = "Season",
+    # y     = "Proportion to Total Chl-a",
+    y     = "PFT:Total Chlorophyll-a (%)",
+    fill  = "Phytoplankton Functional Type",
+    color = "Phytoplankton Functional Type"
+  ) +
+  scale_fill_manual(values  = tol_muted) +
+  scale_color_manual(values = tol_muted) +
+    scale_y_continuous(
+        labels = scales::percent_format(accuracy = 1),
+        expand = c(0,0),
+        limits = c(0,1)) +
+  # theme
+  theme_classic() +
+  theme(
+    text             = element_text(family = "serif", size = 20),
+    axis.title       = element_text(size = 20),
+    legend.position  = "bottom",
+    legend.direction = "horizontal",
+    plot.margin = margin(15,10,10,10, "pt")
+  )
+
+cmtx_szn_bar      
 ```
 ## Save seasonal faction of each PFT
 ```{r save-season-frac}
-if (FALSE) {
-    cowplot::save_plot(
-        filename    = here("data", "plots", 
-                           glue("phyto_func_type_bar_ratio_reason", 
-                           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                           ".jpg")), 
-        plot        = last_plot(),
-        base_height = 8,
-        base_width  = 16,
-        dpi         = 600, 
-        units       = "in", 
-        device      = "png")
+sv_arg <-
+  list(
+    sv_loc    = here("data", "plots"),
+    sv_nm     = "pft_prcnt_season",
+    overwrite = FALSE
+  ) %>%
+  c(
+    .,
+    phyto_bl = dir_ls(.$sv_loc,
+                      regexp = .$sv_nm) %>%
+               is_empty()
+  )
+
+if (sv_arg$phyto_bl | sv_arg$overwrite) {
+    save_plot( 
+    filename = here(
+     sv_arg$sv_loc,
+     glue(
+       sv_arg$sv_nm,
+       format(Sys.time(), "_%Y%m%d_%H%M%S"),
+       ".jpg"
+     )
+   ),
+   plot        = cmtx_szn_bar,
+   base_height = 8,
+   base_width  = 16,
+   dpi         = 600,
+   units       = "in",
+   device      = "png"
+ )
 } else {
-    cli::cli_alert_info(c("Skipping saving of ",
-                          "{.file phyto_func_type_bar_ratio_reason} ",
-                          "because set to {.var FALSE}"))
+    cli_alert_info(
+        c(
+          "Skipping saving of ",
+          "{.file phyto_func_type_bar_ratio_reason} ",
+          "because exists ",
+          "and/or overwrite is set {.var FALSE}"
+        )
+    )
 }
+
+rm(sv_arg)
 ```
 
 # NOT USED: Table Test
