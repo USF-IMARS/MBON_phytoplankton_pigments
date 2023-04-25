@@ -481,7 +481,6 @@ cca_plt <-
 
 cca_plt
 
-library(ggordiplots)
 gg_ordiplot(cmtx_cca, 
             env_cmtx %>% 
                 drop_na(temp,par:sal) %$% as.factor(season),
