@@ -1,6 +1,7 @@
 world_download <- function(path_land = NULL,
                            path_topo = path_land,
-                           extent = NULL) {
+                           extent = NULL,
+                           file_suffix = NULL) {
 # ============================================================================ #
 #                                                                              # 
 #               Download World Shapefiles for plotting                         #
@@ -37,7 +38,7 @@ world_download <- function(path_land = NULL,
 #                               ymin = 24.25,  # South
 #                               ymax = 25.75   # North 
 #                              ) 
-#
+# file_suffix = Suffix to end of topography name
 # ---- OUTPUTS: ----------
 # NA
 #
@@ -71,7 +72,12 @@ world_download <- function(path_land = NULL,
     # unite(as.character(round(extent)), col = "one", c(1:4))
     # topo_file <- here(path_topo,"etopo1_{space}.nc")
     
-    topo_file <- here(path_topo,"etopo1.nc")
+    
+    
+    topo_file <- here(path_topo,
+                      glue("etopo1{file_suffix}.nc",
+                           .null = ""))
+    
     if (length(extent) != 4) {
         cli_abort(c(
             "{.var extent} needs to have 4 values.",
