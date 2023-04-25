@@ -16,7 +16,7 @@ output: html_document
 5. Run function on cruise IDs
 
 
-# Load libraries
+# 1.0 Load libraries
 ```{r setup}
 librarian::shelf(
     librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -33,7 +33,7 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
 
-# Set database
+# 2.0 Set database
 Once you find an ERDDAP with the data you want, you can change the location here
 ```{r set-database}
 # this database contains CTD data from Walton Smith Cruises
@@ -43,7 +43,7 @@ Sys.setenv(RERDDAP_DEFAULT_URL = database)
 rm(database)
 ```
 
-# Set folder location and create vector of cruise IDs
+# 3.0 Set folder location and create vector of cruise IDs
 ```{r loc-ids}
 # folder location
 loc      <- here("data", "raw", "ctd")
@@ -77,7 +77,7 @@ cruiseID[!cruiseID %in% all_cruise]
 all_cruise[!all_cruise %in% cruiseID]
 ```
 
-# Function to query and download CTD data from each cruise
+# 4.0 Function to query and download CTD data from each cruise
 This takes in cruise IDs and queries the ERDDAP to find data. Next, it will
 download if CTD files don't exist
 ```{r query-function}
@@ -218,7 +218,7 @@ ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
 }
 ```
 
-# Run ctd_downloads function and try each cruise ID for existing data
+# 5.0 Run ctd_downloads function and try each cruise ID for existing data
 This will take some time, ~ 30 - 60 min
 ```{r download-ctd-data}
 tictoc::tic()
@@ -236,9 +236,8 @@ tictoc::toc()
 rm(cr_id)
 ```
 
-# Read CTD files and average top 5 meters
+# 6.0 Read CTD files and average top 5 meters
 
-    
 ```{r query-ctd-files}
 # get all CTD file names
 file_ctd <-
@@ -286,52 +285,9 @@ file_ctd <-
     ),
     station = str_replace(station, "-", "_")
   )
-
-#     # extract cruise and station names from files
-#     mutate(
-#          station   = if_else(is.na(station),
-#                             str_extract(file, "\\d_(.*)\\.csv", 1),
-#                             station),
-#         station   = str_replace(station, "(\\d)_+(\\d)", "\\1.\\2"),
-#         station   = str_to_upper(station),
-#         
-#         # station   = str_replace(station, "(21).*(LK)*", "LK"),
-#         # station   = str_replace(station, "21-5", "21.5"),
-#         station   = str_replace(station, "(57-)(\\d)", "57.\\2"),
-#         station   = str_replace(station, "-", "_"),
-#        
-#     )
-# 
-# # fixing 21LK, 21_5, 21-5, 21/LK etc
-# dir_ls(loc,
-#            recurse = TRUE,
-#            regexp = "\\.csv$") %>% 
-#     str_sort() %>%
-#     tibble(file = .) %>%
-#     mutate(
-#         base = basename(file) %>%
-#                path_ext_remove()
-#     ) %>%
-#     separate_wider_delim(base, "_",
-#            names = c("cruise", "stn"),
-#            too_many = "merge",
-#            cols_remove = FALSE) %>%
-#     mutate(station = str_remove(stn, "(?i)(stn|sta)_?"),
-#            station = str_replace(station, "-|/", "_")) %>%
-#     filter(str_detect(stn, "(21|LK)"))  %>% # %$% unique(station)  %>% sort() 
-#     mutate(
-#         .keep = "used",
-#         file,
-#         stn,
-#         station = case_when(
-#             str_detect(station, "(?i)LK") ~ "LK",
-#             str_detect(station, "(?i)^21$") ~ "LK",
-#             str_detect(station, "21.+5") ~ "21.5",
-#             .default = station
-#         ) )
-      
 ```
-## Summarize CTD Files
+
+# 7.0 Summarize CTD Files
 Two version:
 1. Using parallel processing `future_pmap()` (faster)
     - requires `furrr`, `future`, and `progressr` 
@@ -465,8 +421,6 @@ if (FALSE) {
 # TODO: remove to another location
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
-
-
 if (FALSE) {
     # cmtx_avgs created in chemtax_analysis.Rmd
     cmtx_avgs <- 
