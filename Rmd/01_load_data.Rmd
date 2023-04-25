@@ -15,26 +15,34 @@ output: html_document
     * maybe some heatmap
     * maybe map
 
+# 1.0 ---- Load ----
+
+## 1.1 Load Libraries
 ```{r setup, include=FALSE}
 # root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
-library("ggplot2")
-library("tibble")
-library("tidyr")
-library("readr")
-library("purrr")
-library("dplyr")
-library("stringr")
-library("forcats")
-library("lubridate")
-library("glue")
-library("fs")
-library("magrittr")
-library("here")
-# library("broom") # optional
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    # broom # optional
+    
+    # additional
+    rlang
+)
+
+# shelf(conflicted) # may be needed if won't allow loading of certain packages
+
+conflicts_prefer(
+    dplyr::filter(), 
+    dplyr::select()
+    )
 
 ```
 
+## 1.2 Create Directories
 ```{r create-dir}
 # will create a set directory if does not exists
 # useful for new projects
@@ -54,223 +62,293 @@ fs::dir_create(path = here(subDir))
 rm(subDir)
 ```
 
-
+## 1.3 Get File Paths
 ```{r file-paths}
 # find pigment data
-dir <- here("data", "raw", "hplc")
+data_dir <- here("data", "raw", "hplc")
 path_out <- here("data", "processed")
 
 # pigment files
-file.pig <-
-    dir %>%
-    fs::dir_ls(
-               recurse = FALSE,
-               type = "file",
-               # included ^[^~]* to not match ~, means that a file is opened
-               regexp = "^[^~]*\\.xlsx$") %>% 
-    str_sort()
+file_pig <-
+  data_dir %>%
+  dir_ls(
+    recurse = FALSE,
+    type    = "file",
+    # included ^[^~]* to not match ~, means that a file is opened
+    # regexp  = "^[^~]*\\.xlsx$"
+    regexp  = "^[^~]*\\.xlsx$"
+  ) %>%
+  str_sort()
     
-if (identical(file.pig, character(0))) {
-    message(glue("You may need to put raw HPLC data into a ", 
-                 "newly created directory for raw HPLC data in ",
-                 "{dir} (as of Jan 2023)"))
-} else {
-    file.pig
-}
-    
-```
 
-# HPLC data is loaded and cleanup
+if (is_empty(file_pig)) {
+    message(glue_col(
+        "You may need to put raw HPLC data into a ", 
+        "newly created directory for raw HPLC \ndata in:\n",
+        "{red {data_dir}} (as of Jan 2023)"))
+} else {
+    file_pig
+}
+```
+## 1.4 Load HPLC Data and Fix Issues
 Cleans name for tidying, renames some, creates date_time column, replace -9999 to
 NA, -8888 to 0 (is LOD), corrects formatting issues,
 ```{r load-data}
+shelf(readxl, janitor, hms)
 # ---- M-K 06-12 report_may_and_sept_2016 ----
 # fix date and add datetime
 df <-
-    readxl::read_xlsx(
-        file.pig[1],
-        sheet = 2,
-        skip = 8,
-        # -9999 = missing
-        # -8888 = below Limit of Detection (LOD)
-        na = c("-9999", "-8888"),
-        .name_repair = janitor::make_clean_names
-    ) %>%
-
-    rename(lon = longitude,
-           lat = latitude) %>%
-    
-    mutate(
-        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S", 
-                                        tz = "utc")),
-        date_time_utc = ymd_hms(
-            paste(
-                year_of_sample,
-                gregorian_month,
-                day_of_gregorian_month,
-                gmt_time
-            ),
-            tz = "utc"
-        ),
-        .before = lon
-    )
+  read_xlsx(
+    file_pig[1],
+    sheet = 2,
+    skip  = 8,
+    # -9999 = missing
+    # -8888 = below Limit of Detection (LOD)
+    na    = c("-9999", "-8888"),
+    .name_repair = make_clean_names
+  ) %>%
+  rename(
+    lon = longitude,
+    lat = latitude
+  ) %>%
+  mutate(
+    gmt_time      = as_hms(gmt_time),
+    date_time_utc = ymd_hms(
+      str_c(
+        year_of_sample,
+        gregorian_month,
+        day_of_gregorian_month,
+        gmt_time,
+        sep = " "
+      ),
+      tz = "utc"
+    ),
+    .before = lon
+  )
 
 # ---- M-K 09-02 report_nov16_mar17_jun17_oct17_jan18 ----
 # fix date and add datetime
 # convert indicate_if_filters_are_replicates to character
-# fix gfc to gsfc 
+# fix gfc to gsfc
 df2 <-
-    readxl::read_xlsx(
-        file.pig[2],
-        sheet = 2,
-        skip = 8,
-        # -9999 = missing
-        # -8888 = below Limit of Detection (LOD)
-        na = c("-9999", "-8888"),
-        .name_repair = janitor::make_clean_names
-    ) %>%
+  read_xlsx(
+    file_pig[2],
+    sheet = 2,
+    skip  = 8,
+    # -9999 = missing
+    # -8888 = below Limit of Detection (LOD)
+    na    = c("-9999", "-8888"),
+    .name_repair = make_clean_names
+  ) %>%
+  mutate(
+   time          = as_hms(time),
+   date_time_utc = ymd_hms(
+     str_c(
+       year,
+       month,
+       day,
+       time,
+       sep = " "
+     ),
+     tz = "utc"
+   ),
+   .before = lon
+ ) %>%
     
-    mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
-                                     tz = "utc")),
-        date_time_utc = ymd_hms(paste(year, month, day, time),
-                                tz = "utc"),
-        .before = lon
-    ) %>%
+  # converted to character, b/c is logical
+  mutate(
+    indicate_if_filters_are_replicates =
+      as.character(indicate_if_filters_are_replicates)
+  ) %>%
     
-    # converted to character, b/c is logical
-    mutate(indicate_if_filters_are_replicates = 
-               as.character(indicate_if_filters_are_replicates)) %>%
+  # fix gfc to gsfc
+  rename(
+    filter_storage_before_shipment_to_gsfc =
+      filter_storage_before_shipment_to_gfc
+  ) %>%
     
-    # fix gfc to gsfc
-    rename(filter_storage_before_shipment_to_gsfc = 
-               filter_storage_before_shipment_to_gfc) %>%
-    
-    # one station was included in metadata, but does not exist
-    filter(!is.na(station))
+  # one station was included in metadata, but does not exist
+  filter(!is.na(station))
 
 # ---- M-K 10-11 part1 report ----
 # fix date and add datetime
 # fix water depth
 # fix indicate_if_filters_are_replicates as character
 df3 <-
-    readxl::read_xlsx(
-        file.pig[3],
-        sheet = "Report",
-        skip = 8,
-        # -9999 = missing
-        # -8888 = below Limit of Detection (LOD)
-        na = c("-9999", "-8888"),
-        .name_repair = janitor::make_clean_names
-    ) %>%
-    
-    # fix date and datetime
-    mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
-                                     tz = "utc")),
-        date_time_utc = ymd_hms(paste(year, month, day, time),
-                                tz = "utc"),
-        .before = lon
-    ) %>%
-    
-    mutate(
-        indicate_if_filters_are_replicates =
-            as.character(indicate_if_filters_are_replicates),
-        
-        # matches any digit or decimal and convert to numeric (issue with format)
-        water_depth = as.numeric(str_extract(water_depth, "\\d*\\.{0,1}\\d")),
-        water_depth = replace_na(water_depth, 0)
-    )
+  read_xlsx(
+    file_pig[3],
+    sheet = "Report",
+    skip  = 8,
+    # -9999 = missing
+    # -8888 = below Limit of Detection (LOD)
+    na    = c("-9999", "-8888"),
+    .name_repair = make_clean_names
+  ) %>%
+  # fix date and datetime
+  mutate(
+    time          = as_hms(time),
+    date_time_utc = ymd_hms(
+      str_c(
+        year,
+        month,
+        day,
+        time,
+        sep = " "
+      ),
+      tz = "utc"
+    ),
+    .before = lon
+  ) %>%
+  mutate(
+    indicate_if_filters_are_replicates =
+      as.character(indicate_if_filters_are_replicates),
+
+    # matches any digit or decimal and convert to numeric (issue with format)
+    water_depth = str_extract(water_depth, "\\d*\\.{0,1}\\d"),
+    water_depth = as.numeric(water_depth),
+    water_depth = replace_na(water_depth, 0)
+  )
 
 # ---- M-K 10-11 part2 report ----
 # fix misspelled month
 # fix depth
 # fix date and add datetime
 df4 <-
-    readxl::read_xlsx(
-        file.pig[4],
-        sheet = "Report",
-        skip = 8,
-        # -9999 = missing
-        # -8888 = below Limit of Detection (LOD)
-        na = c("-9999", "-8888"),
-        .name_repair = janitor::make_clean_names
-    )  %>%
-    
-    # Fixed misspelled month
-    mutate(month = case_when(
-        !month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
-        TRUE ~ month
-    )) %>%
-    
-    # fix date and add datetime
-    mutate(
-        time = hms::as_hms(strftime(time, format = "%H:%M:%S",
-                                     tz = "utc")),
-        date_time_utc = ymd_hms(paste(year, month, day, time),
-                                tz = "utc"),
-        .before = lon
-    ) %>%
-    
-    mutate(depth = as.numeric(str_extract(depth, "\\d*\\.{0,1}\\d")))
+  read_xlsx(
+    file_pig[4],
+    sheet = "Report",
+    skip  = 8,
+    # -9999 = missing
+    # -8888 = below Limit of Detection (LOD)
+    na    = c("-9999", "-8888"),
+    .name_repair = janitor::make_clean_names
+  ) %>%
+  # Fixed misspelled month
+  mutate(
+    month = case_when(
+      !month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
+      .default = month
+    ),
+    depth = str_extract(depth, "\\d*\\.{0,1}\\d"),
+    depth = as.numeric(depth)                   
+  ) %>%
+  # fix date and add datetime
+  mutate(
+    time          = as_hms(time),
+    date_time_utc = ymd_hms(
+      str_c(
+        year,
+        month,
+        day,
+        time,
+        sep = " "
+      ),
+      tz = "utc"
+    ),
+    .before = lon
+  )
 
 # ---- M-K_05-17_report_mar16 ----
 # fix date and add datetime
 # date_extracted_month_day_year numeric to date, replace str to NA
 df5 <-
-    readxl::read_xlsx(
-        file.pig[5],
-        sheet = "Report",
-        skip = 8,
-        # -9999 = missing
-        # -8888 = below Limit of Detection (LOD)
-        na = c("-9999", "-8888"),
-        .name_repair = janitor::make_clean_names
-    ) %>%
+  read_xlsx(
+    file_pig[5],
+    sheet = "Report",
+    skip  = 8,
+    # -9999 = missing
+    # -8888 = below Limit of Detection (LOD)
+    na    = c("-9999", "-8888"),
+    .name_repair = make_clean_names
+  ) %>%
+  rename(
+    lon = longitude,
+    lat = latitude
+  ) %>%
+  # fix date and add datetime
+  mutate(
+    gmt_time      = as_hms(gmt_time),
+    date_time_utc = ymd_hms(
+      str_c(
+        year_of_sample,
+        gregorian_month,
+        day_of_gregorian_month,
+        gmt_time,
+        sep = " "
+      ),
+      tz = "utc"
+    ),
+    .before = lon
+  ) %>%
     
-    rename(lon = longitude,
-           lat = latitude) %>%
-    
-    # fix date and add datetime
-    mutate(
-        gmt_time = hms::as_hms(strftime(gmt_time, format = "%H:%M:%S",
-                                         tz = "utc")),
-        date_time_utc = ymd_hms(
-            paste(
-                year_of_sample,
-                gregorian_month,
-                day_of_gregorian_month,
-                gmt_time
-            ),
-            tz = "utc"
-        ),
-        .before = lon
-    ) %>%
-    
-    # converts numeric to date, replace str to NA
-    mutate(
-        date_extracted_month_day_year = case_when(!is.na(
-            as.numeric(date_extracted_month_day_year)
-        ) ~ paste(
-            as.Date(as.numeric(date_extracted_month_day_year), origin = "1899-12-30")
-        ),
-        TRUE ~ NA_character_),
-        date_extracted_month_day_year = ymd(date_extracted_month_day_year, tz = "utc")
-    )
+  # converts numeric to date, replace str to NA
+  mutate(
+        temp = str_remove(date_extracted_month_day_year, "\\D+"),
+        temp = as.numeric(temp),
+        temp = janitor::excel_numeric_to_date(temp),
+        temp = ymd(temp, tz = "utc"),
+        date_extracted_month_day_year = temp
+    )  %>%
+  select(-temp) 
+
+unshelf(readxl, janitor, hms)
 ```
 
-# Merge data
+# 2.0 ---- Merge Data Reports ----
+## 2.1 Mapped Column Names
+```{r}
+# select variables that match data sets
+params <- c(
+  # meta
+  "hplc_gsfc_id" = "gsfc_lab_sample_code", "pi", "station",
+  "sample" = "original_pi_sample_label", "cruise" = "cruise_name",
+  "indicate_if_filters_are_replicates",
+  "volfilt" = "volume_filtered_ml", "bottle" = "bottle_number",
+  "depth" = "sampling_depth_meters",
+  "water_depth" = "total_water_depth_meters",
+  "name_of_water_body",
+
+  # time
+  "year" = "year_of_sample", "month" = "gregorian_month",
+  "day" = "day_of_gregorian_month", "sdy" = "sequential_day_of_year",
+  "time" = "gmt_time", "date_time_utc", "lon", "lat",
+
+  # sample type
+  "filter_type", "filter_diameter_mm",
+  "filter_storage_before_shipment_to_gfsc" =
+    "filter_storage_before_shipping_to_gsfc",
+
+  # pigments
+  "tot_chl_a", "tot_chl_b", "tot_chl_c", "alpha_beta_car", "but_fuco",
+  "hex_fuco", "allo", "diadino", "diato", "fuco", "perid", "zea", "mv_chl_a",
+  "dv_chl_a", "chlide_a", "mv_chl_b", "dv_chl_b", "chl_c1c2" = "chl_c12",
+  "chl_c3", "lut", "neo", "viola", "phytin_a", "phide_a", "pras", "gyro",
+  "tchl" = "t_chl", "ppc", "psc", "psp", "tcar" = "t_caro", "tacc" = "t_acc",
+  "tpg" = "t_pg", "dp", "tacc_tchla" = "t_acc_tchla", "psc_tcar" = "psc_t_caro",
+  "ppc_tcar" = "ppc_t_caro", "tchl_tcar" = "t_chl_t_caro", "ppc_tpg" = "ppc_tpig",
+  "psp_tpg" = "psp_t_pg", "tchl_a_tpg" = "t_chl_a_t_pig",
+  "comments", "sequential_sample_number"
+)
+```
+
+## 2.2 Join Data
 ```{r merge-df}
+shelf(paulponcet/statip)
 # ---- merge df 2, 3, 4 ----
 df_merg  <-
     full_join(df3, df2)
 
-df_merg  <-
-    mutate(df_merg,
-           hplc_gsfc_id = case_when(is.na(hplc_gsfc_id) ~ gsfc_sample_code,
-                                    TRUE ~ hplc_gsfc_id))
+df_merg <-
+  mutate(
+    df_merg,
+    hplc_gsfc_id = case_when(
+      is.na(hplc_gsfc_id) ~ gsfc_sample_code,
+      .default = hplc_gsfc_id
+    )
+  )
 
-df_merg  <- full_join(df_merg, df4) %>%
+df_merg  <- 
+    full_join(df_merg, df4) %>%
     
     # one cell had "28A", converted to NA
     mutate(sequential_sample_number = as.numeric(sequential_sample_number)) 
@@ -279,53 +357,24 @@ df_merg  <- full_join(df_merg, df4) %>%
 df_merg2 <- full_join(df, df5)
 
 # ---- full merge ----
-# select variables that match data sets
-params <- c(
-    # meta
-    "hplc_gsfc_id" = "gsfc_lab_sample_code", "pi", "station", 
-    "sample" = "original_pi_sample_label", "cruise" = "cruise_name",
-    "indicate_if_filters_are_replicates",
-    "volfilt" = "volume_filtered_ml", "bottle" = "bottle_number", 
-    "depth" = "sampling_depth_meters", 
-    "water_depth" = "total_water_depth_meters",
-    "name_of_water_body", 
-    
-    # time 
-    "year" = "year_of_sample", "month" = "gregorian_month",
-    "day" = "day_of_gregorian_month", "sdy" = "sequential_day_of_year", 
-    "time" = "gmt_time", "date_time_utc","lon", "lat", 
-    
-    # sample type
-    "filter_type", "filter_diameter_mm", 
-    "filter_storage_before_shipment_to_gfsc" = 
-        "filter_storage_before_shipping_to_gsfc",
-    
-    # pigments
-    "tot_chl_a", "tot_chl_b", "tot_chl_c", "alpha_beta_car","but_fuco", 
-    "hex_fuco", "allo", "diadino", "diato", "fuco", "perid", "zea", "mv_chl_a", 
-    "dv_chl_a", "chlide_a", "mv_chl_b", "dv_chl_b", "chl_c1c2" = "chl_c12",
-    "chl_c3", "lut", "neo", "viola", "phytin_a", "phide_a", "pras", "gyro", 
-    "tchl" = "t_chl", "ppc", "psc", "psp", "tcar" = "t_caro", "tacc" = "t_acc",
-    "tpg" = "t_pg", "dp", "tacc_tchla" = "t_acc_tchla", "psc_tcar" = "psc_t_caro",
-    "ppc_tcar" = "ppc_t_caro", "tchl_tcar" = "t_chl_t_caro", "ppc_tpg" = "ppc_tpig",
-    "psp_tpg" = "psp_t_pg", "tchl_a_tpg" = "t_chl_a_t_pig",
-    
-    "comments", "sequential_sample_number")
-
-
-df_all <- 
-    full_join(df_merg, df_merg2, by = params)  %>%
-    
-    # fix small errors with negative values
-    mutate(lat = case_when(lat < 0 ~ lat * (-1),
-                           TRUE ~ lat),
-           lon = case_when(lon > 0 ~ lon * (-1),
-                           TRUE ~ lon)) %>%
+df_all <-
+  full_join(df_merg, df_merg2, by = params) %>%
+  # fix small errors with negative values
+  mutate(
+    lat = case_when(
+      lat < 0 ~ lat * (-1),
+      .default = lat
+    ),
+    lon = case_when(
+      lon > 0 ~ lon * (-1),
+      .default = lon
+    )
+  ) %>%
     
     # fix spelling and spacing of stations
     mutate(
-        station = stringr::str_replace_all(station, fixed(" "), ""),
-        station = stringr::str_to_upper(station),
+        station = str_replace_all(station, "\\s", ""),
+        station = str_to_upper(station),
         
         # specifically TB1 was off, need to use NOAA AOML for coords
         lat = case_when(station == "TB1" ~ 27.8013, 
@@ -338,9 +387,10 @@ df_all <-
 # summarize most freq value for lat/lon per station
 indx <- df_all %>% 
     select(station, lat, lon) %>%
-    group_by(station) %>%
+    # group_by(station) %>%
     # summarise(n = n())
     summarise(
+        .by = station,
         # lat_mod = modeest::mlv(lat, method = "mfv"),
         # lon_mod = modeest::mlv(lon, method = "mfv1"),
         lat_mod = statip::mfv1(lat),
@@ -350,63 +400,108 @@ indx <- df_all %>%
     ) 
 
 # left join indx to df_all
-df_all <- df_all %>%
+df_all <- 
+    df_all %>%
     # group_by(station) %>%
     left_join(indx, by = "station") %>%
-    mutate(lat = lat_mod, 
-           lon = lon_mod) %>%
+    mutate(
+        lat = lat_mod, 
+        lon = lon_mod
+        ) %>%
     select(-lat_mod, -lon_mod)
 
 rm(df, df2, df3, df4, df5, df_merg, df_merg2, params)
+unshelf(paulponcet/statip)
 ```
 
-
+## 2.4 Map Points of Data
 ```{r plot-points}
-# will need plotly 
-# plotly::ggplotly(
-    # ggplot() +
-    #     geom_point(data= df_all, aes(x = lon, y = lat, color = station), show.legend = F) +
-        # geom_point(data = indx, mapping = aes(lon_mod, lat_mod, stn = station), shape = 21, fill = NA ,
-        #            inherit.aes = F, show.legend = F) #+
-#         # geom_point(data=tibble(x = -82.8819, y =	27.8013), aes(x=x, y=y), color = "black")
-# )
+map_plt <-
+    ggplot() +
+    geom_point(data = df_all,
+               aes(x     = lon, 
+                   y     = lat, 
+                   color = station),
+               
+               show.legend = FALSE) +
+    geom_point(
+        data = indx,
+        aes(x = lon_mod, 
+            y = lat_mod, 
+            group = station),
+        color = "purple",
+        shape = 21,
+        alpha = 25,
+        size = 3,
+        # fill  = NA ,
+        inherit.aes = FALSE,
+        show.legend = FALSE
+    )
 
-# for looking at similarities in the column names between different files
-# x <- cbind(names(df),names(df2),names(df3),names(df4),names(df5))
-# x2 <- cbind(names(df234), names(df15))
+map_plt
+
+if (interactive() & nzchar(system.file(package = "plotly")) & FALSE)
+    # will need plotly 
+    plotly::ggplotly(map_plt)
+
+rm(map_plt)
 ```
 
 ```{r summary-statistics}
 # group by seasons
-winter <- c("Dec", "Jan", "Feb")
-spring <- c("Mar", "Apr", "May")
-summer <- c("Jun", "Jul", "Aug")
-autumn <- c("Sep", "Nov", "Oct")
+# szn <-
+#   list(
+#     winter = c("Dec", "Jan", "Feb"),
+#     spring = c("Mar", "Apr", "May"),
+#     summer = c("Jun", "Jul", "Aug"),
+#     autumn = c("Sep", "Nov", "Oct")
+#   )
+szn <-
+  list(
+    winter = month.abb[c(12,1,2)], # Dec, Jan, Feb
+    spring = month.abb[3:5], # Mar, Apr, May
+    summer = month.abb[6:8], # Jun, Jul, "Aug"
+    autumn = month.abb[9:11] # Sep, Nov, Oct
+  )
 
-df_all <- df_all %>% 
+df_all <-
+    df_all %>% 
     mutate(
     month  = strtrim(month, 3),
-    season = case_when(
-        month %in% winter ~ "Winter",
-        month %in% spring ~ "Spring",
-        month %in% summer ~ "Summer",
-        month %in% autumn ~ "Autumn",
+    season = case_match(
+        month,
+        szn$winter ~ "Winter",
+        szn$spring ~ "Spring",
+        szn$summer ~ "Summer",
+        szn$autumn ~ "Autumn",
+        .default = NA_character_
     ),
     .after = month
 )
 
 # average and standard deviations for each pigment
-pig_stat <- df_all %>%
-    group_by(season) %>%
-    summarise_at(vars(tot_chl_a:tchl_a_tpg),
-                 list(avg = mean, sd = sd, var = var),
-                 na.rm = TRUE)
-
+pig_stat <-
+  df_all %>%
+  summarise(
+    .by = season,
+    across(
+      tot_chl_a:tchl_a_tpg,
+      list(
+        avg = ~ mean(.x, na.rm = TRUE),
+        sd  = ~ sd(.x, na.rm = TRUE),
+        var = ~ var(.x, na.rm = TRUE)
+      )
+    )
+  ) 
 ```
 
-# Calculate size fractionation based on Uitz, 2006
+# 3.0 ---- Calculate size fractionation based on Uitz, 2006 ----
+
+# 3.1 Size Fractionation
+
 ```{r size-fractionation}
-df_all <- df_all %>%
+df_all <- 
+    df_all %>%
     mutate(
         # diagnostic pigment
         dp_w =
@@ -425,7 +520,7 @@ df_all <- df_all %>%
     )
 ```
 
-# Save pigment data combined and mean/std dev
+##  Save pigment data combined and mean/std dev
 ```{r save-combined-data}
 if (FALSE) {
     readr::write_csv(df_all, here(path_out, "combined_pig_dat.csv"))
@@ -444,11 +539,14 @@ if (!exists("df_all")) {
 # transform pigments to log10 
 val     <- 0.001 # change to 1 or 0.001
 
-log_pig <- 
-    pig_dat %>%
-    mutate(
-           across(tot_chl_a:dp,
-                  ~ log10(.x + val)))
+log_pig <-
+  pig_dat %>%
+  mutate(
+    across(
+      tot_chl_a:dp,
+      ~ log10(.x + val)
+    )
+  )
 
 
 # TODO: maybe I don't need to do this
@@ -462,57 +560,65 @@ log_pig <-
     #              values_to = "log_conc")
     
 log_pig_stat <-
-    log_pig %>%
-    pivot_longer(tot_chl_a:dp, 
-                 names_to  = "pigment", 
-                 values_to = "log_conc") %>% 
-    
-    filter(!is.na(log_conc)) %>% 
-    
-    group_by(season, pigment) %>% 
-    
-    summarise(
-        log_avg = mean(log_conc),
-        log_sd  = sd(log_conc),
-        log_var = var(log_conc)
-    ) %>%
-    
-    transmute(pigment,
-              avg     = 10^log_avg - val,
-              sd      = 10^log_sd - val,
-              var     = 10^log_var - val,
-              log_avg,
-              log_sd,
-              log_var)
+  log_pig %>%
+  pivot_longer(
+    tot_chl_a:dp,
+    names_to  = "pigment",
+    values_to = "log_conc"
+  ) %>%
+  filter(!is.na(log_conc)) %>%
+  # group_by(season, pigment) %>%
+
+  summarise(
+    .by = c(season, pigment),
+    log_avg = mean(log_conc),
+    log_sd  = sd(log_conc),
+    log_var = var(log_conc)
+  ) %>%
+  mutate(
+    .keep = "none",
+    pigment,
+    avg = 10^log_avg - val,
+    sd  = 10^log_sd - val,
+    var = 10^log_var - val,
+    log_avg,
+    log_sd,
+    log_var
+  )
 ```
 
 # Filter for FL Keys specifically
 ```{r fl-keys-only}
 # filter for Florida Keys and cluster by seasons
-chemtax_seasons <- 
-    pig_dat %>%
-    filter(name_of_water_body == "Florida Keys") %>%
-    mutate(cluster_code = case_when(season == "Winter" ~ 1,
-                                    season == "Spring" ~ 2, 
-                                    season == "Summer" ~ 3,
-                                    season == "Autumn" ~ 4)
-           ) %>%
-    dplyr::select(hplc_gsfc_id, 
-                  cluster_code, 
-                  sample, 
-                  chl_c3, 
-                  chl_c1c2, 
-                  perid, 
-                  but_fuco,
-                  fuco, 
-                  pras, 
-                  hex_fuco, 
-                  zea, 
-                  allo, 
-                  lut, 
-                  tot_chl_b, 
-                  dv_chl_a, 
-                  tot_chl_a)
+chemtax_seasons <-
+  pig_dat %>%
+  filter(name_of_water_body == "Florida Keys") %>%
+  mutate(
+    cluster_code = case_when(
+      season == "Winter" ~ 1,
+      season == "Spring" ~ 2,
+      season == "Summer" ~ 3,
+      season == "Autumn" ~ 4
+    )
+  ) %>%
+  dplyr::select(
+    hplc_gsfc_id,
+    cluster_code,
+    sample,
+    chl_c3,
+    chl_c1c2,
+    perid,
+    but_fuco,
+    fuco,
+    pras,
+    hex_fuco,
+    zea,
+    allo,
+    lut,
+    tot_chl_b,
+    dv_chl_a,
+    tot_chl_a
+  )
 ```
 
 
