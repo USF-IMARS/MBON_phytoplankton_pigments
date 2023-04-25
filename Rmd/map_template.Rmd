@@ -5,7 +5,7 @@ date: '2022-06-14'
 output: html_document
 ---
 
-## Creates map of site locations for IMaRS MBON
+# Creates map of site locations for IMaRS MBON
 Uses topography and coastline data from NOAA.
 
 ```{r setup, include=FALSE}
@@ -34,10 +34,10 @@ path_topo <- here("data", "map")
 
 # Region of Interest Bounding Box                   ======== edit this if needed
 # Change the spatial extent
-exnt <- c(xmin = -82, # West
-          xmax = -80, # East
-          ymin = 24.25,# South
-          ymax = 25.75   # North 
+exnt <- c(xmin = -82,   # West
+          xmax = -80,   # East
+          ymin = 24.25, # South
+          ymax = 25.75  # North 
         )
 
 # inset extent (i.e. smaller map on top)            ======== edit this if needed
@@ -52,7 +52,9 @@ names(exnt2) <- names(exnt)
 
 # Load Combined Pigment Data
 ```{r load-pigment-data}
-pig_dat  <- read.csv(here("data", "processed", "combined_pig_dat.csv")) %>%
+pig_dat  <- 
+    here("data", "processed", "combined_pig_dat.csv") %>%
+    read_csv(show_col_types = FALSE) %>%
     select(-c(pi, 
               bottle, indicate_if_filters_are_replicates, volfilt,
               filter_type:filter_storage_before_shipment_to_gfsc,
@@ -85,18 +87,24 @@ rm(world_download)
 # Load coastline and topography data
 ```{r load-shapefiles}
 # select and read coastline file from GSHHS then crop
-world2   <- fs::dir_ls(path = path_land,
-                       recurse = TRUE ,
-                       regexp = "GSHHS_h_L1.shp") %>%
-                       st_read(.) %>%
-                       st_crop(., st_bbox(exnt2))
+world2 <-
+  dir_ls(
+    path    = path_land,
+    recurse = TRUE,
+    regexp  = "GSHHS_h_L1.shp"
+  ) %>%
+  st_read(.) %>%
+  st_crop(., st_bbox(exnt2))
 
 # read state lines and crop
-state    <- fs::dir_ls(path = path_land,
-                       recurse = TRUE ,
-                       regexp = "WDBII_border_h_L2.shp") %>%
-                       st_read(.) %>%
-                       st_crop(., st_bbox(exnt2))
+state <-
+  dir_ls(
+    path    = path_land,
+    recurse = TRUE,
+    regexp  = "WDBII_border_h_L2.shp"
+  ) %>%
+  st_read(.) %>%
+  st_crop(., st_bbox(exnt2))
 
 # TODO: remove?
 # bathy    <- nc_open(here(path_topo, "etopo1.nc"))
@@ -106,7 +114,9 @@ state    <- fs::dir_ls(path = path_land,
 # nc_close(bathy)
 
 # read topography data
-bathy <- raster::raster(here(path_topo,"etopo1.nc")) %>%
+bathy <-
+  here(path_topo, "etopo1.nc") %>%
+  raster::raster() %>%
   as.data.frame(xy = TRUE)
 
 rm(path_topo, path_land)
@@ -114,9 +124,11 @@ rm(path_topo, path_land)
 
 # Plot FL Keys stations on map
 ```{r plt-fl-keys, fig.height=6, fig.width=10}
-lat_lon_dat <- pig_dat %>%
-    filter(name_of_water_body == "Florida Keys" & 
-           !str_detect(station, "60")) %>%
+lat_lon_dat <- 
+    pig_dat %>%
+    filter(
+        name_of_water_body == "Florida Keys"  
+        & !str_detect(station, "60")) %>%
     select(station, lat, lon) %>% 
     distinct(station, lat, lon)
 
@@ -135,7 +147,6 @@ base_map <-
     scale_y_continuous(expand = c(0,0), 
                        breaks = seq(floor(exnt[3]), ceiling(exnt[4]), 0.5)
                        ) +
-
     labs(
       x = NULL,
       y = NULL
@@ -249,7 +260,7 @@ suppressWarnings(rm(stn.map, east.map, lat_lon_dat, state, exnt, exnt2, bathy,
 # ---- Kriging for All Pigments ----
 Test to see if it works
 ```{r map-pigments}
-source("../scripts/krig_fun.R")
+source(here("scripts", "krig_fun.R"))
 
 # filter for pigment and season
 loc       <- "Florida Keys"
@@ -261,15 +272,14 @@ pigm_dat <-
         names_to  = "conc_name", 
         values_to = "conc"
         ) %>%
-    filter(str_detect(name_of_water_body, loc)) %>%
+    filter(str_detect(name_of_water_body, loc) 
+           & !str_detect(station, "60")) %>%
     select(
         hplc_gsfc_id, sample,                   # id
         station, lat, lon, name_of_water_body,  # spatial
         year, date_time_utc, season,            # temporal
         tot_chl_a, conc_name, conc) %>%         # measurements
-    group_by(conc_name, season) %>%
-    nest() %>%
-    ungroup() %>%
+    nest(.by = c(season, conc_name)) %>%
     
     # calc ratio of each pigment to total chlor-a
     mutate(data = pmap(list(season, conc_name, data),
@@ -279,8 +289,9 @@ pigm_dat <-
                                group_by(station) %>%
                                summarise(across(
                                    c(ratio, conc, tot_chl_a),
-                                   .fn = list(avg = mean),
-                                   na.rm = TRUE
+                                   # .fns = list(avg = (\(x) mean(x, na.rm = TRUE))),
+                                   .fns = (\(x) mean(x, na.rm = TRUE)),
+                                   .names = "{.col}_avg"
                                ),
                                across(c(lat, lon), .fn = mean)) %>%
                                ungroup()  %>%
@@ -297,31 +308,64 @@ pigm_dat <-
            title    = glue("{szn_name}: {conc_name}:TChla"),
            title2   = glue("{szn_name}: Average {conc_name}"),
            sv_name  = glue("MBON_pigm_{conc_name}_{str_to_lower(szn_name)}")
-           ) 
-
-pigm_dat1 <-
-    pigm_dat %>%
-    # slice_sample(n = 2) %>% # TODO: delete
-    # slice_head(n = 1) %>% # TODO: delete
-    mutate(
-        krig = pmap(list(data, conc_name, szn_name, title, sv_name),
-        # krig = pmap(list(data, conc_name, szn_name, title2, sv_name), 
-                    ~ map_data(
-                               .data     = ..1,
-                               conc_name = ..2,
-                               col_name  = "ratio_avg",
-                               # col_name  = "conc_avg",
-                               loc_name  = ..3,
-                               .title    = ..4,
-                               base_map  = base_map,
-                               sav       = TRUE,
-                               sv_name   = ..5)
-                   )
-    ) %>%
-     unnest_wider(krig) 
-pigm_dat1$map
-pigm_dat1$dat
+           )
 ```
+
+2 Samples will cause and error:
+W	tot_chl_b
+F	dv_chl_b
+
+Not sure why these don't work, but is ignored when running. 
+
+Here are offending samples: 
+```{r}
+pigm_dat %>%
+    slice(c(67, 115)) %>%
+    unnest(
+        data, 
+        names_sep = "_") 
+```
+
+```{r map-pigments}
+pigm_dat1 <-
+  pigm_dat %>%
+    
+  # remove two samples that cause issues, don't need anymore
+  # slice(-c(67, 115)) %>%
+  
+ mutate(
+    krig = pmap(
+      list(data, conc_name, szn_name, title, sv_name),
+      .progress = TRUE,
+      # krig = pmap(list(data, conc_name, szn_name, title2, sv_name),
+      ~ map_data(
+        .data     = ..1,
+        conc_name = ..2,
+        col_name  = "ratio_avg",
+        # col_name  = "conc_avg",
+        loc_name  = ..3,
+        .title    = ..4,
+        base_map  = base_map,
+        sav       = FALSE,
+        sv_name   = ..5
+      )
+    )
+  ) %>%
+  hoist(krig, "dat", "map")
+
+pigm_dat1 %>%
+    slice_sample(n = 5) %$% map
+pigm_dat1 %>%
+    slice_sample(n = 5) %$% dat
+
+# save krig maps
+pigm_dat1 %$%
+    pwalk(list(map, sv_name),
+          save_maps,
+          sv = TRUE)
+```
+
+
 
 # ---- ERROR: tot_chl_a doesn't exist in chemtax_with_metadata ----
 ```{r}
