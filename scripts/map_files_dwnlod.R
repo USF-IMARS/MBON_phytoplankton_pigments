@@ -1,3 +1,47 @@
+#%######################################################%##
+#                                                          #
+####         Download World Shapefiles for Maps         ####
+#                                                          #
+##%######################################################%##
+#' Download World Shapefiles for Maps
+#'
+#' This function will download topography, state lines, and coastline from
+#' NOAA if it does not exist at the designated path.
+#' 
+#' The topography should be re-downloaded for new projects since it's only a 
+#' subset of the world based on the extent given.
+#' 
+#' The land boundaries only need to be downloaded once, so specifying where it's 
+#' located may be a better option. 
+#' 
+#' Location of data:
+#' Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), 
+#' (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
+#' 
+#' Global Self-consistent, Hierarchical, High-resolution Geography Database
+#' (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
+#'
+#' @param path_land File directory to be used for coastline files. This may need to be
+#'                  created or already exists. This is where the land map will be
+#'                  downloaded to if it doesn't exists.
+#' @param path_topo File directory to be used for topgraphy file. This may need to be
+#'                  created or already exists. This is where the topo map will be
+#'                  downloaded to if it doesn't exists. This will require a spatial
+#'                  extent to subset the data
+#' @param extent Spatial extent for the topography data.
+#'               Format: exnt <- c(xmin = -82,    # West
+#'                                 xmax = -80,    # East
+#'                                 ymin = 24.25,  # South
+#'                                 ymax = 25.75   # North
+#'                                 ) 
+#' @param file_suffix Suffix to end of topography name
+#'
+#' @author Sebastian Di Geronimo (2023-01-11 14:55:54)
+#' 
+#' @return NULL, saves files
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
 world_download <- function(path_land = NULL,
                            path_topo = path_land,
                            extent = NULL,
@@ -61,8 +105,8 @@ world_download <- function(path_land = NULL,
     # ======================================================================== #
     # ---- Create directories for files ----
     # ======================================================================== #    
-    fs::dir_create(path_land)
-    fs::dir_create(path_topo)
+    dir_create(path_land)
+    dir_create(here(path_topo, "temp"))
     
     # ======================================================================== #
     # ---- Download topography for the specific location ----
@@ -71,8 +115,6 @@ world_download <- function(path_land = NULL,
     # space <- paste(as.character(round(extent)), sep = "_")
     # unite(as.character(round(extent)), col = "one", c(1:4))
     # topo_file <- here(path_topo,"etopo1_{space}.nc")
-    
-    
     
     topo_file <- here(path_topo,
                       glue("etopo1{file_suffix}.nc",
@@ -101,12 +143,16 @@ world_download <- function(path_land = NULL,
             longitude = exent[1:2],
             stride    = c(1, 1),
             fields    = 'altitude',
-            store     = disk(path_topo)
+            store     = disk(here(path_topo, "temp"))
         )
         
         # Rename file 
-        file.rename(fs::dir_ls(path_topo, regexp = "\\.nc$"),
-                    topo_file)
+        # file.rename(fs::dir_ls(here(path_topo, "temp"), regexp = "\\.nc$"),topo_file)
+        
+        file_move(dir_ls(here(path_topo, "temp"), regexp = "\\.nc$"),
+                  topo_file)
+        
+        dir_delete(here(path_topo, "temp"))
         
         cli_alert_success("Downloaded etopo1.nc")
     } else {
@@ -116,7 +162,7 @@ world_download <- function(path_land = NULL,
     }
     
     # ======================================================================== #
-    # ---- Download GSHHS Coastline Shapfile ----
+    # ---- Download GSHHS Coastline Shapefile ----
     # ======================================================================== # 
     # download GSHHS shapefile if not already downloaded
     coast         <- fs::dir_ls(path = path_land,
@@ -141,4 +187,8 @@ world_download <- function(path_land = NULL,
     } else {
         cli_alert_info("Coastline shapefile exists in {.file {path_land}}.\n")
     }
+    
+    
+    return(invisible(NULL))
+    # ---- End of Function ----
 }
