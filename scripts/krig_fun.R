@@ -1,8 +1,29 @@
 ##%######################################################%##
 #                                                          #
-####          Function to Run Kriging on Data           ####
+####                Run Kriging on Data                 ####
 #                                                          #
 ##%######################################################%##
+#' Run Kriging on Data
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .data DESCRIPTION.
+#' @param conc_name DESCRIPTION.
+#' @param col_name DESCRIPTION.
+#' @param loc_name DESCRIPTION.
+#' @param .title DESCRIPTION.
+#' @param resolution DESCRIPTION.
+#' @param adj DESCRIPTION.
+#' @param base_map DESCRIPTION.
+#' @param colr DESCRIPTION.
+#' @param sav_loc DESCRIPTION.
+#' @param sav DESCRIPTION.
+#' @param sv_name DESCRIPTION.
+#' @param verbose DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
 map_data <- function(
                     .data,
                     conc_name,
@@ -17,6 +38,8 @@ map_data <- function(
                     sav        = FALSE,
                     sv_name    = NULL,
                     verbose    = FALSE) {
+    
+    
 # ---- DESCRIPTION: ------
 # This uses the `fields` package to run `spatialProcesses` for a Krigged set of
 # data.
@@ -90,8 +113,6 @@ map_data <- function(
 # Sebastian Di Geronimo (2023-02-08 11:18:54)
     
     
-    cli_alert_info("Working on: {conc_name} for {loc_name}")
-    
     # TODO: fix ggplot
     # TODO: allow to use ratio or not
     set.seed(123)
@@ -99,6 +120,15 @@ map_data <- function(
     librarian::shelf(
         cli, ggplot2, rlang, fields, dplyr, 
     )
+    
+    
+    cli_alert_info("Working on: {conc_name} for {loc_name}")
+    
+    if (mean(.data[[col_name]], na.rm = TRUE) == 0) {
+        cli_alert_warning(c("Skipping: Average {conc_name} for ",
+                            "{loc_name} equals 0."))
+        return(invisible(NULL))
+    }
     
     # ======================================================================== #
     # ---- color and contour breaks ----
@@ -161,8 +191,27 @@ map_data <- function(
     # ======================================================================== #
     # ---- model spatial process using lon/lat and pigment:chla  ----
     # ======================================================================== #  
-    krig_dat     <- spatialProcess(df_loc, 
-                                   .data[[col_name]])
+    krig_dat <-
+      spatialProcess(
+        df_loc,
+        .data[[col_name]]
+      )
+            
+    # catches ones with issues
+    if (any(str_detect(class(krig_dat), "list"))) {
+      cli_alert_danger(
+        c(
+          "Skipping: Issues with ",
+          "{.fun {col_red(\"spatialProcess\")}}.",
+          "\nThe returned {col_blue(\"class\")} is of type ",
+          "{.var {col_green(\"list\")}} instead of ",
+          "{.var {col_red(\"spatialProcess\")}} or ",
+          "{.var {col_red(\"mKrig\")}}."
+        )
+      )
+
+      return(invisible(NULL))
+    }
     
     if (verbose) {
         summary(krig_dat)
@@ -172,14 +221,21 @@ map_data <- function(
     }
     
     # prediction surface and standard errors
-    krig_pred <- predictSurface(krig_dat, 
-                                   loc_grid,
-                                   extrap = FALSE
+   krig_pred <-
+     predictSurface(
+       object = krig_dat,
+       gridList = loc_grid,
+       extrap = FALSE,
+       verbose = FALSE
+     )
+    
+    ratio_SE <-
+    predictSurfaceSE(
+      krig_dat,
+      loc_grid,
+      extrap = FALSE
     )
     
-    ratio_SE     <- predictSurfaceSE(krig_dat, 
-                                     loc_grid, 
-                                     extrap = FALSE)
     
     # corrects the kriged min and max to observed min and max observed
     max_pig <- max(.data[[col_name]], na.rm = TRUE)
@@ -274,11 +330,15 @@ map_data <- function(
     #         legend.key.height = unit(50, "pt")
     #     )
     
+    # TODO: make save into another function
     # save location and name
-    if (sav) {
+    # if (sav) {
+    if (FALSE) {
+        
         if (is.null(sv_name)) {
-            sv_name <- sv_name <- glue("{conc_name}_{loc_name}") %>%
-                                  janitor::make_clean_names()
+            sv_name <- 
+                glue("{conc_name}_{loc_name}") %>%
+                janitor::make_clean_names()
         }
         
         filename <- here(sav_loc,
@@ -298,6 +358,7 @@ map_data <- function(
     # return list of data
     result <- list(
         dat = dat_sp,
+        # map = list(map = plt)
         map = plt
     )
     
@@ -306,3 +367,57 @@ map_data <- function(
     return(result)
     # ---- end of function ----
     }
+
+
+##%######################################################%##
+#                                                          #
+####                  Save Kriged Map                   ####
+#                                                          #
+##%######################################################%##
+#' Save Kriged Map
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param maps DESCRIPTION.
+#' @param save DESCRIPTION.
+#' @param sv_name DESCRIPTION.
+#' @param sav_loc DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+save_maps <- function(maps, sv = FALSE, sv_name = NULL,
+                      sav_loc  = here("data", "plots", Sys.Date(), "map"),
+                      overwrite = FALSE
+                      ) {
+    library("cli")
+    
+    overwrite
+    
+    if (is.null(sv_name)) {
+        sv_name <- "map_plot"
+    }
+    
+    if (is.null(maps)) {
+        cli_alert_warning(c("Skipping: {.file {sv_name}} ",  
+                            "is {.var {col_red(\"NULL\")}}"))
+        return(invisible(NULL))
+    }
+    
+    # save location and name
+    if (sv) {
+        
+        filename <- here(sav_loc,
+                         glue("{sv_name}_",
+                              format(Sys.time(), "%y%m%d_%H%M%S") ,
+                              ".png"))
+        # cat("\n\n")
+        cli_alert_info("Map file location: {.file {dirname(filename)}}")
+        cli_alert_info("Map file name: {.file {basename(filename)}}")
+        
+        ggsave(filename,
+               plot   = maps,
+               width  = 10,
+               height = 6)
+    }
+}
