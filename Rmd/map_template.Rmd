@@ -358,11 +358,14 @@ pigm_dat1 %>%
 pigm_dat1 %>%
     slice_sample(n = 5) %$% dat
 
-# save krig maps
-pigm_dat1 %$%
+if (FALSE) {
+   # save krig maps
+    pigm_dat1 %$%
     pwalk(list(map, sv_name),
           save_maps,
-          sv = TRUE)
+          sv = TRUE) 
+}
+
 ```
 
 
