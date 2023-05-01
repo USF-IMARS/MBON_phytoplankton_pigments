@@ -23,6 +23,9 @@ librarian::shelf(
 # prefer select and filter 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+
+# source map download function
+source(here("scripts", "map_files_dwnlod.R"))
 ```
 
 
@@ -74,14 +77,10 @@ Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Shee
 
 Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
 ```{r download-maps}
-# source map download function
-source(here("scripts", "map_files_dwnlod.R"))
-
 world_download(
-    # path_land = path_land,
     path_land = path_land,
     path_topo = path_topo,
-    extent = exnt
+    extent    = exnt
 )
 ```
 
@@ -108,61 +107,38 @@ lat_lon_dat <-
     distinct(station, lat, lon)
 
 # ---- create base map
-base_map2 <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
+base_map <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
 
+stn_map <-
+  base_map +
+  geom_point(
+    data = lat_lon_dat,
+    aes(
+      x = lon,
+      y = lat
+      # shape = station,
+    ),
+    size        = 2,
+    # alpha     = 0.5,
+    stroke      = 1.5,
+    show.legend = FALSE
+  ) +
 
-
-# base_map <-
-#     ggplot() +
-#     geom_contour2(data = bathy, 
-#                   aes(x = x, 
-#                       y = y, 
-#                       z = -Altitude), 
-#                   col = "grey40",
-#                   breaks = c(100, 50, 25, 10, 0)
-#                   ) +
-#     geom_sf(data = world2) +
-# 
-#     scale_x_continuous(expand = c(0,0)) + 
-#     scale_y_continuous(expand = c(0,0), 
-#                        breaks = seq(floor(exnt[3]), ceiling(exnt[4]), 0.5)
-#                        ) +
-#     labs(
-#       x = NULL,
-#       y = NULL
-#       ) +
-#     theme_bw() +
-#     theme(text = element_text(family = "serif", size = 20),
-#           panel.grid.major = element_blank(), 
-#           panel.grid.minor = element_blank()
-#           )
-
-stn_map <- 
-    base_map2 +
-    geom_point(data = lat_lon_dat,
-               aes(
-                   x = lon,
-                   y = lat
-                   # shape = station,
-                   ),
-              size = 2,
-              # alpha = 0.5,
-              stroke = 1.5,
-              show.legend = FALSE) +
-
-    labs(
-        shape = "Station",
-        fill = "Station") +
-    coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
-     scale_shape_manual(values = c(24,25,21)) 
+  labs(
+    shape = "Station",
+    fill  = "Station"
+  ) +
+  coord_sf(xlim = exnt[1:2], 
+           ylim = exnt[3:4]) +
+  scale_shape_manual(values = c(24, 25, 21))
 
 stn_map
 ```
+
 # Zoomed out map 
 ```{r plt-large, fig.width=8, fig.height=10}
 # ---- create inset map
 inset_map <-
-  east_map <-
   with(
     map_obj,
     map_inset(coast_topo, state,
@@ -182,42 +158,54 @@ inset_map
 # putting both of the maps together
 May need to play with draw_plot(east.map, x, y, width and height)
 ```{r plt-lg-sm, fig.height=6, fig.width=10}
-ggdraw() +
+fullmap <- 
+  ggdraw() +
   draw_plot(stn_map) +
   draw_plot(inset_map, x = 0.04, y = 0.57, width = 0.19, height = 0.4)
+fullmap
 ```
 
 
 ```{r save-plt-map}
 if (FALSE) {
-    save_plot(
-        filename = here("data", "plots",
-                        glue::glue("map",
-                                   format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                                   ".jpeg")), 
-        plot = last_plot(),
-        base_height = 6,
-        base_width = 10,
-        dpi = 600, 
-        units = "in", 
-        device = 'jpeg')
-    
-    save_plot(
-        filename = here("data", "plots",
-                        glue::glue("map",
-                                   format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                                   ".svg")), 
-        plot = last_plot(),
-        base_height = 6,
-        base_width = 10,
-        dpi = 600, 
-        units = "in", 
-        device = 'svg')
+  {    
+  map_save_name <-
+    here(
+      "data", "plots",
+      glue::glue(
+        "map",
+        format(Sys.time(), "_%Y%m%d_%H%M%S"),
+        ".{c('jpeg', 'svg')}"
+      )
+    )
+
+
+  save_plot(
+    filename    = map_save_name[1],
+    plot        = fullmap,
+    base_height = 6,
+    base_width  = 10,
+    dpi         = 600,
+    units       = "in",
+    device      = "jpeg"
+  )
+
+  save_plot(
+    filename    = map_save_name[2],
+    plot        = fullmap,
+    base_height = 6,
+    base_width  = 10,
+    dpi         = 600,
+    units       = "in",
+    device      = "svg"
+  )
+  
+  rm(map_save_name)
+  }
 }
 
 # clean up workspace
-suppressWarnings(rm(stn.map, east.map, lat_lon_dat, state, exnt, exnt2, bathy,
-                    world2))
+suppressWarnings(rm(stn_map, inset_map, lat_lon_dat, exnt, exnt2))
 ```
 
 # ---- Kriging for All Pigments ----
@@ -289,7 +277,7 @@ pigm_dat %>%
         names_sep = "_") 
 ```
 
-```{r map-pigments}
+```{r map-pigments, fig.width=30, fig.height=15}
 pigm_dat1 <-
   pigm_dat %>%
     
@@ -298,20 +286,17 @@ pigm_dat1 <-
   
  mutate(
     krig = pmap(
-      list(data, conc_name, szn_name, title, sv_name),
+      list(data, conc_name, szn_name, title),
       .progress = TRUE,
-      # krig = pmap(list(data, conc_name, szn_name, title2, sv_name),
-      ~ map_data(
-        .data     = ..1,
-        conc_name = ..2,
+      (\(x, y, z, title) map_data(
+        .data     = x,
+        conc_name = y,
         col_name  = "ratio_avg",
         # col_name  = "conc_avg",
-        loc_name  = ..3,
-        .title    = ..4,
+        loc_name  = z,
+        .title    = title,
         base_map  = base_map,
-        sav       = FALSE,
-        sv_name   = ..5
-      )
+      ))
     )
   ) %>%
   hoist(krig, "dat", "map")
