@@ -365,8 +365,8 @@ sv_arg <-
   ) %>%
   c(
     .,
-    sm_exist = dir_ls(.$sv_loc, regexp = .$sn_nm[1]) %>% is_empty(),
-    lg_exist = dir_ls(.$sv_loc, regexp = .$sn_nm[2]) %>% is_empty()
+    sm_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[1]) %>% is_empty(),
+    lg_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[2]) %>% is_empty()
   )
 
 if (sv_arg$lg_exist | sv_arg$overwrite) {
