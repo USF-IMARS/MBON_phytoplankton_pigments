@@ -23,7 +23,10 @@ librarian::shelf(
 # prefer select and filter 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+```
 
+
+```{r include=FALSE}
 # fixes issue with reading file
 sf::sf_use_s2(FALSE)
 
@@ -80,46 +83,18 @@ world_download(
     path_topo = path_topo,
     extent = exnt
 )
-
-rm(world_download)
 ```
 
 # Load coastline and topography data
 ```{r load-shapefiles}
-# select and read coastline file from GSHHS then crop
-world2 <-
-  dir_ls(
-    path    = path_land,
-    recurse = TRUE,
-    regexp  = "GSHHS_h_L1.shp"
-  ) %>%
-  st_read(.) %>%
-  st_crop(., st_bbox(exnt2))
-
-# read state lines and crop
-state <-
-  dir_ls(
-    path    = path_land,
-    recurse = TRUE,
-    regexp  = "WDBII_border_h_L2.shp"
-  ) %>%
-  st_read(.) %>%
-  st_crop(., st_bbox(exnt2))
-
-# TODO: remove?
-# bathy    <- nc_open(here(path_topo, "etopo1.nc"))
-# topo     <- ncvar_get(bathy, 'altitude')
-# topo_lat <- ncvar_get(bathy, 'latitude')
-# topo_lon <- ncvar_get(bathy, 'longitude')
-# nc_close(bathy)
-
-# read topography data
-bathy <-
-  here(path_topo, "etopo1.nc") %>%
-  raster::raster() %>%
-  as.data.frame(xy = TRUE)
-
-rm(path_topo, path_land)
+map_obj <- 
+    load_map_obj( 
+    .map_coast = path_land, 
+    .map_state = path_land,
+    .map_bath = path_topo, 
+    .map_file = "etopo1.nc",
+    .extent = exnt2
+    )
 ```
 
 # Plot FL Keys stations on map
@@ -132,33 +107,38 @@ lat_lon_dat <-
     select(station, lat, lon) %>% 
     distinct(station, lat, lon)
 
-base_map <-
-    ggplot() +
-    geom_contour2(data = bathy, 
-                  aes(x = x, 
-                      y = y, 
-                      z = -Altitude), 
-                  col = "grey40",
-                  breaks = c(100, 50, 25, 10, 0)
-                  ) +
-    geom_sf(data = world2) +
+# ---- create base map
+base_map2 <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
 
-    scale_x_continuous(expand = c(0,0)) + 
-    scale_y_continuous(expand = c(0,0), 
-                       breaks = seq(floor(exnt[3]), ceiling(exnt[4]), 0.5)
-                       ) +
-    labs(
-      x = NULL,
-      y = NULL
-      ) +
-    theme_bw() +
-    theme(text = element_text(family = "serif", size = 20),
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank()
-          )
 
-stn.map <- 
-    base_map +
+
+# base_map <-
+#     ggplot() +
+#     geom_contour2(data = bathy, 
+#                   aes(x = x, 
+#                       y = y, 
+#                       z = -Altitude), 
+#                   col = "grey40",
+#                   breaks = c(100, 50, 25, 10, 0)
+#                   ) +
+#     geom_sf(data = world2) +
+# 
+#     scale_x_continuous(expand = c(0,0)) + 
+#     scale_y_continuous(expand = c(0,0), 
+#                        breaks = seq(floor(exnt[3]), ceiling(exnt[4]), 0.5)
+#                        ) +
+#     labs(
+#       x = NULL,
+#       y = NULL
+#       ) +
+#     theme_bw() +
+#     theme(text = element_text(family = "serif", size = 20),
+#           panel.grid.major = element_blank(), 
+#           panel.grid.minor = element_blank()
+#           )
+
+stn_map <- 
+    base_map2 +
     geom_point(data = lat_lon_dat,
                aes(
                    x = lon,
@@ -169,62 +149,45 @@ stn.map <-
               # alpha = 0.5,
               stroke = 1.5,
               show.legend = FALSE) +
-    
+
     labs(
         shape = "Station",
         fill = "Station") +
     coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
      scale_shape_manual(values = c(24,25,21)) 
 
-stn.map
+stn_map
 ```
 # Zoomed out map 
 ```{r plt-large, fig.width=8, fig.height=10}
-east.map <- 
-      
-    ggplot() +
-    geom_sf(data = world2) +  
-    geom_sf(data = state, color = "grey40", linewidth = 0.2) +
-  
-    # create red box on map to show sampling locations
-    geom_rect(                  
-        aes(
-          xmin = min(lat_lon_dat$lon) - 0.25, # West
-          xmax = max(lat_lon_dat$lon) + 0.25, # East
-          ymin = min(lat_lon_dat$lat) - 0.25, # South
-          ymax = max(lat_lon_dat$lat) + 0.25  # North
-        ),
-        color = "red",
-        fill = NA
-    ) +
-    
-    scale_x_continuous(expand = c(0,0)) + 
-    scale_y_continuous(expand = c(0,0)) +
-    coord_sf(xlim = exnt2[1:2], ylim = exnt2[3:4], 
-            ) +
-    
-    theme_bw() +
-    theme(axis.text.x = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks = element_blank(),
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          plot.margin = grid::unit(c(0,0,0,0), "in"),
-          panel.border = element_rect(linetype = "solid", 
-                                      color = "black", 
-                                      fill = NA)
-        )
+# ---- create inset map
+inset_map <-
+  east_map <-
+  with(
+    map_obj,
+    map_inset(coast_topo, state,
+      c(
+        xmin = min(lat_lon_dat$lon), # West
+        xmax = max(lat_lon_dat$lon), # East
+        ymin = min(lat_lon_dat$lat), # South
+        ymax = max(lat_lon_dat$lat) # North
+      ),
+      add_tol = 0.25
+    )
+  )
 
-east.map
+inset_map
 ```
 
 # putting both of the maps together
 May need to play with draw_plot(east.map, x, y, width and height)
 ```{r plt-lg-sm, fig.height=6, fig.width=10}
 ggdraw() +
-  draw_plot(stn.map) +
-  draw_plot(east.map, x = 0.04, y = 0.57, width = 0.19, height = 0.4)
+  draw_plot(stn_map) +
+  draw_plot(inset_map, x = 0.04, y = 0.57, width = 0.19, height = 0.4)
 ```
+
+
 ```{r save-plt-map}
 if (FALSE) {
     save_plot(
