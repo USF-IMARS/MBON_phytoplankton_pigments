@@ -4,7 +4,8 @@ author: "Anna Finch"
 date: '2022-07-21'
 output: html_document
 ---
-# ---- Load Libraries ----
+# ---- Setup ----
+## Load Libraries
 ```{r setup, include=FALSE}
 
 librarian::shelf(
@@ -23,7 +24,10 @@ library("conflicted")
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
-# Set paths
+## Load Data
+- CHEMTAX Seasonal Averages
+- Surface Averaged CTD Data
+- Merge CHETMAX-CTD
 ```{r chemtax-ctd}
 # CHEMTAX files
 cmtx_avgs <- 
@@ -34,11 +38,12 @@ cmtx_avgs <-
                              "Winter", "Spring", "Summer", "Autumn")
         )
 
+# CTD data
 ctd_dat_summary <- 
     here("data", "processed", "ctd_all.csv") %>%
     read_csv(show_col_types = FALSE)
 
-
+# Envrionmental Data
 env_cmtx <-
     cmtx_avgs %>% 
     mutate(
@@ -47,40 +52,59 @@ env_cmtx <-
         ) %>%
     relocate(cruise_code, .before = cruise) %>%
     left_join(ctd_dat_summary, 
-              by = c("cruise_code" = "cruise_id", 
-                     "station"     = "stations")) 
-
-if (FALSE) {   
-    write_csv(
-        env_cmtx, 
-        file = here("data", "processed", "cmtx_env_data.csv")
-        )
-    }
+              by = join_by(
+                  "cruise_code" == "cruise_id", 
+                  "station" == "stations"
+                  )
+              )
 ```
 
+## Save CHEMTAX-CTD Merged Data
+```{r chemtax-ctd}
+sv_arg <-
+  list(
+    sv_loc    = here("data", "processed"),
+    sv_nm     = "cmtx_env_data.csv",
+    overwrite = FALSE
+  ) %>%
+  c(
+    .,
+    env_dat = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+  )
 
-```{r paths}
-# pig_dat  <- read.csv(paste0(path_out,"combined_pig_dat.csv"))
 
-cmtx_avgs2 <- 
+if (sv_arg$env_dat | sv_arg$overwrite) {
+ write_csv(
+        x = env_cmtx, 
+        file = here(sv_arg$sv_loc, sv_arg$sv_nm)
+        )
+} else {
+    cli::cli_alert_info(c("Skipping saving of {.file {sv_arg$sv_nm}} ",
+                          "because exists ",
+                          "and/or overwrite = {.var FALSE}"))
+}
+rm(sv_arg)
+```
+
+# Create Matrix Version of CHEMTAX Seasonal Averages
+```{r cmtx-convert-matrix}
+cmtx_avgs <- 
     cmtx_avgs %>% 
     rownames_to_column(var = "row_num") %>% 
     unite("sample_code", 
           row_num, 
           season, 
           remove = FALSE)
-# ggplot(data = env_cmtx, 
-#        aes(y = sal, 
-#            x = season)) +
-#     geom_path()
 
-cmtx_data_matrix <- cmtx_avgs2 %>%
+# convert to matrix
+cmtx_data_matrix <- 
+    cmtx_avgs %>%
     select(sample_code, chloro:pras) %>% 
     column_to_rownames(var = "sample_code")
 ```
 
 
-
+# NOT USED: ---- PCoA ----
 ```{r Bray-Curtis-Dissimilarity-Matrix}
 # cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray")
 # 
@@ -132,7 +156,8 @@ cmtx_data_matrix <- cmtx_avgs2 %>%
 
 # ---- Run PCoA and PCA on CHEMTAX data ----
 
-
+## Function to Calculate and Plot PCoA
+Doesn't work too well
 ```{r func-ord-plot}
 ggPCoA2 <- function(data, pc = 12, level = 0.68, dist_meth = "bray") {
   
@@ -145,7 +170,7 @@ ggPCoA2 <- function(data, pc = 12, level = 0.68, dist_meth = "bray") {
   pcoa <- pcoa(dis, correction = "none", rn = NULL)
   
   # Extract eignvalues
-  eig  <- round(100*pcoa$values[1:3, 2], 2)
+  eig  <- round(100 * pcoa$values[1:3, 2], 2)
   
   # site info?
   site <- pcoa$vectors[, 1:3]
@@ -224,129 +249,230 @@ ggPCoA2 <- function(data, pc = 12, level = 0.68, dist_meth = "bray") {
 }
 ```
 
-# Plot results
+## Calculate and Plot 
 ```{r plt-pcoa-pca}
-
+# ---- PCoA on PFT groups
 cmtx_data_matrix2 <- 
-    cmtx_avgs2 %>%
+    cmtx_avgs %>%
     mutate(group = season) %>%
     select(group, chloro:pras)
 
+## calc and plot PCoA
+pcoa_plt <- ggPCoA2(cmtx_data_matrix2)
+
+# ---- PCA on environmental CTD
+# temp, par and sal
 env_data_matrix <- 
     env_cmtx %>% 
     # mutate(group = season) %>% 
     select(temp, par, sal, season) %>% 
     na.omit()
 
+## calc PCA 
 env_pca <- prcomp(env_data_matrix[1:3], scale. = TRUE)
 
-# plot PCoA and PCA
-pcoa_plt <- ggPCoA2(cmtx_data_matrix2)
+## plot PCA
+pca_plt <-
+  autoplot(
+    env_pca,
+    data   = env_data_matrix,
+    colour = "season"
+  ) +
+  scale_colour_discrete(name = "Season") +
+  theme_classic() +
+  theme(
+    text = element_text(family = "serif", size = 20),
+    legend.position = "bottom"
+  )
 
-# plt_pca <- 
-    autoplot(env_pca, 
-             data   = env_data_matrix, 
-             colour = "season") +
-    scale_colour_discrete(name = "Season") + 
-    theme_classic() +
-    theme(
-        text = element_text(family = "serif", size = 20),
-        legend.position = c(0.8, 0.85)
-        ) 
     
-# optional save
-if (FALSE) {
-    save_plot(
-        filename = 
-            here("data", "plots",
-                 glue("pcoa",
-                      format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                      ".jpeg")),
-        plot        = pcoa_plt,
-        base_height = 9.7,
-        base_width  = 19,
-        dpi         = 600, 
-        units       = "in", 
-        device      = "png")
-    
+pcoa_plt   
+pca_plt
+```
 
-    save_plot(
-        filename = 
-            here("data", "plots",
-                 glue("pca",
-                      format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                      ".jpeg")),
-        plot        = pca_plt,
-        base_height = 9.7,
-        base_width  = 19,
-        dpi         = 600, 
-        units       = "in", 
-        device      = "png")
+## Save PCA and PCoA
+```{r save-pcoa-pca}
+# ---- optional save
+shelf(cli)
+sv_arg <-
+  list(
+    sv_loc    = here("data", "plots"),
+    sv_nm     = c("pca", "pcoa"),
+    overwrite = FALSE
+  ) %>%
+  c(
+    .,
+    pca = dir_ls(.$sv_loc,
+                 regexp = .$sv_nm[1]) %>% is_empty(),
+    pcoa = dir_ls(.$sv_loc,
+                 regexp = .$sv_nm[2]) %>% is_empty()
+  )
+
+# ---- save PCA
+if (sv_arg$pca | sv_arg$overwrite) {
+    save_plot( 
+    filename = here(
+     sv_arg$sv_loc,
+     glue(
+       sv_arg$sv_nm[1],
+       format(Sys.time(), "_%Y%m%d_%H%M%S"),
+       ".jpg"
+     )
+   ),
+   plot        = pca_plt,
+   base_height = 9.7,
+   base_width  = 19,
+   dpi         = 600,
+   units       = "in",
+   device      = "png"
+ )
+} else {
+    cli_alert_info(
+        c(
+          "Skipping saving of ",
+          "{.file {sv_arg$sv_nm[1]}} ",
+          "because exists ",
+          "and/or overwrite = {.var FALSE}"
+        )
+    )
 }
+
+# ---- save PCoA
+if (sv_arg$pcoa | sv_arg$overwrite) {
+    save_plot( 
+    filename = here(
+     sv_arg$sv_loc,
+     glue(
+       sv_arg$sv_nm[2],
+       format(Sys.time(), "_%Y%m%d_%H%M%S"),
+       ".jpg"
+     )
+   ),
+   plot        = pcoa_plt,
+   base_height = 9.7,
+   base_width  = 19,
+   dpi         = 600,
+   units       = "in",
+   device      = "png"
+ )
+} else {
+    cli_alert_info(
+        c(
+          "Skipping saving of ",
+          "{.file {sv_arg$sv_nm[2]}} ",
+          "because exists ",
+          "and/or overwrite = {.var FALSE}"
+        )
+    )
+}
+rm(sv_arg)
 ```
 
 # ---- Pairwise Permanova Test ----
 ```{r permanova}
 set.seed(1082002)
-all_test_env <- adonis2(env_data_matrix[1:3] ~ season, 
-                    data   = env_data_matrix, 
-                    method = "bray")
+all_test_env <-
+  adonis2(
+    env_data_matrix[1:3] ~ season,
+    data   = env_data_matrix,
+    method = "bray"
+  )
 
-all_test <- adonis2(cmtx_data_matrix ~ season, 
-                    data   = cmtx_avgs, 
-                    method = "bray")
+all_test <-
+  adonis2(
+    cmtx_data_matrix ~ season,
+    data   = cmtx_avgs,
+    method = "bray"
+  )
    
+# ---- function
+# run adonis2 on
+szn_adonis2 <- function(
+        .data, 
+        pair_col, 
+        pairs, 
+        formula = NULL, # something like "season * station" 
+        dist_method = "bray") {
 
-
-
-szn_adonis2 <- function(.data, pair_col, pairs, 
-                        formula = NULL, # something like "season * station" 
-                        dist_method = "bray") {
     pair_name <- str_flatten(pairs, collapse = "|")
-    dat_pair  <- filter(.data, 
-                        str_detect(!!sym(pair_col), 
-                                   pair_name))
+    
+    dat_pair  <- 
+        filter(
+            .data, 
+            str_detect(!!sym(pair_col),
+            pair_name))
     
     value <- select(dat_pair, chloro:pras)
 
     adon_test <- adonis2(
         formula = as.formula(paste("value ~", formula)), 
         data   = dat_pair, 
-        method = dist_method)   
+        method = dist_method
+        # strata = # should probably add something here
+        )   
     
     pairwise_p <- adon_test[["Pr(>F)"]][1]
     pairwise_p
 }
 
-{
-    set.seed(1234)
-    pairwise_p <- numeric()
-    pairwise_p[["spsu"]] <- 
-        szn_adonis2(cmtx_avgs, "season", c("Spring", "Summer"), "season * station")
-    
-    pairwise_p[["spw"]] <- 
-        szn_adonis2(cmtx_avgs, "season", c("Spring", "Winter"), "season")
-    
-    pairwise_p[["spa"]] <- 
-        szn_adonis2(cmtx_avgs, "season", c("Spring", "Autumn"), "season")
-    
-    pairwise_p[["sua"]] <- 
-        szn_adonis2(cmtx_avgs, "season", c("Summer", "Autumn"), "season")
-    
-    pairwise_p[["suw"]] <- 
-        szn_adonis2(cmtx_avgs, "season", c("Summer", "Winter"), "season")
-    
-    pairwise_p[["aw"]] <- 
-        szn_adonis2(cmtx_avgs, "season", c("Autumn", "Winter"), "season")
+# create combinations of season to pairwise test
+cross_pairs <- 
+    cmtx_avgs %>%
+    select(season) %$%
+    combn(unique(as.character(season)), 2) %>%
+    t()
+colnames(cross_pairs) <- c("szn1", "szn2")
 
-    # ---- correct p-values ----
-    p.adjust(pairwise_p, method = "bonferroni")    
-}
+cross_pairs <- 
+    cross_pairs %>% 
+    as_tibble() %>%
+    unite(season_pairs, szn1, szn2, sep = "|")
+
+set.seed(1234)
+cross_pairs %>%
+    mutate(
+       pairwise_p = map_dbl(
+           .x = season_pairs,
+           .data = cmtx_avgs,
+           .f = ~ szn_adonis2(.data = cmtx_avgs, "season", pairs = .x, "season"),
+           .data = cmtx_avgs
+       ),
+       
+      # ---- correct p-values
+      p_adjust = p.adjust(pairwise_p, method = "bonferroni")     
+    )
+
 
 ```
 
 
 ```{r permanova}
+# {
+#     set.seed(1234)
+#     pairwise_p <- numeric(0)
+#     pairwise_p[["spsu"]] <- 
+#         # szn_adonis2(cmtx_avgs, "season", c("Spring", "Summer"), "season * station")
+#         szn_adonis2(cmtx_avgs, "season", c("Spring", "Summer"), "season")
+#     
+#     pairwise_p[["spw"]] <- 
+#         szn_adonis2(cmtx_avgs, "season", c("Spring", "Winter"), "season")
+#     
+#     pairwise_p[["spa"]] <- 
+#         szn_adonis2(cmtx_avgs, "season", c("Spring", "Autumn"), "season")
+#     
+#     pairwise_p[["sua"]] <- 
+#         szn_adonis2(cmtx_avgs, "season", c("Summer", "Autumn"), "season")
+#     
+#     pairwise_p[["suw"]] <- 
+#         szn_adonis2(cmtx_avgs, "season", c("Summer", "Winter"), "season")
+#     
+#     pairwise_p[["aw"]] <- 
+#         szn_adonis2(cmtx_avgs, "season", c("Autumn", "Winter"), "season")
+# 
+#     # ---- correct p-values
+#     p.adjust(pairwise_p, method = "bonferroni")    
+# }
+# 
 # # ============================================================================ #
 # # ---- Spring vs. Summer -----
 # # ============================================================================ #    
@@ -438,8 +564,9 @@ szn_adonis2 <- function(.data, pair_col, pairs,
 # # ---- correct p-values ----
 # p.adjust(pairwise_p, method = "bonferroni")
 ```
+
 # CCA Analysis 
-```{r cca}
+```{r cca, fig.height=9.7, fig.width=19}
 # extrafont::font_import()
 cca_matrix <- select(env_cmtx, chloro:pras)
 
@@ -455,7 +582,7 @@ new_lab <- list(temp = "Temp",
 
 tol_muted2 <- c('#88CCEE', '#44AA99', '#117733', '#332288')
 
-cca_plt <- 
+cca_plt <-
     ggord(
         cmtx_cca,
         size      = 4,
@@ -470,21 +597,20 @@ cca_plt <-
         vec_lab   = new_lab,
         grp_title = "Season"
         ) +
-    
-    scale_color_discrete(
-        breaks = c("Winter", "Spring", "Summer", "Autumn"),
-        name   = "Season") +
-    
     theme_classic() +
     theme(text = element_text(family = "serif", size = 20),
-          legend.position = c(0.15, 0.9))
+          legend.position = "bottom")
 
 cca_plt
 
-gg_ordiplot(cmtx_cca, 
-            env_cmtx %>% 
-                drop_na(temp,par:sal) %$% as.factor(season),
-            scaling = 1)
+gg_ordiplot(
+  ord     = cmtx_cca,
+  groups  = # extract seasons
+    env_cmtx %>%
+      drop_na(temp, par:sal) %$% 
+      as.factor(season),
+  scaling = 1
+)
 
 if (FALSE) {
         save_plot(
@@ -508,6 +634,10 @@ ggplot(env_cmtx) +
     geom_boxplot(aes(y = par)) +
     facet_wrap(facet =  ~ season)
 
+
+ggplot(env_cmtx) +
+    geom_point(aes(x = date_time_utc, y = par, 
+                   color = season)) 
 env_cmtx %>%
     # select(-c(cruise_code, indx, cruise.y)) %>%
     ggpairs(columns = 27:41, 
