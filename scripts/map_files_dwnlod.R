@@ -1,4 +1,4 @@
-#%######################################################%##
+##%######################################################%##
 #                                                          #
 ####         Download World Shapefiles for Maps         ####
 #                                                          #
@@ -36,7 +36,7 @@
 #'                                 ) 
 #' @param file_suffix Suffix to end of topography name
 #'
-#' @author Sebastian Di Geronimo (2023-01-11 14:55:54)
+#' @author Sebastian Di Geronimo (2023-01-11)
 #' 
 #' @return NULL, saves files
 #' @examples
@@ -46,121 +46,543 @@ world_download <- function(
         path_land   = NULL,
         path_topo   = path_land,
         extent      = NULL,
-        file_suffix = NULL) {
+        file_suffix = NULL,
+        use_suffix  = NULL) {
     # ========================================================================== #
-    # ---- Load libraries ----
+    # ---- Load libraries
     # ========================================================================== #
     library("here")
     library("fs")
     library("rerddap")
     library("cli")
     library("rlang")
+    library("magrittr")
     
     # ========================================================================== #
-    # ---- Create directories for files ----
+    # ---- Download Topography to the Specified Path
     # ========================================================================== #
-    dir_create(path_land)
-    dir_create(here(path_topo, "temp"))
+    cli_h1("Topography Data")
     
-    # ========================================================================== #
-    # ---- Download topography for the specific location ----
-    # ========================================================================== #
-    # TODO: add suffix to name to specify spatial location
-    # space <- paste(as.character(round(extent)), sep = "_")
-    # unite(as.character(round(extent)), col = "one", c(1:4))
-    # topo_file <- here(path_topo,"etopo1_{space}.nc")
-    
-    topo_file <- here(
-        path_topo,
-        glue("etopo1{file_suffix}.nc",
-             .null = ""
-        )
-    )
-    
-    if (length(extent) != 4) {
-        cli_abort(c(
-            "{.var extent} needs to have 4 values.",
-            "x" = "You supplied {length(extent)} values.",
-            "Format Example: 
-            exnt <- c(xmin = -82,xmax = -80, ymin = 24.25, ymax = 25.75) "
+    if (is.null(path_topo)) {
+        # ---- skip if path to topography is NULL
+        cli_alert_warning(c(
+            "Skipping Topography nc file because ",
+            "{.var path_topo} = {.var NULL}.\n"
         ))
+    } else {
+        
+        if (!is.null(use_suffix) 
+            & isTRUE(str_detect(use_suffix, "(?i)extent"))
+            & (!is.null(extent) | length(extent) != 4)) {
+            file_suffix <- 
+                extent %>%
+                tibble(extent = .) %>%
+                mutate(
+                    type = rep(c("lon","lat"), each = n()/2),
+                    label = case_when(
+                        str_detect(type, "lon") & exnt < 0 ~ glue("{extent}W"),
+                        str_detect(type, "lon") & exnt > 0 ~ glue("{extent}E"),
+                        str_detect(type, "lat") & exnt > 0 ~ glue("{extent}N"),
+                        str_detect(type, "lat") & exnt < 0 ~ glue("{extent}S")
+                    ),
+                    label = str_remove(label, "-") 
+                ) %$% 
+                str_c(label, collapse = "_") %>%
+                str_replace_all("(^|\\.)", "_") 
+        }
+        
+        topo_file <- here(
+            path_topo,
+            glue("etopo1{file_suffix}.nc",
+                 .null = ""
+            )
+        )
+        
+        if (file.exists(topo_file)) {
+            # ---- skip if topography file exists
+            cli_alert_info(c(
+                "Topography data exists in {.file {path_topo}}.\n",
+                "You may need to {.emph {col_red('check')}} the spatial",
+                " extent."
+            ))
+        } else if (is.null(extent) | length(extent) != 4) {
+            # ---- stop if extent is not correct
+            cli_abort(c(
+                "{.var extent} needs to have 4 values.",
+                "x" = "You supplied {length(extent)} values.",
+                "Format Example:",
+                "exnt <- c(xmin = -82, xmax = -80, ymin = 24.25, ymax = 25.75)"
+            ))
+        } else {
+            
+            # ---- download topography data
+            cli_alert_info(
+                "Starting Topography Data Download to {.file {path_topo}}"
+            )
+            
+            # create temp directory
+            cli_alert_info("Creating a temporary folder in {.file {path_topo}}")
+            dir_create(here(path_topo, "temp"))
+            
+            cli_alert_info(c(
+                "Downloading Topography Data from:\n",
+                "URL: {.url https://coastwatch.pfeg.noaa.gov/erddap/griddap/}\n",
+                "Bounding Box:\n",
+                sprintf("\tLongitude: % 7.2f, % 7.2f\n", extent[1], extent[2]),
+                sprintf("\tLatitude:  % 7.2f, % 7.2f\n", extent[3], extent[4])
+                # "\tLatitude:  {extent[3]}, {extent[4]} \n"
+                
+            ))
+            
+            # ERDDAP extract and save
+            griddap(
+                info("etopo180"),
+                latitude  = extent[3:4],
+                longitude = extent[1:2],
+                stride    = c(1, 1),
+                fields    = "altitude",
+                store     = disk(here(path_topo, "temp"))
+            )
+            
+            # Move and rename .nc file
+            file_move(
+                dir_ls(here(path_topo, "temp"), regexp = "\\.nc$"),
+                topo_file
+            )
+            
+            # delete temp folder
+            cli_alert_info("Deleting the temporary folder in {.file {path_topo}}")
+            dir_delete(here(path_topo, "temp"))
+            
+            cli_alert_success("Downloaded etopo1.nc")
+        }
     }
     
-    if (!file.exists(topo_file)) {
-        cli_alert_info("Topography data doesn't exists in {.file {path_topo}}")
-        cli_alert_info(c(
-            "Downloading Topography Data\n",
-            "Longitude: {extent[1]}, {extent[2]} \n",
-            "Latitude:  {extent[3]}, {extent[4]} \nURL: ",
-            "{.url https://coastwatch.pfeg.noaa.gov/erddap/griddap/}"
+    # ========================================================================== #
+    # ---- Download GSHHS Coastline Shapefile
+    # ========================================================================== #
+    cli_h1("Coastline Data")
+    
+    if (is.null(path_land)) {
+        
+        cli_alert_warning(c(
+            "Skipping Coastline shapefile because ",
+            "{.var path_land} = {.var NULL}.\n"
         ))
-        
-        # ERDDAP extract and save
-        griddap(
-            info("etopo180"),
-            latitude  = extent[3:4],
-            longitude = extent[1:2],
-            stride    = c(1, 1),
-            fields    = "altitude",
-            store     = disk(here(path_topo, "temp"))
-        )
-        
-        # Move and rename .nc file
-        file_move(
-            dir_ls(here(path_topo, "temp"), regexp = "\\.nc$"),
-            topo_file
-        )
-        
-        # delete temp folder
-        dir_delete(here(path_topo, "temp"))
-        
-        cli_alert_success("Downloaded etopo1.nc")
         
     } else {
-        cli_alert_info(c(
-            "Topography data exists in {.file {path_topo}}.\n",
-            "You may need to {.emph {col_red('check')}} the spatial",
-            " extent."
-        ))
-    }
-    
-    # ========================================================================== #
-    # ---- Download GSHHS Coastline Shapefile ----
-    # ========================================================================== #
-    # download GSHHS shapefile if not already downloaded
-    coast <-
-        dir_ls(
-            path    = path_land,
-            recurse = TRUE,
-            regexp  = "GSHHS_h_L1.shp"
-        )
-    
-    if (rlang::is_empty(coast)) {
-        cli_alert_info(c(
-            "GSHHS_h_L1 Coastline data doesn't exists in ",
-            "{.file {path_land}}"
-        ))
-        cli_alert_info(c(
-            "Downloading Coastline Shapefile\nURL:",
-            "{.url https://www.ngdc.noaa.gov/mgg/shorelines/}"
-        ))
         
-        temp <- tempfile()
-        download.file(
-            "ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip",
-            temp,
-            method = "libcurl",
-            mode = "wb"
-        )
+        # download GSHHS shapefile if not already downloaded
+        coast <-
+            dir_ls(
+                path    = path_land,
+                recurse = TRUE,
+                regexp  = "GSHHS_h_L1.shp"
+            )
         
-        unzip(exdir = path_land, temp)
-        # delete temp folder and files
-        unlink(temp)
-        
-    } else {
-        cli_alert_info("Coastline shapefile exists in {.file {path_land}}.\n")
-    }
+        if (!rlang::is_empty(coast)) {
+            cli_alert_info("Coastline shapefile exists in {.file {path_land}}.\n") 
+            
+        } else {
+            
+            dir_create(path_land)
+            
+            
+            cli_alert_info(c(
+                "GSHHS_h_L1 Coastline data doesn't exists in ",
+                "{.file {path_land}}"
+            ))
+            cli_alert_info(c(
+                "Downloading Coastline Shapefile\nURL:",
+                "{.url https://www.ngdc.noaa.gov/mgg/shorelines/}"
+            ))
+            
+            temp <- tempfile()
+            download.file(
+                "ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip",
+                temp,
+                method = "libcurl",
+                mode = "wb"
+            )
+            
+            unzip(exdir = path_land, temp)
+            # delete temp folder and files
+            unlink(temp)
+        }  
+    } 
     
     return(invisible(NULL))
-    # ---- End of Function ----
+    # ---- End of `world_download` Function ----
+}
+
+##%######################################################%##
+#                                                          #
+####                  Load Map Objects                  ####
+#                                                          #
+##%######################################################%##
+#' Load Map Objects
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .map_coast DESCRIPTION.
+#' @param .map_state DESCRIPTION.
+#' @param .map_bath DESCRIPTION.
+#' @param .map_file DESCRIPTION.
+#' @param .extent DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' 
+#' @author Sebastian Di Geronimo (2023-04-27)
+#' 
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+load_map_obj <- function(
+    .map_coast,
+    .map_state = .map_coast,
+    .map_bath = .map_coast,
+    .map_file = "etopo1.nc",
+    .extent) {
+
+  # ---- libraries
+  library("sf")
+  library("raster")
+  library("fs")
+  library("cli")
+
+
+  coast_file_name <- "GSHHS_h_L1.shp"
+  state_file_name <- "WDBII_border_h_L2.shp"
+
+  # ---- coastline
+  cli::cli_h1("Coastline")
+  cli::cli_alert_info("Searching: {.file {(.map_coast)}}")
+  coast_topo <-
+    dir_ls(
+      path    = .map_coast,
+      recurse = TRUE,
+      regexp  = coast_file_name
+    )
+
+  if (rlang::is_empty(coast_topo)) {
+    cli::cli_alert_warning(
+      c(
+        "Skipping: Couldn't find ",
+        "{.var {col_red(coast_file_name)}}"
+      )
+    )
+    coast_topo <- NULL
+  } else {
+    cli::cli_alert_info("Loading: {.file {coast_file_name}}")
+    coast_topo <-
+      coast_topo %>%
+      st_read(.) %>%
+      st_crop(
+        .,
+        st_bbox(
+          .extent
+        )
+      ) %>%
+      suppressMessages() %>%
+      suppressWarnings()
+  }
+  # ---- state lines
+  cli::cli_h1("State Lines")
+  if (rlang::is_empty(.map_state)) {
+    cli::cli_alert_warning(
+      c(
+        "Skipping State Lines:\n",
+        "{.var {col_red(\".map_state\")}} = {.var NULL}"
+      )
+    )
+    state <- NULL
+  } else {
+    cli::cli_alert_info("Searching: {.file {(.map_state)}}")
+    state <-
+      dir_ls(
+        path    = .map_state,
+        recurse = TRUE,
+        regexp  = state_file_name
+      )
+
+    if (rlang::is_empty(state)) {
+      cli::cli_alert_warning(
+        c(
+          "Skipping: Couldn't find ",
+          "{.var {col_red(state_file_name)}}"
+        )
+      )
+      state <- NULL
+    } else {
+      cli::cli_alert_info("Loading: {.file {state_file_name}}")
+      state <-
+        state %>%
+        st_read(.) %>%
+        st_crop(
+          .,
+          st_bbox(
+            .extent
+          )
+        ) %>%
+        suppressMessages() %>%
+        suppressWarnings()
+    }
+  }
+  # ---- bathymetry
+  cli::cli_h1("Bathymetry")
+  cli::cli_alert_info("Searching: {.file {(.map_bath)}}")
+  bathy <-
+    here(.map_bath) %>%
+    dir_ls(regexp = .map_file)
+
+  if (rlang::is_empty(bathy)) {
+    cli::cli_alert_warning(
+      c(
+        "Skipping: Couldn't find ",
+        "{.var {col_red(.map_file)}}"
+      )
+    )
+    bathy <- NULL
+  } else {
+    cli::cli_alert_info("Loading: {.file {(.map_file)}}")
+    bathy <-
+      bathy %>%
+      raster::raster() %>%
+      as.data.frame(xy = TRUE)
+  }
+
+  return(
+    list(
+      coast_topo = coast_topo,
+      state      = state,
+      bathy      = bathy
+    )
+  )
+  # ---- End of `load_map_obj` Function ----
+}
+
+##%######################################################%##
+#                                                          #
+####                   Base Map Plot                    ####
+#                                                          #
+##%######################################################%##
+#' Base Map Plot 
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param topo DESCRIPTION.
+#' @param bathy DESCRIPTION.
+#' @param extnt DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' 
+#' @author Sebastian Di Geronimo (April 27, 2023)
+#' 
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+base_map_plot <- function(
+        .topo,
+        .bathy,
+        .extent
+) {
+    
+    # ---- libraries
+    library("ggplot2")
+    library("metR")
+    
+    # ---- plot 
+    plt <- 
+        ggplot() +
+        geom_sf(data = .topo) +
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_continuous(expand = c(0, 0), breaks = seq(24.5, 28.0, 0.5)) +
+        coord_sf(xlim = .extent[1:2], ylim = .extent[3:4]) +
+        labs(
+            x = NULL,
+            y = NULL,
+        )  +
+        theme_bw() +
+        theme(
+            text = element_text(family = "serif", size = 20),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank()
+        )
+    
+    if (rlang::is_empty(.bathy)) return(plt)
+    
+    plt +
+        geom_contour2(
+            data = .bathy,
+            aes(
+                x = x,
+                y = y,
+                z = -Altitude
+            ),
+            col = "grey70",
+            breaks = c(100, 50, 25, 10, 0)
+        ) +
+        directlabels::geom_dl(
+            data = filter(
+                .bathy,
+                between(x, -84, -81.2)
+                & between(y, 25, 25.5)
+            ),
+            aes(
+                x = x, 
+                y = y, 
+                z = -Altitude,
+                label = ..level..
+            ), 
+            method = list(
+                "bottom.pieces",
+                fontfamily = "serif",
+                alpha = 0.5,
+                hjust = 1.5),
+            stat   = "contour",
+            breaks = c(100, 50, 25, 10, 0)
+        )
+    
+    # ---- End of `base_map_plot` Function ----
+}
+
+##%######################################################%##
+#                                                          #
+####                     Inset Map                      ####
+#                                                          #
+##%######################################################%##
+#' Inset Map
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .topo DESCRIPTION.
+#' @param .state_line DESCRIPTION.
+#' @param .extent DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' 
+#' @author Sebastian Di Geronimo (April 27, 2023)
+#' 
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+map_inset <- function(
+        .topo, 
+        .state_line, 
+        .extent,
+        add_tol = 0.4) {
+    
+    # ---- plot
+    ggplot() +
+        geom_sf(data = .topo) +
+        geom_sf(data      = .state_line, 
+                color     = "grey40", 
+                linewidth = 0.2) +
+        
+        # create red box on map to show sampling locations
+        geom_rect(
+            aes(
+                xmin = .extent[1] - add_tol, # West
+                xmax = .extent[2] + add_tol, # East
+                ymin = .extent[3] - add_tol, # South
+                ymax = .extent[4] + add_tol  # North
+            ),
+            color = "red",
+            fill  = NA
+        ) +
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        theme_bw() +
+        theme(
+            axis.text.x      = element_blank(),
+            axis.text.y      = element_blank(),
+            axis.ticks       = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            plot.margin      = grid::unit(c(0, 0, 0, 0), "in"),
+            panel.border     = element_rect(
+                linetype = "solid",
+                color    = "black",
+                fill     = NA
+            )
+        )
+    # ---- End of `map_inset` Function ----
+}
+
+
+##%######################################################%##
+#                                                          #
+####                Plot Samples on Map                 ####
+#                                                          #
+##%######################################################%##
+#' Plot Samples on Map
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .base_plt DESCRIPTION.
+#' @param .dat DESCRIPTION.
+#' @param .id DESCRIPTION.
+#' @param .title DESCRIPTION.
+#' @param .extent_cruise DESCRIPTION.
+#' @param .inset description
+#'
+#' @return RETURN_DESCRIPTION
+#' 
+#' @author Sebastian Di Geronimo (April 27, 2023)
+#' 
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+map_plot <- function(
+        .base_plt,
+        .dat, 
+        .id,
+        .title, 
+        .extent_cruise,
+        .inset = NULL
+) {
+    
+    set.seed(123)
+    
+    plt <- 
+        .base_plt +
+        geom_point(
+            data = .dat, 
+            aes(x = lon, 
+                y = lat, 
+                color = labels)
+        ) +
+        ggrepel::geom_text_repel(
+            data  = .dat,
+            aes(x = lon, 
+                y = lat, 
+                label = station),
+            size  = 2.5,
+            hjust = 0,
+        ) +
+        labs(title = .title) +
+        scale_color_manual(
+            name   = "Sample Type:",
+            values = c("#1E90FF", "#EE3B3B", "#00FF00", "purple")
+        ) +
+        theme(
+            legend.position = "bottom",
+            legend.text     = element_text(size = 10),
+            legend.title    = element_text(size = 15),
+            title           = element_text(size = 15)
+        )
+    
+    if (!is.null(.inset)) {
+        plt <- 
+            ggdraw() +
+            draw_plot(plt) +
+            draw_plot(.inset, 
+                      x = 0.85, 
+                      y = 0.755, 
+                      width  = 0.1, 
+                      height = 0.4)
+    }
+    
+    return(plt) 
+    # ---- End of `map_plot` Function ----
 }
