@@ -264,7 +264,6 @@ map_data <- function(
                    color = "yellow") +
         
         labs(color = NULL,
-             fill = "Concentration",
              title = .title) +
         
         scale_fill_gradientn(breaks = breaks, 
