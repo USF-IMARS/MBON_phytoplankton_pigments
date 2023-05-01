@@ -5,25 +5,57 @@
 ##%######################################################%##
 #' Run Kriging on Data
 #'
-#' FUNCTION_DESCRIPTION
+#' This uses the `fields` package to run `spatialProcesses` for a Krigged set of
+#' data.
 #'
-#' @param .data DESCRIPTION.
-#' @param conc_name DESCRIPTION.
-#' @param col_name DESCRIPTION.
+#' @param .data Dataframe or tibble that contains columns of:
+#'              - avg_ratio, 
+#'              - lat, and 
+#'              - lon
+#' @param conc_name name of pigment or phytoplankton functional type
+#'                  (ex. "Fucoxanthin")
+#' @param col_name The column named used to run `spatialProces`
 #' @param loc_name DESCRIPTION.
-#' @param .title DESCRIPTION.
-#' @param resolution DESCRIPTION.
-#' @param adj DESCRIPTION.
-#' @param base_map DESCRIPTION.
-#' @param colr DESCRIPTION.
-#' @param sav_loc DESCRIPTION.
-#' @param sav DESCRIPTION.
-#' @param sv_name DESCRIPTION.
-#' @param verbose DESCRIPTION.
+#' @param .title name added to the title (i.e. <.title>: <con_name>:TChla)
+#'               (ex: "Spring: Fucoxanthin:TChla")
+#' @param resolution Resolution of each pixel in degrees 
+#'                   (default: 0.01)
+#' @param adj Add adjustment to bounding box to make slighlty larger then the
+#'            min/max of lat/lon un degrees
+#'            (default: 0.1)
+#' @param base_map Optional: supply a base map as a ggplot object to plot data
+#'                 (default: NULL)
+#' @param colr Setting the number and distance of break points in green color 
+#'             palette. 
+#'             Options (default: "data"): 
+#'             - data:        sets the breaks at 10 locations based on the 
+#'                            `avg_conc` column
+#'             - vector == 3: low, high and length (i.e. c(1,5,9))
+#'             - vector > 3:  sets number and distance of breaks
+#' @param verbose Optional: allow the script to be more verbose with print 
+#'                statements and plots 
+#'                (default: FALSE)
 #'
 #' @return RETURN_DESCRIPTION
+#' 
+#' @returns A list object with three lists:
+#'          - lon   = longitude of prediction grid 
+#'          - lat   = latitude of prediction grid
+#'          - value = predicted values
+#'          
+#'
+#' @author Sebastian Di Geronimo (Febuary 08, 2023)
+#'
+#' @details
+#' Optional:
+#' map = Adds a ggplot map to output variable if base_map is given list(plt = plt)
+#'
+#' @note
+#' Modified from https://github.com/eqmh/waltonsmith/blob/main/R_code/waltonsmith_hplc.R
+#' 
 #' @examples
 #' # ADD_EXAMPLES_HERE
+#' 
 map_data <- function(
                     .data,
                     conc_name,
@@ -34,85 +66,10 @@ map_data <- function(
                     adj        = 0.1, 
                     base_map   = NULL, 
                     colr       = "data",
-                    sav_loc    = here("data", "plots", Sys.Date(), "map"),
-                    sav        = FALSE,
-                    sv_name    = NULL,
                     verbose    = FALSE) {
     
     
-# ---- DESCRIPTION: ------
-# This uses the `fields` package to run `spatialProcesses` for a Krigged set of
-# data.
-#
-# ---- INPUTS: -----------
-# .data      = Dataframe or tibble that contains columns of:
-#              - avg_ratio, 
-#              - lat, and 
-#              - lon
-# 
-# col_name   = The column named used to run `spatialProces`
-#              
-# conc_name  = name of pigment or phytoplankton functional type
-#              (ex. "Fucoxanthin")
-# 
-# .title     = name added to the title (i.e. <.title>: <con_name>:TChla)
-#               (ex: "Spring: Fucoxanthin:TChla")
-#              
-# resolution = Resolution of each pixel in degrees 
-#               (default: 0.01)
-#               
-# adj        = Add adjustment to bounding box to make slighlty larger then the
-#              min/max of lat/lon un degrees
-#               (default: 0.1)
-#               
-# base_map   = Optional: supply a base map as a ggplot object to plot data
-#               (default: NULL)
-#               
-# colr       = Setting the number and distance of break points in green color 
-#              palette. 
-#              Options (default: "data"): 
-#              - data:        sets the breaks at 10 locations based on the 
-#                             `avg_conc` column
-#              - vector == 3: low, high and length (i.e. c(1,5,9))
-#              - vector > 3:  sets number and distance of breaks
-#              
-# 
-# sav_loc    = Optional: set location to save plots as `.jpeg`, a default is set 
-#               (default: here("data", "plots", Sys.Date(), "map")
-#                         "~/data/plots/map/<current date>/")
-#               
-# sav        = Optional: set to TRUE if want to save 
-#               (default: FALSE)
-#               
-# sv_name    = Optional: add part of name to file,
-#               (default: NULL; file - MBON_pigm_<title>_<yyymmdd_hhmmss>.png,
-#                optional: file - MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png)
-#               
-# verbose    = Optional: allow the script to be more verbose with print 
-#              statements and plots 
-#               (default: FALSE)
-#
-# ---- OUTPUTS: ----------
-# dat        = A list object with three lists:
-#              - lon   = longitude of prediction grid 
-#              - lat   = latitude of prediction grid
-#              - value = predicted values
-# 
-# Optional:
-# map = Adds a ggplot map to output variable if base_map is given list(plt = plt)
-# 
-# External:
-# If `sav == TRUE`, will save figures to location set in sav_loc with a file 
-# name of "MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png"
-#
-# ---- NOTES: ------------
-# Modified from https://github.com/eqmh/waltonsmith/blob/main/R_code/waltonsmith_hplc.R
-# ---- REFERENCES(s): ----
-#
-# ---- AUTHOR(s): --------
-# Sebastian Di Geronimo (2023-02-08 11:18:54)
-    
-    
+
     # TODO: fix ggplot
     # TODO: allow to use ratio or not
     set.seed(123)
@@ -120,7 +77,6 @@ map_data <- function(
     librarian::shelf(
         cli, ggplot2, rlang, fields, dplyr, 
     )
-    
     
     cli_alert_info("Working on: {conc_name} for {loc_name}")
     
@@ -330,31 +286,6 @@ map_data <- function(
     #         legend.key.height = unit(50, "pt")
     #     )
     
-    # TODO: make save into another function
-    # save location and name
-    # if (sav) {
-    if (FALSE) {
-        
-        if (is.null(sv_name)) {
-            sv_name <- 
-                glue("{conc_name}_{loc_name}") %>%
-                janitor::make_clean_names()
-        }
-        
-        filename <- here(sav_loc,
-                         glue("{sv_name}_",
-                              format(Sys.time(), "%y%m%d_%H%M%S") ,
-                              ".png"))
-        cat("\n\n")
-        cli_alert_info("Map file location: {.file {dirname(filename)}}")
-        cli_alert_info("Map file name: {.file {basename(filename)}}")
-        
-        ggsave(filename,
-               plot   = plt,
-               width  = 10,
-               height = 6)
-    }
-    
     # return list of data
     result <- list(
         dat = dat_sp,
@@ -379,13 +310,25 @@ map_data <- function(
 #' FUNCTION_DESCRIPTION
 #'
 #' @param maps DESCRIPTION.
-#' @param save DESCRIPTION.
-#' @param sv_name DESCRIPTION.
-#' @param sav_loc DESCRIPTION.
+#' @param save Optional: set to TRUE if want to save 
+#'            (default: FALSE)
+#' @param sv_name Optional: add part of name to file,
+#'                (default: NULL; file - MBON_pigm_<title>_<yyymmdd_hhmmss>.png,
+#'                 optional: file - MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png)
+#' @param sav_loc Optional: set location to save plots as `.jpeg`, a default is set 
+#'                (default: here("data", "plots", Sys.Date(), "map")
+#'                               "~/data/plots/map/<current date>/")
 #'
 #' @return RETURN_DESCRIPTION
+#' 
+#' @details
+#' #' External:
+#' If `sav == TRUE`, will save figures to location set in sav_loc with a file 
+#' name of "MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png"
+#' 
 #' @examples
 #' # ADD_EXAMPLES_HERE
+#' 
 save_maps <- function(maps, sv = FALSE, sv_name = NULL,
                       sav_loc  = here("data", "plots", Sys.Date(), "map"),
                       overwrite = FALSE
