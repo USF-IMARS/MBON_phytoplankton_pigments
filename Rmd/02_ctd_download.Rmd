@@ -432,9 +432,10 @@ if (FALSE) {
     
     
     ctd_join <-
-    (here("data", "processed") %>%
+    here("data", "processed") %>%
     dir_ls(regexp = "ctd_all") %>%
-    sort(decreasing = TRUE))[1] %>%
+    sort(decreasing = TRUE) %>%
+    first() %>%
     read_csv(show_col_types = FALSE) %>%
     mutate(time = as_datetime(time)) %>%
     filter(

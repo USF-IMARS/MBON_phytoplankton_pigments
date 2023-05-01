@@ -36,9 +36,10 @@ env_cmtx created in Rmd/02_ctd_download.Rmd
 
 # ---- CHEMTAX with CTD
 env_cmtx <- 
-    (here("data", "processed") %>%
+    here("data", "processed") %>%
     dir_ls(regexp = "cmtx_env_data")  %>%
-    sort(decreasing = TRUE))[1] %>%
+    sort(decreasing = TRUE) %>%
+    first() %>%
     read_csv(show_col_types  = FALSE) %>% 
     mutate(
         season = fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"),
