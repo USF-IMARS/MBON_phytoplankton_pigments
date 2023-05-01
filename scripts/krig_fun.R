@@ -289,14 +289,13 @@ map_data <- function(
     # return list of data
     result <- list(
         dat = dat_sp,
-        # map = list(map = plt)
         map = plt
     )
     
     
     Sys.sleep(1)
     return(result)
-    # ---- end of function ----
+    # ---- End of Function ----
     }
 
 
@@ -309,9 +308,9 @@ map_data <- function(
 #'
 #' FUNCTION_DESCRIPTION
 #'
-#' @param maps DESCRIPTION.
-#' @param save Optional: set to TRUE if want to save 
-#'            (default: FALSE)
+#' @param maps <S3: gg> object to save
+#' @param sv Optional: set to TRUE if want to save 
+#'           (default: FALSE)
 #' @param sv_name Optional: add part of name to file,
 #'                (default: NULL; file - MBON_pigm_<title>_<yyymmdd_hhmmss>.png,
 #'                 optional: file - MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png)
@@ -354,7 +353,7 @@ save_maps <- function(maps, sv = FALSE, sv_name = NULL,
                          glue("{sv_name}_",
                               format(Sys.time(), "%y%m%d_%H%M%S") ,
                               ".png"))
-        # cat("\n\n")
+
         cli_alert_info("Map file location: {.file {dirname(filename)}}")
         cli_alert_info("Map file name: {.file {basename(filename)}}")
         
