@@ -1,0 +1,170 @@
+---
+title: "Summary Tables"
+author: "Sebastian DiGeronimo"
+date: "2023-05-08"
+output: html_document
+---
+
+flextable
+rstatix
+qwraps2
+gtsummary
+skimr
+DescTools
+Hmisc::describe
+dlookr
+exploratory
+
+# Setup
+
+## Load Libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    # broom # optional
+    
+    # additional
+    qwraps2
+)
+
+# shelf(conflicted) # may be needed if won't allow loading of certain packages
+
+conflicts_prefer(
+    dplyr::filter(), 
+    dplyr::select()
+    )
+```
+
+## Path to Files 
+```{r path}
+# CTD data
+ctd_dat_summary <- 
+    here("data", "processed", "ctd_all.csv") %>%
+    read_csv(show_col_types = FALSE)
+
+# filter CTD data
+dat <- 
+here("data", "processed", "cmtx_env_data.csv") %>%
+     read_csv(show_col_types = FALSE) 
+
+names(dat)
+ctd_dat_summary <- 
+dat %>%
+    select(
+        cruise_code, station, date_time_utc, season, name_of_water_body, lat.x, 
+        lon.x, depth.x, water_depth, pressure, temp, o_sat, do, par, sal
+        )
+
+```
+
+```{r}
+ctd_dat_summary %>%
+    summarise(
+        total = n()
+    )
+ctd_dat_summary %>%
+    count(station) 
+ctd_dat_summary %>% 
+    count(season)
+ctd_dat_summary %>% 
+    count(year(date_time_utc))
+
+ctd_dat_summary %>%
+    distinct(cruise_code, .keep_all = T) %>%
+    count(season)
+
+unique(ctd_dat_summary$station) %>%
+    length()
+
+
+# test <- 
+    # qwraps2::summary_table(mtcars, by = "cyl")
+# print(test, caption = "Hello world", markup = "latex")
+
+# drop_na(ctd_dat_summary) %>%
+# with(., qwraps2::qacf(sal, lat, lon))
+
+# ctd_dat_summary %>%
+#     select(-time) %>%
+#     qwraps2::summary_table(by = "season")
+
+ctd_dat_summary %>%
+    group_by(season) %>%
+    rstatix::get_summary_stats() %>%
+    arrange(variable) %T>%
+    print() %>%
+    filter(!str_detect(variable, "lat|lon")) %>%
+    ggplot(aes(season, median)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = median - se, ymax = median + se)) +
+    facet_wrap(~variable, 
+               scale = "free_y") +
+    theme_classic()
+
+ctd_dat_summary %>%
+    ggpubr::ggboxplot(
+        x = "season",
+        y = "temp"
+    )
+
+ctd_dat_summary %>%
+    group_by(season) %>%
+    dlookr::describe()
+
+explore::explore(
+    ctd_dat_summary
+)
+
+ctd_dat_summary %>%
+  pivot_longer(
+      data      = .,
+      cols      = c(lat:last_col()),     # columns to pivot long,
+      names_to  = "name",  # desired name for category column
+      values_to = "value", # desired name for value column
+      )  %>%
+             
+ ggplot(aes(time, value, color = season)) +
+    geom_point() +
+    # geom_errorbar(aes(ymin = median - se, ymax = median + se)) +
+    facet_wrap(~ name, 
+               scale = "free_y") +
+    theme_classic()
+
+ctd_dat_summary %>%
+  pivot_longer(
+      data      = .,
+      cols      = c(lat:last_col()),     # columns to pivot long,
+      names_to  = "name",  # desired name for category column
+      values_to = "value", # desired name for value column
+      )  %>%
+             
+ ggplot(aes(yday(time), value, shape = season, color = factor(year(time)))) +
+    geom_point() +
+    # geom_errorbar(aes(ymin = median - se, ymax = median + se)) +
+    facet_wrap(~ name, 
+               scale = "free_y") +
+    theme_classic()
+```
+
+```{r}
+ggquickeda
+
+DataExplorer::introduce(ctd_dat_summary)
+DataExplorer::create_report()
+Hmisc::describe(ctd_dat_summary)
+
+DescTools::Desc(. ~ month(time), data = ctd_dat_summary, plotit = T)
+DescTools::Desc(ctd_dat_summary$sal, plotit = T)
+DescTools::Desc(ctd_dat_summary$sal ~ month(ctd_dat_summary$time), plotit = F)
+DescTools::Desc(ctd_dat_summary$sal ~ (ctd_dat_summary$time), plotit = T)
+DescTools::Desc(ctd_dat_summary$sal ~ ctd_dat_summary$cruise_id, plotit = T)
+
+
+DescTools::PlotQQ(ctd_dat_summary$sal, function(p)
+    qchisq(p, df = 5), type = "n", main = NA, args.qqline = NA)
+```
