@@ -714,34 +714,40 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
-# NOT USED: Table Test
+# TODO: test table of PFT proportions
 ```{r}
-    # gt(
-    #     rowname_col = NULL,
-    #     groupname_col = NULL
-    # ) %>% 
-    # cols_label(
-    #     frac_chloro_avg = "Chloro",
-    #     frac_crypto_avg = "Crypto",
-    #     frac_cyano_avg = "Cyano",
-    #     frac_diat_avg = "Diat",
-    #     frac_dino_avg = "Dino",
-    #     frac_hapt_avg = "Hapt",
-    #     frac_pras_avg = "Pras") %>% 
-    # tab_options(
-    #     table_body.hlines.width = 0,
-    #     table_body.vlines.width = 0,
-    #     stub.border.width = 0
-    # ) %>%
-    # # fmt_number(columns = starts_with("frac"), decimals = 4) %>% 
-    # fmt_percent(columns = starts_with("frac"), decimals = 0) %>% 
-    # tab_spanner(label = "Average Fraction",
-    #             columns = frac_chloro_avg:frac_pras_avg) %>% 
-    # tab_stubhead("Season") %>% 
-    # opt_table_font("serif") %>% 
-    # gtsave(filename = here("data", "plots", glue("community_fractions", 
-    #        format(Sys.time(), '_%Y%m%d_%H%M%S'),
-    #        ".html")))
+gt_pft <- 
+gt(
+    rowname_col = NULL,
+    groupname_col = NULL
+) %>%
+cols_label(
+    frac_chloro_avg = "Chloro",
+    frac_crypto_avg = "Crypto",
+    frac_cyano_avg = "Cyano",
+    frac_diat_avg = "Diat",
+    frac_dino_avg = "Dino",
+    frac_hapt_avg = "Hapt",
+    frac_pras_avg = "Pras") %>%
+tab_options(
+    table_body.hlines.width = 0,
+    table_body.vlines.width = 0,
+    stub.border.width = 0
+) %>%
+# fmt_number(columns = starts_with("frac"), decimals = 4) %>%
+fmt_percent(columns = starts_with("frac"), decimals = 0) %>%
+tab_spanner(label = "Average Fraction",
+            columns = frac_chloro_avg:frac_pras_avg) %>%
+tab_stubhead("Season") %>%
+opt_table_font("serif") 
 
+if (FALSE) {
+    gtsave(
+        gt_pft,
+        filename = here("data", "plots", glue("community_fractions",
+           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+           ".html")))
+}
+    
 ```
 
