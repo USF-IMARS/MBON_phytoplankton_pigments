@@ -104,6 +104,7 @@ cmtx_data_matrix <-
 ```
 
 
+
 # NOT USED: ---- PCoA ----
 ```{r Bray-Curtis-Dissimilarity-Matrix}
 # cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray")
