@@ -53,13 +53,22 @@ here("data", "processed", "cmtx_env_data.csv") %>%
      read_csv(show_col_types = FALSE) 
 
 names(dat)
-ctd_dat_summary <- 
-dat %>%
+ctd_dat_summary <-
+    dat %>%
     select(
-        cruise_code, station, date_time_utc, season, name_of_water_body, lat.x, 
+        season, cruise_code, station, date_time_utc, name_of_water_body, lat.x, 
         lon.x, depth.x, water_depth, pressure, temp, o_sat, do, par, sal
-        )
-
+        ) %>%
+    mutate(
+        season = fct(season,
+                     levels = c("Winter", "Spring", "Summer", "Autumn"))
+    ) 
+  
+# load data
+pig_dat <-
+    here("data", "processed", "combined_pig_dat.csv") %>%
+    read_csv(show_col_types = FALSE) %>%
+    filter(str_detect(name_of_water_body, "Keys"))
 ```
 
 ```{r}
@@ -94,15 +103,27 @@ unique(ctd_dat_summary$station) %>%
 #     qwraps2::summary_table(by = "season")
 
 ctd_dat_summary %>%
+    # group_by(season) %>%
+    rstatix::get_summary_stats() %>%
+    arrange(variable)  %>% 
+    filter(str_detect(variable, "temp"))  %>%
+    mutate(.after = median, 
+           lower = mean - min,
+           upper = max - mean) %T>%
+    print() 
+
+ctd_dat_summary %>%
     group_by(season) %>%
     rstatix::get_summary_stats() %>%
     arrange(variable) %T>%
     print() %>%
     filter(!str_detect(variable, "lat|lon")) %>%
+    group_by(variable) %>%
+    
     ggplot(aes(season, median)) +
     geom_point() +
     geom_errorbar(aes(ymin = median - se, ymax = median + se)) +
-    facet_wrap(~variable, 
+    facet_wrap(~ variable, 
                scale = "free_y") +
     theme_classic()
 
@@ -116,19 +137,27 @@ ctd_dat_summary %>%
     group_by(season) %>%
     dlookr::describe()
 
-explore::explore(
-    ctd_dat_summary
-)
+# explore::explore(
+#     ctd_dat_summary
+# )# explore::explore(
+#     ctd_dat_summary
+# )
 
 ctd_dat_summary %>%
+  select(-contains(c("depth.x","lon.x", "lat.x", "water"))) %>%
   pivot_longer(
       data      = .,
-      cols      = c(lat:last_col()),     # columns to pivot long,
+      cols      = c(temp:last_col()),     # columns to pivot long,
       names_to  = "name",  # desired name for category column
       values_to = "value", # desired name for value column
       )  %>%
              
- ggplot(aes(time, value, color = season)) +
+ ggplot(
+     aes(
+         x = date_time_utc, 
+         y= value, 
+         color = season,
+         shape = season)) +
     geom_point() +
     # geom_errorbar(aes(ymin = median - se, ymax = median + se)) +
     facet_wrap(~ name, 
@@ -136,19 +165,36 @@ ctd_dat_summary %>%
     theme_classic()
 
 ctd_dat_summary %>%
+  select(-contains(c("depth.x","lon.x", "lat.x", "water"))) %>%
   pivot_longer(
       data      = .,
-      cols      = c(lat:last_col()),     # columns to pivot long,
+      cols      = c(temp:last_col()),     # columns to pivot long,
       names_to  = "name",  # desired name for category column
       values_to = "value", # desired name for value column
       )  %>%
-             
- ggplot(aes(yday(time), value, shape = season, color = factor(year(time)))) +
-    geom_point() +
+    ggplot(
+     aes(
+         x = yday(date_time_utc), 
+         y = value, 
+         shape = season, 
+         color = factor(year(date_time_utc)))) +
+    geom_point(na.rm = TRUE) +
     # geom_errorbar(aes(ymin = median - se, ymax = median + se)) +
+    labs(x = "Day of Year",
+         y = "Value",
+         color = "Year",
+         shape = "Season") +
     facet_wrap(~ name, 
-               scale = "free_y") +
+               scales = "free_y") +
     theme_classic()
+
+
+qplot(x = hms::as_hms(date_time_utc) - hms::hms(hours = 5), y = par, data = ctd_dat_summary) +
+    scale_x_time(breaks = hours(seq(0,24, 1))) +
+    theme_classic() +
+    theme(
+        axis.text.x = element_text(angle = 90)
+    )
 ```
 
 ```{r}
@@ -168,3 +214,76 @@ DescTools::Desc(ctd_dat_summary$sal ~ ctd_dat_summary$cruise_id, plotit = T)
 DescTools::PlotQQ(ctd_dat_summary$sal, function(p)
     qchisq(p, df = 5), type = "n", main = NA, args.qqline = NA)
 ```
+
+```{r, fig.height=20, fig.width=30}
+ctd_dat_summary %>%
+    mutate(
+     date_time_utc = format(date_time_utc, "%Y-%m")
+    ) %>%
+    summarise(
+        .by = c(date_time_utc, season),
+        across(
+            depth.x:last_col(),
+            list(avg = \(x) mean(x, na.rm = TRUE))
+        )
+    ) %>%
+     pivot_longer(
+         data      = .,
+         cols      = c(depth.x_avg:last_col()),     # columns to pivot long,
+         names_to  = "name",  # desired name for category column
+         values_to = "value", # desired name for value column
+         ) %>%
+    drop_na(value) %>%
+    ggplot(
+        aes(
+            ym(date_time_utc), 
+            y = value,
+            color = season,
+
+            )) +
+        geom_vline(xintercept = ym(glue("{2016:2021}-01")), 
+                   color = "red", linetype = "dashed",
+                   alpha = 0.5) +
+    geom_line(color = "black",  na.rm = TRUE) +
+    geom_point(
+        aes(shape = season),
+        na.rm = TRUE,
+        size = 6) +
+    scale_x_date(breaks = "1 year",
+                 date_labels = "%Y") + 
+    scale_y_continuous(breaks = scales::breaks_pretty(10)) +
+    facet_wrap(~ name, 
+               scales = "free_y") +
+    ggthemes::theme_calc()
+```
+
+```{r, fig.height=15, fig.width=30}
+pig_dat %>%
+    ggplot(aes(date_time_utc, y = tot_chl_a, color = station)) +
+    geom_point(show.legend = FALSE) +
+    
+    ggthemes::theme_calc()
+
+pig_dat %>%
+    ggplot(aes(date_time_utc, y = tot_chl_a, color = season)) +
+    geom_point(na.rm = TRUE) +
+    scale_y_continuous(limits = c(NA, 5)) +
+    scale_x_datetime(date_labels = "%Y") +
+    ggthemes::theme_calc()
+
+pig_dat %>%
+    ggplot(aes(month(date_time_utc, label = TRUE,
+                     abbr = FALSE), 
+               y = tot_chl_a, color = season)) +
+    geom_point(na.rm = TRUE) +
+    scale_y_continuous(limits = c(NA, 1)) +
+    # scale_x_datetime(date_labels = "%Y") +
+    ggthemes::theme_calc()
+
+
+pig_dat %>%
+    group_by(year, season) %>%
+    rstatix::get_summary_stats(tot_chl_a) %>%
+    arrange(median)
+```
+
