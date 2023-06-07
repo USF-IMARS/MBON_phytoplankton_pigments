@@ -419,6 +419,12 @@ rm(sv_arg)
 
 # 5.0 ---- Perform Kruskal-Wallis and Dunn Test ----
 ## 5.1 K-W Test with PFT on season
+
+Here Kruskal-Wallis was performed to identify if there was any signficant 
+difference between each season and a PFT.
+
+If p-value <= 0.05, then would go to Dunn's test to test pairwise season-phyto 
+combination.
 ```{r kruskal-and-dunn}
 # concentration on season grouped by PFT
 cmtx_kruskal <-
@@ -427,21 +433,30 @@ cmtx_kruskal <-
     kruskal_test(conc ~ season)
 
 # extract PFT where p value > 0.05
-p_gt_05 <- filter(cmtx_kruskal, p > 0.05) %>% pull(phyto)
+p_gt_05 <- filter(cmtx_kruskal, p > 0.05)
 
 # Dunn's test
 cmtx_dunn <-
     cmtx_avgs %>%
     # remove PFT with no signficant difference
-    filter(!(phyto %in% p_gt_05)) %>%
+    filter(!(phyto %in% p_gt_05$phyto)) %>%
     group_by(phyto) %>%
     dunn_test(conc ~ season, 
               p.adjust.method = "bonferroni") 
 
 p_gt_05
 cmtx_kruskal
-cmtx_dunn
+cmtx_dunn %>%
+    filter(p.adj <= 0.05) %>% 
+    unite("groups", group1, group2, sep = "-") %>%
+    print()
+
 ```
+Based on the results, Diatom 1 did not have any signficant difference between 
+each season. 
+
+From the pairwise Dunn's test, only 30 pairs were signficantly different.
+
 # 6.0 ---- Combine PFT Sub Groups ----
 i.e. diatom 1 + diatom 2 = diatom
 ```{r station-seasonally-yearly-avgs}
@@ -716,38 +731,61 @@ rm(sv_arg)
 
 # TODO: test table of PFT proportions
 ```{r}
-gt_pft <- 
-gt(
+shelf(gt)
+gt_pft <-
+  cmtx_fract %>%
+  summarise(
+    .by = season,
+    across(
+      contains("frac"),
+      list(
+        avg = \(x) mean(x)
+        # sd = \(x) sd(x)
+      )
+    )
+  ) %>%
+  gt(
+    data = .,
     rowname_col = NULL,
     groupname_col = NULL
-) %>%
-cols_label(
+  ) %>%
+  cols_label(
     frac_chloro_avg = "Chloro",
     frac_crypto_avg = "Crypto",
-    frac_cyano_avg = "Cyano",
-    frac_diat_avg = "Diat",
-    frac_dino_avg = "Dino",
-    frac_hapt_avg = "Hapt",
-    frac_pras_avg = "Pras") %>%
-tab_options(
+    frac_cyano_avg  = "Cyano",
+    frac_diat_avg   = "Diat",
+    frac_dino_avg   = "Dino",
+    frac_hapt_avg   = "Hapt",
+    frac_pras_avg   = "Pras"
+  ) %>%
+  tab_options(
     table_body.hlines.width = 0,
     table_body.vlines.width = 0,
     stub.border.width = 0
-) %>%
-# fmt_number(columns = starts_with("frac"), decimals = 4) %>%
-fmt_percent(columns = starts_with("frac"), decimals = 0) %>%
-tab_spanner(label = "Average Fraction",
-            columns = frac_chloro_avg:frac_pras_avg) %>%
-tab_stubhead("Season") %>%
-opt_table_font("serif") 
+  ) %>%
+  # fmt_number(columns = starts_with("frac"), decimals = 4) %>%
+  fmt_percent(columns = starts_with("frac"), decimals = 0) %>%
+  tab_spanner(
+    label = "Average Fraction",
+    columns = frac_chloro_avg:frac_pras_avg
+  ) %>%
+  tab_stubhead("Season") %>%
+  opt_table_font("serif") %T>%
+  print()
+
 
 if (FALSE) {
-    gtsave(
-        gt_pft,
-        filename = here("data", "plots", glue("community_fractions",
-           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-           ".html")))
+  gtsave(
+    gt_pft,
+    filename = here(
+      "data", "plots",
+      glue(
+        "community_fractions",
+        format(Sys.time(), "_%Y%m%d_%H%M%S"),
+        ".docx"
+      )
+    )
+  )
 }
-    
 ```
 
