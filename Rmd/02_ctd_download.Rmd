@@ -214,7 +214,7 @@ ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
              skips     = skips)
     )
     
-    # ---- end of function ----
+    # ---- end of function
 }
 ```
 
