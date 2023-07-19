@@ -198,10 +198,9 @@ qplot(x = hms::as_hms(date_time_utc) - hms::hms(hours = 5), y = par, data = ctd_
 ```
 
 ```{r}
-ggquickeda
 
-DataExplorer::introduce(ctd_dat_summary)
-DataExplorer::create_report()
+# DataExplorer::introduce(ctd_dat_summary)
+# DataExplorer::create_report()
 Hmisc::describe(ctd_dat_summary)
 
 DescTools::Desc(. ~ month(time), data = ctd_dat_summary, plotit = T)
