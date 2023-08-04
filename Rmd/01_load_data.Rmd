@@ -40,26 +40,25 @@ conflicts_prefer(
     dplyr::select()
     )
 
+source(here("scripts", "misc_functions.R"))
 ```
 
 ## 1.2 Create Directories
 ```{r create-dir}
 # will create a set directory if does not exists
 # useful for new projects
-subDir <-
-    c("data/raw",
-      "data/processed",
-      "data/plots",
-      "data/metadata",
-      "data/raw/seascapes",
-      "data/raw/chemtax",
-      "data/raw/hplc",
-      "data/raw/microscopy",
-      "Rmd",
-      "scripts")
+source(here("scripts", "create_dir.R")) 
 
-fs::dir_create(path = here(subDir))
-rm(subDir)
+loc <- here()
+
+create_dir(
+  .loc = loc,
+  cust_dir = 
+   c(
+     here(loc, "data", "raw", c("seascapes", "chemtax", "hplc", "microscopy"))
+     ),
+  showtree = TRUE,
+  recurse  = 2)
 ```
 
 ## 1.3 Get File Paths
@@ -78,7 +77,8 @@ file_pig <-
     # regexp  = "^[^~]*\\.xlsx$"
     regexp  = "^[^~]*\\.xlsx$"
   ) %>%
-  str_sort()
+  str_sort() %>%
+  str_subset("ignore", negate = TRUE)
     
 
 if (is_empty(file_pig)) {
@@ -296,7 +296,7 @@ unshelf(readxl, janitor, hms)
 
 # 2.0 ---- Merge Data Reports ----
 ## 2.1 Mapped Column Names
-```{r}
+```{r colnames}
 # select variables that match data sets
 params <- c(
   # meta
@@ -335,8 +335,7 @@ params <- c(
 ```{r merge-df}
 shelf(paulponcet/statip)
 # ---- merge df 2, 3, 4 ----
-df_merg  <-
-    full_join(df3, df2)
+df_merg  <- full_join(df3, df2)
 
 df_merg <-
   mutate(
@@ -458,26 +457,26 @@ rm(map_plt)
 #   )
 szn <-
   list(
-    winter = month.abb[c(12,1,2)], # Dec, Jan, Feb
+    winter = month.abb[c(12, 1, 2)], # Dec, Jan, Feb
     spring = month.abb[3:5], # Mar, Apr, May
     summer = month.abb[6:8], # Jun, Jul, "Aug"
     autumn = month.abb[9:11] # Sep, Nov, Oct
   )
 
 df_all <-
-    df_all %>% 
-    mutate(
-    month  = strtrim(month, 3),
+  df_all %>%
+  mutate(
+    month  = month(date_time_utc, label = TRUE, abbr = TRUE),
     season = case_match(
-        month,
-        szn$winter ~ "Winter",
-        szn$spring ~ "Spring",
-        szn$summer ~ "Summer",
-        szn$autumn ~ "Autumn",
-        .default = NA_character_
+      month,
+      szn$winter ~ "Winter",
+      szn$spring ~ "Spring",
+      szn$summer ~ "Summer",
+      szn$autumn ~ "Autumn",
+      .default = NA_character_
     ),
     .after = month
-)
+  ) %T>% print()
 
 # average and standard deviations for each pigment
 pig_stat <-
@@ -492,46 +491,85 @@ pig_stat <-
         var = ~ var(.x, na.rm = TRUE)
       )
     )
-  ) 
+  ) %T>% print()
 ```
 
 # 3.0 ---- Calculate size fractionation based on Uitz, 2006 ----
 
-# 3.1 Size Fractionation
+## 3.1 Size Fractionation
+diagnostic pigment calculations:
+$$
+dp = \\
+ 1.41 \times \text{fuco} + \\
+ 1.41 \times \text{perid} + \\
+ 1.27 \times \text{hex fuco} + \\
+ 0.35 \times \text{but fuco} +  \\
+ 0.6 \times \text{allo} + \\
+ 1.01 \times \text{total chl-b} + \\
+ 0.86 \times \text{zea}
+$$
 
+fractions:
+- micro : (1.41 * fuco + 1.41 * perid) / dp_w
+- nano  : (1.27 * hex_fuco + 0.35 * but_fuco + 0.6 * allo) / dp_w
+- pico  : (1.01 * tot_chl_b + 0.86 * zea) / dp_w
+
+biomass:
+- micro : fraction micro * total chlorophyll-a
+- nano  : fraction  nano * total chlorophyll-a
+- pico  : fraction  pico * total chlorophyll-a
 ```{r size-fractionation}
-df_all <- 
-    df_all %>%
-    mutate(
-        # diagnostic pigment
-        dp_w =
-            1.41 * fuco + 1.41 * perid + 1.27 * hex_fuco + 0.35 * but_fuco +
-            0.6 * allo + 1.01 * tot_chl_b + 0.86 * zea,
-        
-        # fractions
-        f_micro = (1.41 * fuco + 1.41 * perid) / dp_w,
-        f_nano  = (1.27 * hex_fuco + 0.35 * but_fuco + 0.6 * allo) / dp_w,
-        f_pico  = (1.01 * tot_chl_b + 0.86 * zea) / dp_w,
-        
-        # biomass
-        micro   = f_micro * tot_chl_a,
-        nano    = f_nano * tot_chl_a,
-        pico    = f_pico * tot_chl_a
-    )
+df_all <-
+      df_all %>%
+  mutate(
+    # diagnostic pigment
+    dp_w =
+      1.41 * fuco + 1.41 * perid + 1.27 * hex_fuco + 0.35 * but_fuco +
+        0.6 * allo + 1.01 * tot_chl_b + 0.86 * zea,
+
+    # fractions
+    f_micro = (1.41 * fuco + 1.41 * perid) / dp_w,
+    f_nano  = (1.27 * hex_fuco + 0.35 * but_fuco + 0.6 * allo) / dp_w,
+    f_pico  = (1.01 * tot_chl_b + 0.86 * zea) / dp_w,
+
+    # biomass
+    micro = f_micro * tot_chl_a,
+    nano  = f_nano * tot_chl_a,
+    pico  = f_pico * tot_chl_a
+  )
 ```
 
-##  Save pigment data combined and mean/std dev
+## 3.2 Save pigment data combined and mean/std dev
 ```{r save-combined-data}
-if (FALSE) {
-    readr::write_csv(df_all, here(path_out, "combined_pig_dat.csv"))
-    readr::write_csv(pig_stat, here(path_out, "pig_summary_stat.csv"))
-    }
+save_csv(
+  .data          = df_all,        
+  save_location  = path_out,
+  save_name      = "combined_pig_dat",
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL
+)
+
+save_csv(
+  .data          = pig_stat,        
+  save_location  = path_out,
+  save_name      = "pig_summary_stat",
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL
+)
 ```
-# Convert pigments to log
+
+
+
+
+# 4.0 ---- Convert pigments to log ----
+
 ```{r log-dat}
 # read combined pigment data 
 if (!exists("df_all")) {
-    pig_dat  <- read_csv(here(path_out,"combined_pig_dat.csv"))
+    pig_dat  <- read_csv(here(path_out,"combined_pig_dat.csv"),
+                         show_col_types = FALSE)
 } else {
     pig_dat <- df_all
 }
@@ -553,7 +591,8 @@ log_pig <-
     # log_pig %>% 
     #     select(season, tot_chl_a:dp) %>%
     #     group_by(season) %>%
-    #     summarise(across(tot_chl_a:dp, .fn = list(mean = mean, sd = sd, var = var), na.rm = TRUE,
+    #     summarise(across(tot_chl_a:dp, 
+    #     .fn = list(mean = mean, sd = sd, var = var), na.rm = TRUE,
     #            .names = "{.col}_{.fn}")) %>%
     #             pivot_longer(2:last_col(), 
     #              names_to  = "pigment", 
@@ -577,6 +616,7 @@ log_pig_stat <-
   ) %>%
   mutate(
     .keep = "none",
+    season,
     pigment,
     avg = 10^log_avg - val,
     sd  = 10^log_sd - val,
@@ -585,13 +625,50 @@ log_pig_stat <-
     log_sd,
     log_var
   )
+
+log_pig_stat %>%
+    pivot_wider(
+        data         = .,
+        id_cols      = c(season), # *optional* vector of unaffected columns,
+        names_from   = pigment, # category column(s) to pivot wide
+        values_from  = c(log_avg:last_col()), # value column(s) that hold data for each category column
+        names_glue    = "{pigment}_{.value}",
+        names_repair = janitor::make_clean_names
+        )
 ```
 
-# Filter for FL Keys specifically
+# 5.0 ---- Filter for FL Keys specifically ----
 ```{r fl-keys-only}
+water_body <- list(
+  "Florida Keys" = c(
+    glue("{1:18}"),
+    glue("9.{1:9}"), "9B", "24", "LK", "MR", "WS", "21.5"
+  ),
+  "Southwest Florida Shelf" = c(
+    glue("{30:68}"),
+    glue("57.{1:3}"), "KW1", "KW2", "KW4"
+  ),
+  "West Florida Shelf" = c(
+    "Z04-068", "CBH", "NBH", "EB1",
+    as.vector(outer(
+      c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG"),
+      c(1:12),
+      str_c
+    ))
+  )
+) 
+
 # filter for Florida Keys and cluster by seasons
 chemtax_seasons <-
   pig_dat %>%
+  mutate(
+    name_of_water_body = case_match(
+      station,
+      water_body[[1]] ~ names(water_body[1]),
+      water_body[[2]] ~ names(water_body[2]),
+      water_body[[3]] ~ names(water_body[3])
+    )
+  ) %>%
   filter(name_of_water_body == "Florida Keys") %>%
   mutate(
     cluster_code = case_when(
@@ -601,7 +678,7 @@ chemtax_seasons <-
       season == "Autumn" ~ 4
     )
   ) %>%
-  dplyr::select(
+  select(
     hplc_gsfc_id,
     cluster_code,
     sample,
@@ -619,23 +696,45 @@ chemtax_seasons <-
     dv_chl_a,
     tot_chl_a
   )
+
+rm(water_body)
 ```
 
 
-# Save data
+## 5.1 Save data
 ```{r save-data}
-if (FALSE) {
-    # log trans of pigment
-    write_csv(log_pig, 
-              here(path_out, "log_combined_pig_dat.csv"))
-    
-    # mean, std dev, var
-    write_csv(log_pig_stat, 
-              here(path_out, "log_pig_summary_stat.csv"))
-    
-    # chemtax season clusters
-    write_csv(chemtax_seasons, 
-              here(path_out,"chemtax_season_clust.csv"))
-    }
+overwrite_data <- FALSE
+
+# log trans of pigment
+save_csv(
+  .data          = log_pig,        
+  save_location  = path_out,
+  save_name      = "log_combined_pig_dat",
+  overwrite      = overwrite_data,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL
+)
+
+# mean, std dev, var
+save_csv(
+  .data          = log_pig_stat,        
+  save_location  = path_out,
+  save_name      = "log_pig_summary_stat",
+  overwrite      = overwrite_data,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL
+)
+
+# chemtax season clusters
+save_csv(
+  .data          = chemtax_seasons,        
+  save_location  = path_out,
+  save_name      = "chemtax_season_clust",
+  overwrite      = overwrite_data,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL
+)
+
+rm(overwrite_data)
 ```
 
