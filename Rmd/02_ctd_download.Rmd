@@ -37,6 +37,8 @@ conflicts_prefer(
     dplyr::filter(), 
     dplyr::select()
     )
+
+source(here("scripts", "misc_functions.R"))
 ```
 
 # 2.0 Set database
@@ -93,11 +95,11 @@ download if CTD files don't exist
 ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
 
     # ---- check if ERDDAP is able to be connected to
-    # if (!RCurl::url.exists(eurl())) {
-    #     cat("\n")
-    #     stop(paste("\b\b----\nCannot reach", eurl(),
-    #                "\nThe server is probably down!\n---\n"))
-    #     }
+    if (!RCurl::url.exists(eurl())) {
+        cat("\n")
+        stop(paste("\b\b----\nCannot reach", eurl(),
+                   "\nThe server is probably down!\n---\n"))
+        }
     
    if (verbose) message(paste("\n-------------------------",
                               "\nStarting cruise: ", IDS,
@@ -415,17 +417,22 @@ rm(fn, p)
 
 
 ```{r save-ctd-all}
-if (FALSE) {
-  ctd_dat_summary %>%
-    arrange(time) %>%
-    write_csv(
-      here("data", "processed", 
-           glue("ctd_all_",
-                "{Sys.Date()}",
-                ".csv")
-           )
-      )
-    }
+ctd_dat_summary %>%
+  arrange(time) %>%
+  save_csv(
+    .data          = .,
+    save_location  = here("data", "processed"),
+    save_name      = "ctd_all",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+
+save_csv(tibble(x = "d"),  
+         save_location  = here("data", "processed"),
+    save_name      = "ctd_all",
+    overwrite      = FALSE,
+    verbose        = TRUE, time_stamp_fmt = "help")
 ```
 
 
