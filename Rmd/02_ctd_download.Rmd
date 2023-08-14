@@ -427,12 +427,6 @@ ctd_dat_summary %>%
     verbose        = TRUE,
     time_stamp_fmt = NULL
   )
-
-save_csv(tibble(x = "d"),  
-         save_location  = here("data", "processed"),
-    save_name      = "ctd_all",
-    overwrite      = FALSE,
-    verbose        = TRUE, time_stamp_fmt = "help")
 ```
 
 
