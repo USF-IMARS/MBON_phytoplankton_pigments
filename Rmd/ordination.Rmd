@@ -23,6 +23,8 @@ library("conflicted")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+
+source(here("scripts", "misc_functions.R"))
 ```
 ## Load Data
 - CHEMTAX Seasonal Averages
@@ -61,29 +63,38 @@ env_cmtx <-
 
 ## Save CHEMTAX-CTD Merged Data
 ```{r chemtax-ctd}
-sv_arg <-
-  list(
-    sv_loc    = here("data", "processed"),
-    sv_nm     = "cmtx_env_data.csv",
-    overwrite = FALSE
-  ) %>%
-  c(
-    .,
-    env_dat = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+save_csv(
+    .data          = env_cmtx,
+    save_location  = here("data", "processed"),
+    save_name      = "cmtx_env_data",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
   )
-
-
-if (sv_arg$env_dat | sv_arg$overwrite) {
- write_csv(
-        x = env_cmtx, 
-        file = here(sv_arg$sv_loc, sv_arg$sv_nm)
-        )
-} else {
-    cli::cli_alert_info(c("Skipping saving of {.file {sv_arg$sv_nm}} ",
-                          "because exists ",
-                          "and/or overwrite = {.var FALSE}"))
-}
-rm(sv_arg)
+# sv_arg <-
+#   list(
+#     sv_loc    = here("data", "processed"),
+#     sv_nm     = "cmtx_env_data.csv",
+#     overwrite = FALSE
+#   ) %>%
+#   c(
+#     .,
+#     env_dat = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+#   )
+# 
+# 
+# 
+# if (sv_arg$env_dat | sv_arg$overwrite) {
+#  write_csv(
+#         x = env_cmtx, 
+#         file = here(sv_arg$sv_loc, sv_arg$sv_nm)
+#         )
+# } else {
+#     cli::cli_alert_info(c("Skipping saving of {.file {sv_arg$sv_nm}} ",
+#                           "because exists ",
+#                           "and/or overwrite = {.var FALSE}"))
+# }
+# rm(sv_arg)
 ```
 
 # Create Matrix Version of CHEMTAX Seasonal Averages
@@ -394,13 +405,13 @@ szn_adonis2 <- function(
         pairs, 
         formula = NULL, # something like "season * station" 
         dist_method = "bray") {
-
+    # browser()
     pair_name <- str_flatten(pairs, collapse = "|")
     
     dat_pair  <- 
         filter(
             .data, 
-            str_detect(!!sym(pair_col),
+            str_detect( !!sym(pair_col),
             pair_name))
     
     value <- select(dat_pair, chloro:pras)
@@ -422,6 +433,7 @@ cross_pairs <-
     select(season) %$%
     combn(unique(as.character(season)), 2) %>%
     t()
+
 colnames(cross_pairs) <- c("szn1", "szn2")
 
 cross_pairs <- 
@@ -434,7 +446,7 @@ cross_pairs %>%
     mutate(
        pairwise_p = map_dbl(
            .x = season_pairs,
-           .data = cmtx_avgs,
+           # .data = cmtx_avgs,
            .f = ~ szn_adonis2(.data = cmtx_avgs, "season", pairs = .x, "season"),
            .data = cmtx_avgs
        ),
