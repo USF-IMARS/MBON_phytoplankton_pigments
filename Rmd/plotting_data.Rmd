@@ -9,18 +9,20 @@ fig_height: 9.7
 # ---- Load Libraries ----
 ```{r setup, include=FALSE}
 librarian::shelf(
-    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
     # broom # optional
     
     # additional
-    scales, ggthemes, ggtext, huxtable, gt, cowplot, ggthemes, vegan, rstatix
+    scales, ggthemes, ggtext, huxtable, gt, cowplot, ggthemes, vegan, rstatix,
+    patchwork, 
+    quiet = TRUE
 )
 
-library("conflicted")
-
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+    dplyr::filter(),
+    dplyr::select()
+)
 
 # set season names and order
 szn_lab <- c("Winter", "Spring", "Summer", "Autumn")
@@ -32,13 +34,17 @@ pig_dat <-
     mutate(
         season = fct_relevel(season, ~ c("W", "Sp", "Su", "F")),
         season = fct_relabel(season, ~ szn_lab),
-        name_of_water_body = if_else(
+        name_of_water_body = case_when(
             str_detect(station, "WS") 
-            & str_detect(name_of_water_body, "Florida Bay"), 
-            "Florida Keys",
-            name_of_water_body
+            & str_detect(name_of_water_body, "Florida Bay") ~ "Florida Keys",
+            str_detect(station, "60") 
+            & str_detect(name_of_water_body, "Florida Keys") ~ "Florida Bay",
+            .default = name_of_water_body
             )
-        ) 
+        ) %>%
+    
+    # bad sample, contaminated with blue ink
+    filter(!str_detect(sample, "WS18120_103"))
 
 pig_dat
 
@@ -89,10 +95,11 @@ ggplot(pig_dat,
         shape = "Region"
     ) +
     scale_y_continuous(expand = c(0, 0)) +
+    scale_x_continuous(expand = c(0, 0)) +
     scale_shape_manual(values = c(21, 22, 24)) +
     coord_cartesian(ylim = c(0, NA)) +
-    facet_wrap(~ season) +
-    theme_classic()
+    facet_grid(name_of_water_body ~ season) +
+    theme_bw()
 ```
 
 # ---- Plot Histogram and Violin Plot ----
@@ -120,9 +127,13 @@ pig_long <-
                     x     = "Log<sub>\u0065</sub>([Pigment] + 1)",
                     y     = "Frequency",
                     fill  = "Season") +
-                scale_x_continuous(trans = log1p_trans()) +
+                scale_x_continuous(trans = log1p_trans(),
+                                   expand = c(0, 0)) +
+                scale_y_continuous(expand = c(0, 0)) + 
+                coord_cartesian(xlim = c(0, NA)) +
                 facet_wrap(facet = ~ name_of_water_body) +
-                theme_tufte(base_family = "serif") +
+                # theme_tufte(base_family = "serif") +
+                theme_calc(base_family = "serif") +
                 theme(
                      axis.title.x = element_markdown(margin = margin(t = 20, 
                                                                       b = 5))
@@ -145,8 +156,9 @@ pig_long <-
                      y     = "Concentration",
                      x     = "Season") +
             
-                theme_tufte(base_family = "serif") + 
+                theme_calc(base_family = "serif") + 
                 scale_y_continuous(expand = c(0, 0)) +
+                coord_cartesian(ylim = c(0, NA)) +
                 facet_wrap(facet = ~ name_of_water_body) +
                 theme(legend.position = "none")
             )
@@ -163,53 +175,58 @@ pig_long %>%
 
 ```{r chla-boxplot}
 chl_a_box <-
-    pig_dat %>%
-    group_by(name_of_water_body) %>%
-    nest() %>%
-    mutate(
-        plt = map2(
-            .x = data,
-            .y = name_of_water_body,
-            function(.x, .y) {
-                ylims <-  c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE))
-                
-                .x %>%
-                ggplot(aes(x = season, 
-                           y = tot_chl_a)) +
-                geom_boxplot(outlier.shape = NA, na.rm = TRUE) +
-                
-                stat_summary(
-                    fun   = mean,
-                    geom  = "point",
-                    shape = 20,
-                    size  = 8,
-                    na.rm = TRUE
-                ) +
-                
-                geom_jitter(width = 0.1, size = 0.5, alpha = 0.5, na.rm = TRUE) +
-                
-                labs(
-                    title = glue("{.y}: [Chlorophyll-a]"), 
-                    x     = "Season",
-                    y     = "Concentration (mg m<sup>-3</sup>)") +
-                
-                scale_y_continuous(expand = c(0, 0)) +
-                coord_cartesian(y = ylims) +
-                
-                # theme
-                ggthemes::theme_tufte() +
-                theme(text = element_text(size = 24, family = "serif"),
-                      axis.title.y = element_markdown(margin = margin(r = 30, 
-                                                                      l = 15)),
-                      axis.title.x = element_markdown(margin = margin(t = 20, 
-                                                                      b = 5)),
-                      axis.text.x  = element_text(color = "black"),
-                      axis.text.y  = element_text(color = "black"),
-                      axis.ticks.x = element_blank()) 
-                
-                }
-        )
+  pig_dat %>%
+  # group_by(name_of_water_body) %>%
+  nest(.by = name_of_water_body) %>%
+  mutate(
+    plt = map2(
+      .x = data,
+      .y = name_of_water_body,
+      function(.x, .y) {
+        ylims <- c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE))
+
+        .x %>%
+          ggplot(aes(
+            x = season,
+            y = tot_chl_a
+          )) +
+          geom_boxplot(outlier.shape = NA, na.rm = TRUE) +
+          stat_summary(
+            fun   = mean,
+            geom  = "point",
+            shape = 20,
+            size  = 8,
+            na.rm = TRUE
+          ) +
+          geom_jitter(width = 0.1, size = 0.5, alpha = 0.5, na.rm = TRUE) +
+          labs(
+            title = glue("{.y}: [Chlorophyll-a]"),
+            x     = "Season",
+            y     = "Concentration (mg m<sup>-3</sup>)"
+          ) +
+          scale_y_continuous(expand = c(0, 0)) +
+          coord_cartesian(y = ylims) +
+
+          # theme
+          ggthemes::theme_tufte() +
+          theme(
+            text = element_text(size = 24, family = "serif"),
+            axis.title.y = element_markdown(
+               margin = margin(
+                 r = 30,
+                 l = 15)
+               ),
+            axis.title.x = element_markdown(margin = margin(
+              t = 20,
+              b = 5
+            )),
+            axis.text.x = element_text(color = "black"),
+            axis.text.y = element_text(color = "black"),
+            axis.ticks.x = element_blank()
+          )
+      }
     )
+  )
 
 chl_a_box$plt
 
@@ -280,8 +297,12 @@ size_frac_plt <-
                            fill = name_of_water_body
                        )) +
                 geom_boxplot(na.rm = TRUE, linewidth = 0.2) +
-                    {if (str_detect(y_name, "Frac")) {
-                        scale_y_continuous(labels = label_percent())
+                    {if (str_detect(y_name, "Percent")) {
+                        scale_y_continuous(labels = scales::label_percent(),
+                                           expand = c(0, 0)
+                                           )
+                    } else {
+                         scale_y_continuous(expand = c(0, 0))
                     }} +
                     
                 labs(
@@ -291,8 +312,10 @@ size_frac_plt <-
                     fill = "Location"
                 ) +
                 scale_fill_brewer(palette = "Dark2") +
+                # theme_tufte() +
+                theme_calc() +
                 coord_cartesian(ylim = y_lim) +
-                theme_tufte() +
+
                 theme(
                     text = element_text(size = 24, family = "serif"),
                     plot.title = element_markdown(),
@@ -310,91 +333,109 @@ size_frac_plt <-
             }
     ))
 size_frac_plt$plt
+
+
+shelf(patchwork)
+size_frac_plt$plt[[1]] /
+size_frac_plt$plt[[2]] /
+size_frac_plt$plt[[3]]
 ```
 
 ```{r size-frac-stack-bar, fig.height=11, fig.width=30}
 plt_stack <-
-    pig_dat %>%
-    pivot_longer(
-        cols      = f_micro:f_pico,
-        names_to  = "size_frac",
-        values_to = "frac") %>%
-    # mutate(station = fct_reorder(station, lon)) %$% 
-    # levels(station)
-    nest(.by = name_of_water_body) %>%
-    mutate(plt = map2(
-        .x = data,
-        .y = name_of_water_body,
-        function(.x, .y) {
-            .x %>%
-                mutate(
-                    station = fct_reorder(station, lon)
-                ) %>%
-                
-                ggplot(aes( 
-                    x    = station, 
-                    y    = frac,
-                    fill = size_frac)) +
-                
-                geom_bar(
-                    position = "fill", 
-                    stat     = "identity",
-                    na.rm    = TRUE,
-                    # position = position_dodge(width = 0.9)
-                    ) +
-                
-                # labels
-                labs(
-                    title = .y,
-                    x     = "Station", 
-                    y     = "Percent (%)", 
-                    fill  = "Phytoplankton Size Class") +
-                
-                 scale_fill_brewer(
-                    palette = "Dark2",
-                    labels  = c("*f*<sub>micro</sub> (>20 &mu;m)",
-                                "*f*<sub>nano</sub> (2 - 20 &mu;m)",
-                                "*f*<sub>pico</sub> (<2 &mu;m)")
-                    ) +
-                scale_y_continuous(labels = label_percent()) +
-                scale_x_discrete(guide = guide_axis(n.dodge = 1, angle = 90)) +
-                facet_wrap( ~ season) +
-                ggthemes::theme_tufte() +
-                theme(
-                    legend.text = element_markdown(),
-                    plot.title = element_text(size = 30),
-                    strip.text.x = element_text(size = 20),
-                    axis.text.x = element_text(size = 15),
-                    panel.spacing.x = unit(25,"pt"),
-                    panel.border = element_rect(fill = NA)
-                      )
-        }
-    )) 
+  pig_dat %>%
+  pivot_longer(
+    cols      = f_micro:f_pico,
+    names_to  = "size_frac",
+    values_to = "frac"
+  ) %>%
+  nest(.by = name_of_water_body) %>%
+  mutate(plt = map2(
+    .x = data,
+    .y = name_of_water_body,
+    function(.x, .y) {
+      .x %>%
+        mutate(
+          water_name = .y,
+          station    = if_else(
+            str_detect(water_name, "(?i)keys"),
+            fct_reorder(station, lon),
+            fct_reorder(station, lat)
+          )
+        ) %>%
+        ggplot(aes(
+          x    = station,
+          y    = frac,
+          fill = size_frac
+        )) +
+        geom_bar(
+          position = "fill",
+          stat     = "identity",
+          na.rm    = TRUE,
+          # position = position_dodge(width = 0.9)
+        ) +
+
+        # labels
+        labs(
+          title = .y,
+          x     = "Station",
+          y     = "Percent (%)",
+          fill  = "Phytoplankton Size Class"
+        ) +
+        scale_fill_brewer(
+          palette = "Dark2",
+          labels  = c(
+            "*f*<sub>micro</sub> (>20 &mu;m)",
+            "*f*<sub>nano</sub> (2 - 20 &mu;m)",
+            "*f*<sub>pico</sub> (<2 &mu;m)"
+          )
+        ) +
+        scale_y_continuous(
+          labels = label_percent(),
+          expand = c(0, 0)
+        ) +
+        scale_x_discrete(guide = guide_axis(n.dodge = 1, angle = 90)) +
+        facet_wrap(~season) +
+        # ggthemes::theme_tufte() +
+        # ggthemes::theme_clean() +
+        ggthemes::theme_calc() +
+        theme(
+          text = element_text(size = 24, family = "serif"),
+          legend.text = element_markdown(),
+          plot.title = element_text(size = 30),
+          strip.text.x = element_text(size = 20),
+          axis.text.x = element_text(size = 15),
+          panel.spacing.x = unit(25, "pt"),
+          panel.border = element_rect(fill = NA)
+        )
+    }
+  ))
 
 plt_stack$plt
 
 # save plots
 if (FALSE) {
-plt_stack %>%
+  plt_stack %>%
     ungroup() %>%
     walk2(
-        .x = .$name_of_water_body,
-        .y = .$plt,
-        .f = ~ .x %>%
-            str_to_lower() %>%
-            str_replace_all(" ", "_") %>%
-            glue(., "_frac_bar{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>% 
-            save_plot(
-                filename    = .,
-                path        = here("data", "plots", Sys.Date()),
-                plot        = .y,
-                base_height = 9.7,
-                base_width  = 19,
-                dpi         = 600,
-                units       = "in",
-                device      = "png",
-                bg          = "white")
+      .x = .$name_of_water_body,
+      .y = .$plt,
+      .f = ~ .x %>%
+        str_to_lower() %>%
+        str_replace_all(" ", "_") %>%
+        glue(., "_frac_bar{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
+        save_plot(
+          filename    = .,
+          path        = here("data", "plots", Sys.Date()),
+          plot        = .y,
+          base_height = 9.7,
+          base_width  = 19,
+          dpi         = 600,
+          units       = "in",
+          device      = "png",
+          bg          = "white"
         )
+    )
 }
 
 ```
@@ -424,8 +465,8 @@ frac_gt <-
     ) %>% 
     cols_label(
         f_micro = md("***f*<sub>micro</sub>** (>20 &mu;m)"),
-        f_nano = md("***f*<sub>nano</sub>** (2 - 20 &mu;m)"),
-        f_pico = md("***f*<sub>pico</sub>** (<2 &mu;m)")) %>%
+        f_nano  = md("***f*<sub>nano</sub>** (2 - 20 &mu;m)"),
+        f_pico  = md("***f*<sub>pico</sub>** (<2 &mu;m)")) %>%
     tab_options(
         table_body.hlines.width = 0,
         table_body.vlines.width = 0,
@@ -457,10 +498,12 @@ if (FALSE) {
 cmtx_avgs <-
     here("data", "processed", "chemtax_w_meta_rm_dup.csv") %>%
     read_csv(show_col_types = FALSE) %>%
+    filter(!str_detect(station, "60")) %>%
     mutate(
         season = fct_relevel(season, ~ c("Winter","Spring", 
                                          "Summer", "Autumn")),
         season = fct_relevel(season, ~ szn_lab),
+        station = fct_reorder(station, lon)
         ) %>%
     select(-c(hplc_gsfc_id, pi, cruise:bottle, filter_type:comments,
               cluster_code)) %>%
@@ -480,8 +523,7 @@ cmtx_long <-
         cols      = chloro:last_col(),
         names_to  = "func_type",
         values_to = "conc") %>%
-    group_by(func_type) %>%
-    nest() %>%
+    nest(.by = func_type) %>%
     ungroup() %>%
     mutate(
         hist = map2(
@@ -513,47 +555,46 @@ cmtx_long$hist
 
 
 ```{r plotting-chemtax-data}
-cmtx_long <- 
-    cmtx_long %>%
-    select(-last_col()) %>%
-    unnest(data) %>%
-    filter(station != 60) %>% 
-    mutate(
-        season_year = case_when(
-            str_detect(season, "Aut|Spr|Sum") ~ glue("{season} {year}"),
-            str_detect(month, "Jan|Feb") ~ glue("{season} {year-1}-{year}"),
-            str_detect(month, "Dec") ~ glue("{season} {year}-{year+1}"),
-        ),
-        season_year = fct_inorder(season_year),
-        season_year = fct_expand(
-            season_year, "Summer 2016 (No Data)", 
-                "Winter 2016-2017 (No Data)", "Spring 2020 (No Data)"
-            ),
-        season_year = fct_relevel(season_year, 
-                                  "Summer 2016 (No Data)", 
-                                  after = 1),
-        season_year = fct_relevel(season_year, 
-                                  "Winter 2016-2017 (No Data)", 
-                                  after = 3),
-        season_year = fct_relevel(season_year, 
-                                  "Spring 2020 (No Data)", 
-                                  after = 16),
-        .after = season
-        )  %>%
-    
-    # added rows with the missing seasons so that the facet grid will have 
-    # seasons by column
-    complete(season_year, season) %>%
-    mutate(
-        station = if_else(is.na(station), "3", station)
-    )  
+cmtx_long <-
+  cmtx_long %>%
+  select(-last_col()) %>%
+  unnest(data) %>%
+  mutate(
+    season_year = case_when(
+      str_detect(season, "Aut|Spr|Sum") ~ glue("{season} {year}"),
+      str_detect(month, "Jan|Feb") ~ glue("{season} {year-1}-{year}"),
+      str_detect(month, "Dec") ~ glue("{season} {year}-{year+1}"),
+    ),
+    season_year = fct_inorder(season_year),
+    season_year = fct_expand(
+      season_year, "Summer 2016 (No Data)",
+      "Winter 2016-2017 (No Data)", "Spring 2020 (No Data)"
+    ),
+    season_year = fct_relevel(season_year,
+      "Summer 2016 (No Data)",
+      after = 1
+    ),
+    season_year = fct_relevel(season_year,
+      "Winter 2016-2017 (No Data)",
+      after = 3
+    ),
+    season_year = fct_relevel(season_year,
+      "Spring 2020 (No Data)",
+      after = 16
+    ),
+    .after = season
+  ) %>%
+  # added rows with the missing seasons so that the facet grid will have
+  # seasons by column
+  complete(season_year, season) %>%
+  mutate(station = fct_na_value_to_level(station, "3"))
 ```
-
 
 
 ```{r, fig.width=30, fig.height=15}
 # CHEMTAX stacked bar graph
 cmtx_long  %>% 
+    filter(!is.na(conc)) %>%
     ggplot(
        aes(
            x     = station,
@@ -570,11 +611,12 @@ cmtx_long  %>%
          y     = "Percent (%)", 
          fill  = "Phytoplankton Functional Type",
          color = "Phytoplankton Functional Type") +
-    scale_y_continuous(labels = scales::label_percent()) +
+    scale_y_continuous(labels = scales::label_percent(),
+                       expand = c(0, 0)) +
     
     facet_wrap(~ season) +
     
-    theme_tufte()
+    theme_calc()
 ```
 ```{r, fig.width=30, fig.height=15}
 tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
@@ -583,7 +625,7 @@ tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
 
 # CHEMTAX stacked bar graph with ratio to chlor-a, organized by station
 cmtx_long %>% 
-    mutate(station = fct_reorder(station, lon, .na_rm = FALSE)) %>% 
+    # mutate(station = fct_reorder(station, lon, .na_rm = FALSE)) %>% 
     # filter(!is.na(station)) 
     ggplot(aes(
         fill  = func_type,
@@ -602,12 +644,13 @@ cmtx_long %>%
     
     scale_fill_manual(values  = tol_muted) +
     scale_color_manual(values = tol_muted) +
-    scale_y_continuous(labels = label_percent()) +
+    scale_y_continuous(labels = label_percent(),
+                       expand = c(0, 0)) +
     
     facet_wrap( ~ season_year, ncol = 4) +
     
     # theme
-    theme_classic() +
+    theme_calc() +
     theme(
         text             = element_text(family = "serif", size = 16),
         axis.title       = element_text(size = 18),
@@ -632,7 +675,6 @@ if (FALSE) {
 ```{r, fig.width=30, fig.height=15}
 # chemtax stacked bar graph (not ratio), organized by station
 cmtx_long %>% 
-    mutate(station = fct_reorder(station, lon, .na_rm = FALSE)) %>%
     summarize(conc = mean(conc, na.rm = TRUE),
               .by  = c(season_year, station, func_type)) %>% 
     ggplot(aes(
@@ -651,11 +693,11 @@ cmtx_long %>%
     
     scale_fill_manual(values  = tol_muted) +
     scale_color_manual(values = tol_muted) +
-    
+    scale_y_continuous(expand = c(0, 0)) +
     facet_wrap( ~ season_year, ncol = 4) +
     
     # theme
-    theme_classic() +
+    theme_calc() +
     theme(text = element_text(family = "serif", size = 12),
           axis.title.y     = element_markdown(size = 10),
           legend.position  = c(0.6, 0.05),
@@ -680,35 +722,50 @@ if (FALSE) {
  
 ```{r pft-ts-loess, fig.width=30, fig.height=15}
 # point plot with smoothing line for 1 functional group, colored by season
-cmtx_avgs %>%
-    pivot_longer(
-        cols      = chloro:pras,
-        names_to  = "func_type",
-        values_to = "conc"
-    ) %>%
-    mutate(
-        conc_ratio = conc / total_chl_a
-    ) %>%
-    select(func_type, date_time_utc, season, conc_ratio) %>%
+plt_smooth <-
+  cmtx_avgs %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "func_type",
+    values_to = "conc"
+  ) %>%
+  mutate(conc_ratio = conc / total_chl_a) %>%
+  ggplot(aes(
+    y     = conc_ratio,
+    color = func_type
+  )) +
+  geom_point(show.legend = FALSE) +
+  geom_smooth(
+    formula     = y ~ s(x),
+    method      = "gam",
+    se          = FALSE,
+    show.legend = FALSE
+  ) +
+  labs(
+    y     = "Pigment:Chlorophyll-a",
+    color = NULL
+  ) +
+  # scale_x_datetime(breaks = "1 year",
+  #                  labels = label_date("%Y")) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_color_brewer(palette = "Paired") +
+  facet_grid(func_type ~ ., 
+             # scales = "free_y"
+             scales = "fixed"
+             ) +
+  theme_calc()
 
-    ggplot(aes(x = date_time_utc, y = conc_ratio, color = season)) +
-    geom_point() +
-    geom_smooth(
-        formula = y ~ s(x),
-        method = "gam",
-        # span = 1,
-        se = FALSE) +
-    labs(
-        x = NULL,
-        y = "Pigment:Chlorophyll-a",
-        color = NULL
-    ) +
-    scale_x_datetime(breaks = "1 year",
-                     labels = label_date("%Y")) +
-    scale_color_brewer(palette = "Dark2") +
-    facet_wrap(~ func_type) +
-    theme_tufte()
-
+(plt_smooth +
+  aes(x = date_time_utc) +
+        labs(x = "Date")) +
+  (plt_smooth +
+    aes(x = yday(date_time_utc)) +
+    labs(y = NULL,
+         x = "Day of Year")) +
+  (plt_smooth +
+    aes(x = month(date_time_utc)) +
+    labs(y = NULL,
+         x = "Month")) 
 ```
 ## Timeseries with Diatoms
 ```{r diat-ts}
@@ -750,28 +807,48 @@ cmtx_longer3 %>%
     geom_point() +
     geom_line() +
     facet_wrap(facets = ~ "station") +
-    
     ggthemes::theme_clean()
     
 # point plot with smoothing line for all functional groups
-cmtx_long %>%
-    filter(year < 2019) %>%
-    mutate(ratio = conc / total_chl_a) %>%
-    ggplot(
-        aes(
-        x     = date_time_utc,
-        y     = ratio,
-        color = func_type
-    )) +
-    geom_smooth(se = FALSE, method = "gam", formula = y ~ s(x)) +
-    geom_point() +
-    labs(
-        x = "Year",
-        y = "Pigment:Total Chlorophyll-a"
-    ) +
-    facet_wrap(~ func_type) +
-    
-    ggthemes::theme_clean()
+plt_smooth2 <- 
+  cmtx_long %>%
+  filter(year < 2019) %>%
+  mutate(conc_ratio = conc / total_chl_a) %>%
+  ggplot(aes(
+    y = conc_ratio,
+    color = func_type
+  )) +
+  geom_point(show.legend = FALSE) +
+  geom_smooth(
+    formula = y ~ s(x),
+    method = "gam",
+    # span = 1,
+    se = FALSE,
+    show.legend = FALSE
+  ) +
+  labs(
+    x = NULL,
+    y = "Pigment:Chlorophyll-a",
+    color = NULL
+  ) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_color_brewer(palette = "Paired") +
+  facet_grid(func_type ~ ., 
+             # scales = "free_y"
+             scales = "fixed"
+             ) +
+  theme_calc()
+
+(plt_test) +
+ (plt_smooth2 +
+  aes(x = date_time_utc)) +
+  (plt_smooth +
+    aes(x = yday(date_time_utc)) +
+    labs(y = NULL)) +
+  (plt_smooth +
+    aes(x = month(date_time_utc)) +
+    labs(y = NULL)) +
+    patchwork::plot_layout(ncol = 4)
 ```
 
 
@@ -782,6 +859,10 @@ aov(dino ~ season * as.factor(year),# + season:as.factor(year),
     summary()
 
 
+lm(crypto ~ season + year, 
+   data = cmtx_avgs) %>%
+    summary()
+
 lm(scale(crypto) ~ season + year, 
    data = cmtx_avgs) %>%
     summary() 
@@ -791,7 +872,8 @@ lm(scale(crypto) ~ season + year,
     cmtx_long %>%
     filter(!is.na(func_type)) %>%
     group_by(func_type) %>%
-    kruskal_test(conc ~ season_year)
+    kruskal_test(conc ~ season_year) %>%
+    arrange(p)
 ```
 
 
@@ -805,7 +887,7 @@ lm(scale(crypto) ~ season + year,
         detailed = TRUE
         ) %>%
     mutate(
-        p = num(p, digits = 3),
+        p     = num(p, digits = 3),
         p.adj = num(p.adj, digits = 3),
     ) %>%
     nest(.by = func_type) %$%
@@ -829,23 +911,46 @@ manova(cmtx_man ~ season, data = cmtx_avgs) %>%
     summary()
 ```
 # Photoprotective Index
+$$
+PI = \frac{PPC}{\text{Tchl-a}} \\
+PPC = \text{photoproective carotenoids} \\
+\text{Tchl-a} = \text{Total chlorophyll-a (Chl-a + MV-Chl-a)}
+$$
+TODO: correlate temperature with PPC and maybe PI ratio?
 ```{r photoprotective-index}
+shelf(ggbeeswarm)
+
 pigm_pi <- mutate(pig_dat, pi = ppc/tot_chl_a)
 
-ggplot(pigm_pi, 
-       aes(x = date_time_utc, 
-           y = pi, 
-           color = season)) +
-    geom_point()
+plt_pi <- 
+  ggplot(pigm_pi, 
+    aes(x = date_time_utc, 
+        y = pi, 
+        color = season,
+        shape = name_of_water_body)) +
+  geom_point() +
+  labs(color = "Season",
+       shape = "Water Body") +
+  theme_calc()
+
+plt_pi /
+(
+  plt_pi + 
+  facet_grid(name_of_water_body ~ .) +
+  guides(color = "none",
+         shape = "none")
+ )
 
 # with SeaBass calculation for PPC
-ggplot(pigm_pi, 
-       aes(
-           x = season, 
-           y = pi,
-           fill = season)) +
+test2 <- 
+  ggplot(
+    pigm_pi, 
+    aes(
+      y = pi,
+      # fill = season
+      )) +
     
-    geom_boxplot() +
+    # geom_boxplot() +
     labs(
         x = "Season",
         y = "Photoprotection Index (PI)") +
@@ -854,6 +959,25 @@ ggplot(pigm_pi,
     theme(legend.position = "none", 
           text = element_text(family = "serif", size = 12)
           )
+
+# top plot
+(
+ test2 +  
+ geom_boxplot(aes( x = season, fill = season))
+) /
+# bottom plot separated by water body
+(
+  test2 + 
+  geom_boxplot(
+    aes(x    = name_of_water_body, 
+        fill = name_of_water_body)) +
+  geom_beeswarm(
+    aes(x     = name_of_water_body, 
+        fill  = name_of_water_body,
+        color = as.factor(year))) +
+  facet_grid( ~ season)
+)
+
 
 if (FALSE) {
     save_plot(
@@ -870,30 +994,86 @@ if (FALSE) {
     )
     }
 ```
+## PI vs Season
+```{r kruskal-dunn-pi}
+# season factor
+kruskal_test(pi ~ season, data = pigm_pi)
+dunn_test( # pairwise with adj
+  data = pigm_pi,
+  pi ~ season, 
+  p.adjust.method = "bonferroni") %>%
+  mutate(
+      p = num(p, digits = 3),
+      p.adj = num(p.adj, digits = 3)
+  ) %>%
+  arrange(desc(p.adj))            
+
+# year factor
+kruskal_test(data = pigm_pi, pi ~ year)
+dunn_test( # pairwise with adj
+  pigm_pi,
+  pi ~ year, 
+  p.adjust.method = "bonferroni") %>%
+  mutate(
+    p = num(p, digits = 3),
+    p.adj = num(p.adj, digits = 3)
+  ) %>%
+  arrange(p.adj)
+```
 
 
-```{r photoprotective-index, fig.height=15, fig.width=30}
-ggplot(pigm_pi, 
-       aes(
-           x = psc,
-           y = ppc,
-           shape = season,
-           color = season
-           )) +
-    geom_point(size = 4, alpha = 0.8) +
-    geom_abline(slope = 1, intercept = 0) +
-    theme_classic() +
-    labs(
-        y = "PPCs",
-        x = "PSCs",
-        color = "Season",
-        shape = "Season"
-    ) +
-    theme(text = element_text(family = "serif", size = 20),
-          legend.position = c(0.8, 0.8)) +
-    scale_y_continuous(expand = c(0, 0)) +
-    scale_x_continuous(expand = c(0, 0)) + 
-    facet_wrap(~season, nrow = 2)
+```{r photoprotective-photosynthetic, fig.height=15, fig.width=30}
+# TODO: separate plots by region 
+pigm_pi %>%
+  filter(
+      !(str_detect(season, "Winter")
+      & str_detect(name_of_water_body, "Keys")
+      & ppc > 2)
+               ) %>%
+  ggplot(
+  aes(
+    x = psc,
+    y = ppc,
+    # shape = season,
+    # color = season
+    # color = name_of_water_body
+  )
+) +
+  geom_point(size = 4, alpha = 0.3, aes(color = as.factor(year))) +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_smooth(
+    aes(color = as.factor(year)),
+    se = FALSE,
+    method   = "lm",
+    formula  = y ~ x,
+    linetype = "dashed",
+    linewidth = 1.5
+  ) +
+  geom_smooth(
+    se = FALSE,
+    color = "red",
+    method   = "lm",
+    formula  = y ~ x,
+    linetype = "dashed",
+    linewidth = 2
+  ) +
+  labs(
+    y = "PPC",
+    x = "PSC",
+    color = NULL
+  ) +
+  theme_calc() +
+  theme(
+    text = element_text(family = "serif", size = 20),
+    # legend.position = c(0.8, 0.8)) +
+    legend.position = "bottom",
+    strip.text.y = element_blank()
+  ) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, NA)) +
+  facet_wrap(name_of_water_body ~ season,
+             scales = "free") +
+  guides(color = guide_legend(nrow = 1, byrow = TRUE)) 
 
 if (FALSE) {
     save_plot(
@@ -910,92 +1090,101 @@ if (FALSE) {
     )
 }
 ```
-```{r kruskal-dunn-pi}
-# pi_kruskal <- 
-    pigm_pi %>% 
-    # kruskal_test(pi ~ season + year)
-    kruskal_test(pi ~ season)
+Autumn has the most scatter, but looks to have more PSC relating to more
+production
+Summer has areas with more PSC and PPC, but cannot distinquish as to where
+Winter is also mostly PSC heavy, with a couple of points with high PPC
+Spring is the season with the most PPC promience
 
-# pi_dunn <- 
-    pigm_pi %>%
-    dunn_test(pi ~ season, 
-              p.adjust.method = "bonferroni")
 
-```
 
 ```{r station-seasonally-yearly-avgs}
-cmtx_avgs_new <- cmtx_avgs %>% 
-    mutate(
-        diat  = diat1  + diat2,
-        cyano = cyano2 + cyano4,
-        hapt  = hapt6  + hapt8,
-        total = chloro + crypto + diat + dino + hapt + pras + cyano
-           )
+cmtx_avgs_new <-
+  cmtx_avgs %>%
+  mutate(
+    diat  = diat1 + diat2,
+    cyano = cyano2 + cyano4,
+    hapt  = hapt6 + hapt8,
+    total = chloro + crypto + diat + dino + hapt + pras + cyano
+  )
 
-cmtx_stat <-  cmtx_avgs_new %>% 
-    summarise(across(chloro:hapt,
-                 list(
-                     avg = (\(x) mean(x, na.rm = TRUE)), 
-                     sd  = (\(x) sd(x, na.rm = TRUE)), 
-                     var = (\(x) var(x, na.rm = TRUE)))),
-              .by = c(year, season, station))
+cmtx_stat <-
+  cmtx_avgs_new %>%
+  summarise(
+    across(
+      chloro:hapt,
+      list(
+        avg = (\(x) mean(x, na.rm = TRUE)),
+        sd  = (\(x) sd(x,   na.rm = TRUE)),
+        var = (\(x) var(x,  na.rm = TRUE))
+      )
+    ),
+    .by = c(year, season, station)
+  )
 
 cmtx_fract <-
-    cmtx_avgs_new %>% 
-    mutate(
-        season,
-        station,
-        across(chloro:hapt, ~ .x / total, .names = "frac_{.col}")
-        ) %>% 
-    select(date_time_utc:season, frac_chloro:frac_pras) %>% 
-    pivot_longer(
-        frac_chloro:frac_pras,
-        names_to     = "func_type",
-        values_to    = "frac",
-        names_prefix = "frac_"
-    )
+  cmtx_avgs_new %>%
+  mutate(
+    season,
+    station,
+    across(chloro:hapt, ~ .x / total, .names = "frac_{.col}")
+  ) %>%
+  select(date_time_utc:season, frac_chloro:frac_pras) %>%
+  pivot_longer(
+    frac_chloro:frac_pras,
+    names_to     = "func_type",
+    values_to    = "frac",
+    names_prefix = "frac_"
+  )
 
-max_fract <- 
-    cmtx_fract %>%
-    summarise(max_frac = max(frac),
-              .by = sample) %>% 
-    left_join(cmtx_fract, 
-              by = c("max_frac" = "frac"))
+max_fract <-
+  cmtx_fract %>%
+  summarise(
+    max_frac = max(frac),
+    .by = sample
+  ) %>%
+  left_join(cmtx_fract,
+    by = c("max_frac" = "frac")
+  )
 ```
 
+# Table for Latitudes and Longitude
+Not sure what this is used for?
 ```{r lat-lon-table}
-lat_lon_dat <- pig_dat %>%
-    filter(name_of_water_body == "Florida Keys", station != "60") %>%
-    dplyr::select(station, lat, lon) %>% 
-    distinct(station, lat, lon)
+lat_lon_dat <-
+  pig_dat %>%
+  filter(name_of_water_body == "Florida Keys") %>%
+  distinct(station, lat, lon)
 
-lat_lon_tbl <- lat_lon_dat %>% 
-    gt(
-        rowname_col   = "station",
-        groupname_col = NULL
-    ) %>%
-    
-    cols_label(
-        lat = md("Latitude (&deg;)"),
-        lon = md("Longitude (&deg;)")) %>% 
-    
-    tab_options(
-        table_body.hlines.width = 0,
-        table_body.vlines.width = 0,
-        stub.border.width       = 0
-    ) %>%
-    
-    opt_table_font("serif")
+lat_lon_tbl <- 
+  lat_lon_dat %>%
+  gt(
+    rowname_col   = "station",
+    groupname_col = NULL
+  ) %>%
+  cols_label(
+    lat = md("Latitude (&deg;)"),
+    lon = md("Longitude (&deg;)")
+  ) %>%
+  tab_options(
+    table_body.hlines.width = 0,
+    table_body.vlines.width = 0,
+    stub.border.width       = 0
+  ) %>%
+  opt_table_font("serif")
 
-lat_lon_tbl 
+lat_lon_tbl
 
 if (FALSE) {
-    gtsave(
-        lat_lon_tbl,
-        filename = here("data", "plots", 
-                        glue("lat_lon_table", 
-                             "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.html")
-                        )
-        )
-    }
+  gtsave(
+    lat_lon_tbl,
+    filename = here(
+      "data", "plots",
+      glue(
+        "lat_lon_table",
+        "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.html"
+      )
+    )
+  )
+}
 ```
