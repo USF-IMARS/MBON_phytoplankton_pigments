@@ -26,13 +26,13 @@ conflict_prefer("select", "dplyr")
 
 # source map download function
 source(here("scripts", "map_files_dwnlod.R"))
+
+# fixes issue with reading file
+sf::sf_use_s2(FALSE)
 ```
 
 
-```{r include=FALSE}
-# fixes issue with reading file
-sf::sf_use_s2(FALSE)
-
+```{r map-info, include=FALSE}
 # path for map to find/download to, they can be different depending on
 # your computer
 path_land <- here("data", "map")
@@ -59,52 +59,52 @@ names(exnt2) <- names(exnt)
 # Load Combined Pigment Data
 ```{r load-pigment-data}
 pig_dat  <- 
-    here("data", "processed", "combined_pig_dat.csv") %>%
-    read_csv(show_col_types = FALSE) %>%
-    select(-c(pi, 
-              bottle, indicate_if_filters_are_replicates, volfilt,
-              filter_type:filter_storage_before_shipment_to_gfsc,
-              comments:other, collected_with_positive_pressure_or_vaccuum,
-              date_extracted_month_day_year,
-              cruise, vx_ml))
+  here("data", "processed", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  select(
+    -c(pi, 
+       bottle, indicate_if_filters_are_replicates, volfilt,
+       filter_type:filter_storage_before_shipment_to_gfsc,
+       comments:other, collected_with_positive_pressure_or_vaccuum,
+       date_extracted_month_day_year,
+       cruise, vx_ml)
+    )
 ```
 
 
-# Download bathymetry and coastline files
+# Download and Load Bathymetry and Coastline Files
 **Note:** this will be done automatically if files **do not exists**
 
 Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
 
 Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
-```{r download-maps}
+```{r maps-download-load}
 world_download(
     path_land = path_land,
     path_topo = path_topo,
     extent    = exnt
 )
-```
 
 # Load coastline and topography data
-```{r load-shapefiles}
 map_obj <- 
     load_map_obj( 
     .map_coast = path_land, 
     .map_state = path_land,
-    .map_bath = path_topo, 
-    .map_file = "etopo1.nc",
-    .extent = exnt2
+    .map_bath  = path_topo, 
+    .map_file  = "etopo1.nc",
+    .extent    = exnt2
     )
 ```
 
 # Plot FL Keys stations on map
 ```{r plt-fl-keys, fig.height=6, fig.width=10}
 lat_lon_dat <- 
-    pig_dat %>%
-    filter(
-        name_of_water_body == "Florida Keys"  
-        & !str_detect(station, "60")) %>%
-    select(station, lat, lon) %>% 
-    distinct(station, lat, lon)
+  pig_dat %>%
+  filter(
+      name_of_water_body == "Florida Keys"  
+      & !str_detect(station, "60")) %>%
+  select(station, lat, lon) %>% 
+  distinct(station, lat, lon)
 
 # ---- create base map
 base_map <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
@@ -135,9 +135,8 @@ stn_map <-
 stn_map
 ```
 
-# Zoomed out map 
+# Create Inset Map (i.e. Zoomed Out Map) 
 ```{r plt-large, fig.width=8, fig.height=10}
-# ---- create inset map
 inset_map <-
   with(
     map_obj,
@@ -214,52 +213,64 @@ Test to see if it works
 source(here("scripts", "krig_fun.R"))
 
 # filter for pigment and season
-loc       <- "Florida Keys"
+loc <- "Florida Keys"
 
 pigm_dat <-
-    pig_dat %>%
-    pivot_longer(
-        tot_chl_b:dp,
-        names_to  = "conc_name", 
-        values_to = "conc"
-        ) %>%
-    filter(str_detect(name_of_water_body, loc) 
-           & !str_detect(station, "60")) %>%
-    select(
-        hplc_gsfc_id, sample,                   # id
-        station, lat, lon, name_of_water_body,  # spatial
-        year, date_time_utc, season,            # temporal
-        tot_chl_a, conc_name, conc) %>%         # measurements
-    nest(.by = c(season, conc_name)) %>%
-    
-    # calc ratio of each pigment to total chlor-a
-    mutate(data = pmap(list(season, conc_name, data),
-                       function(x, y, z) {
-                           z  %>%
-                               mutate(ratio  = conc / tot_chl_a) %>%
-                               group_by(station) %>%
-                               summarise(across(
-                                   c(ratio, conc, tot_chl_a),
-                                   # .fns = list(avg = (\(x) mean(x, na.rm = TRUE))),
-                                   .fns = (\(x) mean(x, na.rm = TRUE)),
-                                   .names = "{.col}_avg"
-                               ),
-                               across(c(lat, lon), .fn = mean)) %>%
-                               ungroup()  %>%
-                               mutate(season    = x,
-                                      conc_name = y,
-                                      .before   = 1)
-                       }),
-           szn_name = case_when(
-              str_detect(season, "(?i)sp") ~ "Spring",
-              str_detect(season, "(?i)su") ~ "Summer",
-              str_detect(season, "^(?i)f") ~ "Autumn",
-              str_detect(season, "^(?i)w") ~ "Winter",
-              TRUE ~ season),
-           title    = glue("{szn_name}: {conc_name}:TChla"),
-           title2   = glue("{szn_name}: Average {conc_name}"),
-           sv_name  = glue("MBON_pigm_{conc_name}_{str_to_lower(szn_name)}")
-           )
+  pig_dat %>%
+  pivot_longer(
+    tot_chl_b:dp,
+    names_to  = "conc_name",
+    values_to = "conc"
+  ) %>%
+  filter(str_detect(name_of_water_body, loc)
+         & !str_detect(station, "60")
+         ) %>%
+  select(
+    hplc_gsfc_id, sample,                                     # <-- id
+    station, lat, lon, name_of_water_body,                    # <-- spatial
+    year, date_time_utc, season,                              # <-- temporal
+    tot_chl_a, conc_name, conc                                # <-- measurements
+  ) %>% 
+  nest(.by = c(season, conc_name)) %>%
+  
+  # calc ratio of each pigment to total chlor-a
+  mutate(
+    data = pmap(
+      list(season, conc_name, data),
+      function(x, y, z) {
+        z %>%
+          mutate(ratio = conc / tot_chl_a) %>%
+          # group_by(station) %>%
+          summarise(
+              .by = station,
+            across(
+              c(ratio, conc, tot_chl_a),
+              # .fns = list(avg = (\(x) mean(x, na.rm = TRUE))),
+              .fns   = (\(x) mean(x, na.rm = TRUE)),
+              .names = "{.col}_avg"
+            ),
+            across(c(lat, lon), .fn = mean)
+          ) %>%
+          # ungroup() %>%
+          mutate(
+            season    = x,
+            conc_name = y,
+            .before   = 1
+          )
+       # ---- end of function
+       }
+    ),
+    szn_name = case_when(
+      str_detect(season, "(?i)sp") ~ "Spring",
+      str_detect(season, "(?i)su") ~ "Summer",
+      str_detect(season, "^(?i)f") ~ "Autumn",
+      str_detect(season, "^(?i)w") ~ "Winter",
+      .default = season
+    ),
+    title   = glue("{szn_name}: {conc_name}:TChla"),
+    title2  = glue("{szn_name}: Average {conc_name}"),
+    sv_name = glue("MBON_pigm_{conc_name}_{str_to_lower(szn_name)}")
+  )
 ```
 
 2 Samples will cause and error:
@@ -283,7 +294,7 @@ pigm_dat1 <-
     
   # remove two samples that cause issues, don't need anymore
   # slice(-c(67, 115)) %>%
-  
+  slice_sample(n = 10) %>%
  mutate(
     krig = pmap(
       list(data, conc_name, szn_name, title),
