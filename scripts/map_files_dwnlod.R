@@ -434,7 +434,8 @@ base_map_plot <- function(
                 x = x, 
                 y = y, 
                 z = -Altitude,
-                label = ..level..
+                # label = ..level..
+                label = after_stat(level)
             ), 
             method = list(
                 "bottom.pieces",
