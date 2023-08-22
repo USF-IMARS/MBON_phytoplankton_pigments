@@ -202,6 +202,8 @@ save_csv <- function(
         time_stamp_fmt = "%Y%m%d_%H%M%S",
         utf_8          = FALSE) {
     
+    library(cli)
+    
     # ---- checking input parameters
     if (is.null(.data)) {
         cli::cli_abort(
