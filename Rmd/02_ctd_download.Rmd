@@ -247,7 +247,7 @@ tictoc::toc()
 rm(cr_id)
 ```
 
-# 6.0 Read CTD files and average top 5 meters
+# 6.0 Find Path to All CTD Files and Extract Cruise ID and Station Name
 
 ```{r query-ctd-files}
 # get all CTD file names
