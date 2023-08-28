@@ -164,6 +164,70 @@ ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
 }
 
 
+##%######################################################%##
+#                                                          #
+####                Read CTD .csv Files                 ####
+#                                                          #
+##%######################################################%##
+#' Read CTD .csv Files  
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param file CTD .csv file
+#' @param cruise_id Cruise ID
+#' @param station_id Station Name
+#' @param depth The depth to average by
+#' @param p If available, progress bar (to be used with `with_progress()`)
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+read_ctd_csv <- function(
+  file,
+  cruise_id,
+  station_id,
+  depth = 5,
+  p) {
+    
+  out <-
+    # ---- read file
+    read_csv(
+      file,
+      show_col_types = FALSE,
+      name_repair = "unique_quiet"
+    ) %>%
+      
+    # ---- filter depth
+    filter(depth <= .env$depth) %>%
+    
+    # ---- select cols and rename
+    select(
+      time,
+      lat      = latitude,
+      lon      = longitude, depth,
+      pressure = sea_water_pressure,
+      temp     = sea_water_temperature,
+      o_sat    = oxygen_saturation, do = dissolved_oxygen,
+      par      = any_of("photosynthetically_available_radiation"),
+      sal      = sea_water_salinity
+    ) %>%
+      
+    # ---- calculate average
+    summarise(across(
+      .cols = everything(),
+      .fn = \(x) mean(x, na.rm = TRUE)
+    ))
+    
+  # ---- print update
+  if (!is.null(p)) {
+    p(glue("Cruise {cruise_id}, Station: {station_id}"))
+  } else {
+    cli::cli_alert_info("Cruise {cruise_id}, Station: {station_id}")
+  }
+  out
+}
+
 # # load rerddap to require data
 # 
 # 
