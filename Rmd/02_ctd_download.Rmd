@@ -39,6 +39,7 @@ conflicts_prefer(
     )
 
 source(here("scripts", "misc_functions.R"))
+source(here("scripts", "ctd_download.R"))
 ```
 
 # 2.0 Set database
@@ -87,149 +88,7 @@ cruiseID[!cruiseID %in% all_cruise]
 # NOTES: I prefer this one as it will have extra data if needed
 all_cruise[!all_cruise %in% cruiseID]
 ```
-
-# 4.0 Function to query and download CTD data from each cruise
-This takes in cruise IDs and queries the ERDDAP to find data. Next, it will
-download if CTD files don't exist
-```{r query-function}
-ctd_downloads <- function(IDS, path, verbose = TRUE, overwrite = FALSE) {
-
-    # ---- check if ERDDAP is able to be connected to
-    if (!RCurl::url.exists(eurl())) {
-        cat("\n")
-        stop(paste("\b\b----\nCannot reach", eurl(),
-                   "\nThe server is probably down!\n---\n"))
-        }
-    
-   if (verbose) message(paste("\n-------------------------",
-                              "\nStarting cruise: ", IDS,
-                              "\n-------------------------\n"))
-    
-    # create folder if doesn't exist
-    here::here(path, IDS) %>%
-    fs::dir_create()
-    
-    # query cruise ID
-    results <- tryCatch({
-        ed_search_adv(query = IDS)
-      }, error = function(e) {
-        if (verbose) message("Did not find any files!")
-        invisible(return())
-        break
-      })
-    # show results of cruise
-    if (verbose) print(results)
-    
-    result_files <-  results$info$dataset_id
-    
-    # 
-    dwn <- 0
-    skips <- prev_dwn <- dwnld <- tibble() 
-    
-    # loop through each station of cruise and download if doesn't exist
-    for (j in seq(result_files)) {
-        
-        # ---- extract filename from query
-        file_name  <- result_files[j] %>%
-            str_extract("(?i)((WS|SAV|WB|H)\\d{4,5}).+((stn|sta).*)",
-                        c(1,3)) %>%
-          str_c(collapse = "_")
-      
-        if (is.na(file_name)) {
-            file_name <- result_files[j]
-            
-            if (str_detect(file_name, "SAV1803")) {
-                file_name <-
-                    str_extract(
-                        file_name,
-                        "SAV\\d{4}_[^SAV].*")
-                } else if ((str_detect(file_name, "WS22215"))) {
-                   file_name <- 
-                       str_extract(
-                           file_name,
-                           "CTD_(.*)", 1) %>%
-                       str_c("WB22215", ., sep = "_stn")
-                } else {
-                    skips <- bind_rows(skips, list("skip" = result_files[j]))
-                    # cat("Skipping file:", file_name, "\n--------\n\n")
-                    
-                    next
-                }
-            }
-        
-        # ---- create out file path
-        file_path <- here(path, IDS, glue("{file_name}.csv")) 
-
-        # ---- skip already downloaded files
-        if (fs::file_exists(file_path) & !overwrite) {
-         if (verbose) prev_dwn <- bind_rows(prev_dwn, 
-                                            list("skip" = result_files[j])) 
-         
-             # cat("Skipping file:", file_name, "\n--------\n\n")
-            next
-        }
-      
-        if (verbose & dwn < 1) {
-            cat("\n-------------------------",
-                "\nDownloading:", 
-                "\n-------------------------")
-            dwn <- 1
-        }
-        
-        if (verbose) {
-            cat(sprintf("\n%-4.3d%35s as %s", dwn, result_files[j], file_name))
-            dwn <- dwn + 1
-            }
-        
-        # ---- get data
-        out      <- info(result_files[j])
-        
-        suppressMessages(ctd_data <- tabledap(out, url = eurl(), store = disk()))
-      
-        # ---- save data
-        # write.csv(ctd_data, file_path, row.names = FALSE)
-        write_csv(ctd_data, file_path)
-        dwnld <- bind_rows(dwnld, list("download" = result_files[j]))
-    }
-    
-    # ---- print section
-    if (verbose & dwn > 1) 
-            cat("\n")
-    
-    # ---- previously downloaded files
-    if (nrow(prev_dwn > 0)) 
-        cat("\n-------------------------", 
-            sprintf("\n%d Previously Downloaded:\n-------------------------",
-                    nrow(prev_dwn)
-                    ),
-            paste("\n", prev_dwn$skip),
-            "\n"
-            )
-    
-    # ---- skipped files
-    if (nrow(skips > 0) & verbose) 
-        cat("\n-------------------------", 
-            sprintf("\n%d Skipped:\n-------------------------",
-                    nrow(skips)
-                    ),
-            paste("\n", skips$skip),
-            "\n"
-            )
-    
-    if (verbose)
-        cat("-------------------------\n\n")
-    
-    return(
-        list(download  = dwnld,
-             prev_down = prev_dwn,
-             skips     = skips)
-    )
-    
-    # ---- end of function
-}
-```
-
-# 5.0 Run ctd_downloads function and try each cruise ID for existing data
+# 4.0 Run ctd_downloads function and try each cruise ID for existing data
 This will take some time, ~ 30 - 60 min
 ```{r download-ctd-data}
 tictoc::tic()
@@ -247,7 +106,7 @@ tictoc::toc()
 rm(cr_id)
 ```
 
-# 6.0 Find Path to All CTD Files and Extract Cruise ID and Station Name
+# 5.0 Find Path to All CTD Files and Extract Cruise ID and Station Name
 
 ```{r query-ctd-files}
 # get all CTD file names
@@ -298,7 +157,7 @@ file_ctd <-
   )
 ```
 
-# 7.0 Summarize CTD Files
+# 6.0 Summarize CTD Files
 Two version:
 1. Using parallel processing `future_pmap()` (faster)
     - requires `furrr`, `future`, and `progressr` 
