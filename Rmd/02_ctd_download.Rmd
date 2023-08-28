@@ -154,7 +154,8 @@ file_ctd <-
       .default = station
     ),
     station = str_replace(station, "-", "_")
-  )
+  ) %>%
+  filter(str_detect(station, "(?i)hex|test", negate = TRUE))
 ```
 
 # 6.0 Summarize CTD Files
@@ -170,51 +171,20 @@ Two version:
 ```{r load-ctd-data}
 shelf(furrr, progressr)
 handlers("cli")
-fn <- function(x, y, z, p) {
-    out <- 
-        # ---- read file
-        read_csv(
-            x,
-            show_col_types = FALSE,
-            name_repair = "unique_quiet")  %>%
-        
-        # filter depth
-        filter(depth <= 5) %>% 
-            
-        # select cols and rename
-        select(
-          time, 
-          lat      = latitude, 
-          lon      = longitude, depth,
-          pressure = sea_water_pressure,
-          temp     = sea_water_temperature, 
-          o_sat    = oxygen_saturation, do = dissolved_oxygen,
-          par      = any_of("photosynthetically_available_radiation"), 
-          sal      = sea_water_salinity) %>%
-    
-        # calc average
-        summarise(across(.cols = everything(),
-                         .fn = \(x) mean(x, na.rm = TRUE)))
-    
-    p(glue("Cruise {y}, Station: {z}"))
-    out
-}
 
 tictoc::tic() # <-- start clock
 plan(multisession, workers = 5)
 
 with_progress({
+  p <- progressor(steps = nrow(file_ctd))
     
-    p <- progressor(steps = nrow(file_ctd))
-    
-    ctd_dat_summary <-
+  ctd_dat_summary <-
     file_ctd %>%
-    filter(str_detect(station, "(?i)hex|test", negate = TRUE)) %>%
     mutate(
         data = future_pmap(
-            p = p,
-            list(file, cruise_id, station),
-            fn)) %>%
+          p = p,
+          list(file, cruise_id, station),
+          read_ctd_csv)) %>%
     unnest(cols = data)
 })
 
@@ -226,52 +196,20 @@ if (!exists("ctd_dat_summary")) {
     tictoc::tic() # <-- start clock
     
     ctd_dat_summary <-
-        file_ctd %>%
-        filter(str_detect(station, "(?i)hex|test", negate = TRUE)) %>%
-        slice(1:10) %>%
+      file_ctd %>%
         mutate(
-            data = pmap(
-                .progress = TRUE,
-                
-                list(file, cruise_id, station),
-                function(x, y, z) {
-                cli::cli_alert_info("Cruise {y}, Station: {z}")
-                
-                out <- read_csv(
-                    x,
-                    show_col_types = FALSE,
-                    name_repair = "unique_quiet")  %>%
-                    
-                    # filter depth
-                    filter(depth <= 5) 
-                
-                message(paste(names(out), "\n"))
-                
-                out <-  out %>% 
-                        
-                    # select cols and rename
-                    select(
-                      time, 
-                      lat      = latitude, 
-                      lon      = longitude, depth,
-                      pressure = sea_water_pressure,
-                      temp     = sea_water_temperature, 
-                      o_sat    = oxygen_saturation, do = dissolved_oxygen,
-                      par      = any_of("photosynthetically_available_radiation"), 
-                      sal      = sea_water_salinity) %>%
-                
-                    # calc average
-                    summarise(across(.cols = everything(),
-                                     .fn = \(x) mean(x, na.rm = TRUE)))
-                }
-                )
-            ) %>%
+          data = pmap(
+            .progress = TRUE,
+            list(file, cruise_id, station),
+             p = NULL,
+             read_ctd_csv
+             )
+        ) %>%
         unnest(cols = data)
 }
 
 tictoc::toc() # <-- end clock
 unshelf(furrr, future)
-rm(fn, p)
 ```
 
 
