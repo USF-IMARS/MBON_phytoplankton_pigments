@@ -6,6 +6,102 @@ output: html_document
 fig_width: 19 
 fig_height: 9.7 
 ---
+
+# What is produced here:
++ setup 
+  - load libraries and data
+
+: concentration-vs-time 
+  - one pigment through time for each region, colored by season, 
+  - TODO: generalize to all pigments 
+
+: scatter-plot-pigment-tchlor-a 
+  - scatter plot of pigment x to Tchlor-a per region
+  
+: hist-viol 
+  - function to make plots for histogram or violin
+  - hist and viol plots for all pigments and regions
+  
+: chla-boxplot
+  - boxplot for each region of chlor-a for each season
+  
+: size-fractionation-boxplots
+  - boxplot for fraction of each size class, separeted by season and region
+  - boxplot for concentration of each size class, separeted by season and region
+  - boxplot for fraction of each size class
+  
+: size-frac-stack-bar
+  - stacked bar charts separated by region with each season broken into average for stations
+  
+
+: size-frac-table
+  - table for seasonal average fraction for each size class 
+
++ chemtax-data
+  - data manipulation
+
+: plotting-chemtax-data
+  - hist plots for all PFTs for Florida Keys, colored by season
+
++ chemtax-add_labels
+  - add labels to variable and add missing season for years
+  
+: chemtax-stacked-bar
+  - stacked bar chart for PFT fraction for each stations and separated by season
+  
+: chemtax-stacked-bar-year-season
+  - stacked bar chart for PFT fraction for each stations and separated by year and season
+
+: chemtax-stacked-bar-conc-year-season
+  - stacked bar chart for PFT concentration for each stations and separated by year and season
+  
+: pft-ts-loess
+  - plot time series for each PFT concentration
+  - separate by PFT and add GAM smoother
+  - facets: full time series, day of year avg, month avg
+  
+: diat-ts-plt
+  - plot time series for each PFT concentration
+  - separate by PFT and add GAM smoother
+  - facets: full time series, day of year avg, month avg
+  
+: diat-ts
+  - data manipulation to compine diatom grp, cyano grp and hapt grp
+  - avg conc by station, PFT and date time
+
+: plt-stn-16
+  - plot cyano and diat across time
+  
++ diat-ts1
+  - TODO: needs work
+  - linear model
+    * dino = season * year
+  - kruskal wallis on conc and year grouped by PFT
+  
++ manova
+  - dunn test on conc and season/year per PFT
+  - MANOVA on PFT community and season
+  
+: photoprotective-index
+  - calc ppc/tchlor-a
+  - plot PI index against time and separate regions
+  - boxplot of PI for seaon and separate regions with jitter axis
+  
++ kruskal-dunn-pi
+  - kruskal wallis on PI per season
+  - dunn test 
+  - kruskal wallis on PI per year
+  - dunn test
+  
+: photoprotective-photosynthetic
+  - plot PPC vs PSC and add linear regression for each season and region
+  
++ station-seasonally-yearly-avgs
+
++ lat-lon-table
+  - lat lon table for stations
+  
+
 # ---- Load Libraries ----
 ```{r setup, include=FALSE}
 librarian::shelf(
@@ -79,7 +175,7 @@ ggplot(pig_dat,
         )
 ```
 
-```{r scatter-plot}
+```{r scatter-plot-pigment-tchlor-a}
 ggplot(pig_dat, 
        aes(x = tot_chl_a, 
            y = fuco,
@@ -487,7 +583,7 @@ if (FALSE) {
 }
 ```
 
-```{r plotting-chemtax-data}
+```{r chemtax-data}
 #season_year order vector
 # seasonyr_order <- c("Spring 2016", "Summer 2016 (No Data)", "Autumn 2016", "Winter 2016-2017 (No Data)", "Spring 2017", 
 #                     "Summer 2017", "Autumn 2017", "Winter 2017-2018", "Spring 2018",
@@ -554,7 +650,7 @@ cmtx_long$hist
 ```
 
 
-```{r plotting-chemtax-data}
+```{r chemtax-add_labels}
 cmtx_long <-
   cmtx_long %>%
   select(-last_col()) %>%
@@ -591,7 +687,7 @@ cmtx_long <-
 ```
 
 
-```{r, fig.width=30, fig.height=15}
+```{r chemtax-stacked-bar, fig.width=30, fig.height=15}
 # CHEMTAX stacked bar graph
 cmtx_long  %>% 
     filter(!is.na(conc)) %>%
@@ -618,7 +714,7 @@ cmtx_long  %>%
     
     theme_calc()
 ```
-```{r, fig.width=30, fig.height=15}
+```{r chemtax-stacked-bar-year-season, fig.width=30, fig.height=15}
 tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
                '#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
 
@@ -672,7 +768,7 @@ if (FALSE) {
         device      = 'png')
     }
 ```
-```{r, fig.width=30, fig.height=15}
+```{r chemtax-stacked-bar-conc-year-season, fig.width=30, fig.height=15}
 # chemtax stacked bar graph (not ratio), organized by station
 cmtx_long %>% 
     summarize(conc = mean(conc, na.rm = TRUE),
@@ -735,9 +831,16 @@ plt_smooth <-
     color = func_type
   )) +
   geom_point(show.legend = FALSE) +
+  # geom_smooth(
+  #   formula     = y ~ s(x),
+  #   method      = "gam",
+  #   se          = FALSE,
+  #   show.legend = FALSE
+  # ) +
   geom_smooth(
-    formula     = y ~ s(x),
-    method      = "gam",
+    formula     = y ~ x,
+    method      = "loess",
+    span = 0.3,
     se          = FALSE,
     show.legend = FALSE
   ) +
@@ -757,58 +860,20 @@ plt_smooth <-
 
 (plt_smooth +
   aes(x = date_time_utc) +
-        labs(x = "Date")) +
+        labs(x = "Date")
+    ) +
   (plt_smooth +
     aes(x = yday(date_time_utc)) +
     labs(y = NULL,
-         x = "Day of Year")) +
+         x = "Day of Year")
+   ) +
   (plt_smooth +
     aes(x = month(date_time_utc)) +
     labs(y = NULL,
-         x = "Month")) 
+         x = "Month")
+   ) 
 ```
-## Timeseries with Diatoms
-```{r diat-ts}
-# time series for diatom at specific stations
-cmtx_longer3 <-
-    cmtx_avgs %>%
-    filter(str_detect(station, "10|WS|16")) %>%
-    mutate(diat  = diat1  + diat2,
-           cyano = cyano2 + cyano4,
-           hapt  = hapt6  + hapt8) %>%
-    
-    # remove columns
-    select(-c(diat1, diat2, cyano2, cyano4, hapt6, hapt8)) %>%
-    
-    pivot_longer(
-        cols      = chloro:hapt,
-        names_to  = "func_type",
-        values_to = "conc") %>%
-    # group_by(station, func_type, date_time_utc) %>%
-    # summarise(
-    reframe(    
-        pick(season),
-        avg_conc = mean(conc),
-        .by      = c(station, func_type, date_time_utc)
-              ) %>%
-    distinct()
-```
-
-
-```{r diat-ts, fig.width=30, fig.height=15}
-# station 16
-cmtx_longer3 %>% 
-    filter(str_detect(func_type, "diat|cyano") & station == "16") %>% 
-    ggplot(aes(x     = date_time_utc, 
-               y     = avg_conc, 
-               color = func_type, 
-               fill  = func_type)
-           ) +
-    geom_point() +
-    geom_line() +
-    facet_wrap(facets = ~ "station") +
-    ggthemes::theme_clean()
-    
+```{r diat-ts-plt, fig.width=30, fig.height=15}
 # point plot with smoothing line for all functional groups
 plt_smooth2 <- 
   cmtx_long %>%
@@ -839,7 +904,8 @@ plt_smooth2 <-
              ) +
   theme_calc()
 
-(plt_test) +
+# (test2 +  # in PI chunk
+#  geom_boxplot(aes( x = season, fill = season))) + 
  (plt_smooth2 +
   aes(x = date_time_utc)) +
   (plt_smooth +
@@ -851,6 +917,51 @@ plt_smooth2 <-
     patchwork::plot_layout(ncol = 4)
 ```
 
+## Timeseries with Diatoms
+```{r diat-ts}
+# time series for diatom at specific stations
+cmtx_longer3 <-
+  cmtx_avgs %>%
+  filter(str_detect(station, "10|WS|16")) %>%
+  mutate(
+    diat  = diat1 + diat2,
+    cyano = cyano2 + cyano4,
+    hapt  = hapt6 + hapt8
+  ) %>%
+  # remove columns
+  select(-c(diat1, diat2, cyano2, cyano4, hapt6, hapt8)) %>%
+  pivot_longer(
+    cols      = chloro:hapt,
+    names_to  = "func_type",
+    values_to = "conc"
+  ) %>%
+  reframe(
+    pick(season),
+    avg_conc = mean(conc),
+    .by      = c(station, func_type, date_time_utc)
+  ) %>%
+  distinct()
+```
+
+
+```{r plt-stn-16, fig.width=30, fig.height=15}
+# station 16 with diat and cyano
+cmtx_longer3 %>% 
+    filter(str_detect(func_type, "diat|cyano") & station == "16") %>% 
+    ggplot(aes(x     = date_time_utc, 
+               y     = avg_conc, 
+               color = func_type, 
+               fill  = func_type)
+           ) +
+    geom_point() +
+    geom_line() +
+    facet_wrap(facets = ~ "station") +
+    ggthemes::theme_clean()
+```
+
+
+
+
 
 ```{r diat-ts1}
 # was commented out
@@ -858,14 +969,9 @@ aov(dino ~ season * as.factor(year),# + season:as.factor(year),
     data = cmtx_avgs) %>%
     summary()
 
-
-lm(crypto ~ season + year, 
+lm(chloro ~ season + year, 
    data = cmtx_avgs) %>%
     summary()
-
-lm(scale(crypto) ~ season + year, 
-   data = cmtx_avgs) %>%
-    summary() 
 
 # this doesnt exists here `cmtx_longer`
 # cmtx_kruskal2 <- 
@@ -873,7 +979,7 @@ lm(scale(crypto) ~ season + year,
     filter(!is.na(func_type)) %>%
     group_by(func_type) %>%
     kruskal_test(conc ~ season_year) %>%
-    arrange(p)
+    arrange(desc(p))
 ```
 
 
@@ -903,12 +1009,19 @@ lm(scale(crypto) ~ season + year,
 
 
 # MANOVA test
-cmtx_man <- cmtx_avgs %>%
-    select(chloro:last_col()) %>%
-    as.matrix() 
+cmtx_man <- 
+  cmtx_avgs %>%
+  select(chloro:last_col()) %>%
+  as.matrix() 
 
 manova(cmtx_man ~ season, data = cmtx_avgs) %>%
     summary()
+
+cmtx_avgs %>%
+  mutate(season_year = str_c(season, year(date_time_utc), sep = " "),
+         .before = 2) %>%
+  manova(cmtx_man ~ season_year, data = .) %>%
+  summary()
 ```
 # Photoprotective Index
 $$
@@ -1018,7 +1131,7 @@ dunn_test( # pairwise with adj
     p = num(p, digits = 3),
     p.adj = num(p.adj, digits = 3)
   ) %>%
-  arrange(p.adj)
+  arrange(desc(p.adj))
 ```
 
 
