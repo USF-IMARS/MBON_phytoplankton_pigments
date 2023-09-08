@@ -139,45 +139,6 @@ cmtx_sea <-
     select(-data) %>% 
     drop_na(seascape, temp, par:sal) 
 
-# ---- remove? ----
-# making empty data frame to be filled with seascapes values
-# seascapes_df <-
-#     as_tibble(matrix(ncol = 4, nrow = 1),
-#               .name_repair = ~ c('lon', 'lat', 'seascape', "yr_mth"))
-
-
-
-# going through each seascapes file and extracting seascapes for each station
-# and adding them to a dataframe
-# for (i in 1:length(file.sea)) {
-# for (i in seq(file.sea)) {
-#  filename <- file.sea[i]
-# for (idx in seascapes_match$yr_mth[[1]]) {
-#    
-#     # # extract month and year in format "YYYY.MM"
-#     # yr_mth <-
-#     #     gsub(pattern     = paste0(seasc_path, "grd_CLASS_"), 
-#     #          replacement = "", 
-#     #          x           = filename) %>% 
-#     #     
-#     #     gsub(pattern     = ".15.tif", 
-#     #          replacement = "")
-#     # make temporary dataframe with seascapes, coordinates, 
-#     # and year + month for cruise
-#     seascapes_temp <-
-#         filter(seascapes_match, yr_mth == idx)  %>%
-#         pull(1) %>%
-#         extract_seascapes(.,  filter(env_cmtx, yr_mth == idx)) 
-#     # 
-#     # # combine the dataframes with seascapes for each cruise
-#     # seascapes_df <- rbind(seascapes_df, seascapes_temp)
-# }
-#
-# # join the chemtax and seascapes data
-# cmtx_sea <-
-#     env_cmtx %>% 
-#     left_join(seascapes_df) %>% 
-#     drop_na(seascape)
 ```
 
 # CAP with Bray-Curtis?
@@ -280,6 +241,7 @@ for (szn in seasons) {
         vec_lab   = new_lab,
         grp_title = "Seascape Class"
         ) +
+        labs(title = szn) +
         theme_classic() +
         theme(text = element_text(family = "serif", 
                                   size   = 20),
@@ -347,7 +309,8 @@ sea_fract <-
 ## nMDS
 ```{r nmds}
 set.seed(1355453)
-nmds <- metaMDS(seascspec, distance = "bray")
+nmds <- metaMDS(seascspec, distance = "bray") %>%
+    print()
 # Call:
 # metaMDS(comm = as.matrix(seascspec), distance = "bray")
 # 
@@ -453,19 +416,23 @@ if (FALSE) {
 ## ANONISM
 ```{r anonism}
 ano1 <-
-    anosim(as.matrix(seascspec), 
-           factor(cmtx_sea$seascape), 
-           distance = "bray", 
-           permutations = 100)
+  anosim(
+    as.matrix(seascspec), 
+    factor(cmtx_sea$seascape), 
+    distance = "bray", 
+    permutations = 100
+    )
 
 ano2 <- 
-    anosim(as.matrix(seascspec),
-           factor(cmtx_sea$season), 
-           distance = "bray", 
-           permutations = 100)
+  anosim(
+    as.matrix(seascspec),
+    factor(cmtx_sea$season), 
+    distance = "bray", 
+    permutations = 100
+    )
+
 ano1
 ano2
-
 ```
 Seascape
 ANOSIM statistic R: 0.2343 
