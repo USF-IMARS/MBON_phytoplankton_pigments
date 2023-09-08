@@ -1,18 +1,71 @@
+# ============================================================================ #
+# 
+# 
+# ---- Create Standard Directories for New Projects ----
+# 
+# 
+# ============================================================================ #    
+
 # will create a set directory if does not exists
 # useful for new projects
 
+##%######################################################%##
+#                                                          #
+####                Show Directory Tree                 ####
+#                                                          #
+##%######################################################%##
+#' Show Directory Tree
+#'
+#' This is run when creating directories for the first time when running 
+#' {.fun create_dir}
+#'
+#' @param .loc DESCRIPTION.
+#' @param showtree DESCRIPTION.
+#' @param ... DESCRIPTION.
+#'
+#' @author Sebastian Di Geronimo
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#'
 showTree <- function(.loc, showtree = TRUE, ...) {
   if (showtree) {
     cli::cli_text("Here is the {.strong project} structure:")
     fs::dir_tree(.loc, type = "directory", ...)
   }
+    
+    # ---- end of function showTree
 }
 
+
+##%######################################################%##
+#                                                          #
+####    Create Standard Directories for New Projects    ####
+#                                                          #
+##%######################################################%##
+#' Create Standard Directories for New Projects
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .loc DESCRIPTION.
+#' @param cust_dir DESCRIPTION.
+#' @param showtree DESCRIPTION.
+#' @param ... DESCRIPTION.
+#'
+#' @author Sebastian Di Geronimo
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
 create_dir <- function(
         .loc      = NULL, 
         cust_dir = NULL,
         showtree = FALSE, ...) {
   
+  library(here)
+    
   subDir_deflt <- c(
       here(.loc, "data", c("raw", "processed", "plots", "metadata")),
       here(.loc, "Rmd"),
