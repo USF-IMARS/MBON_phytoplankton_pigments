@@ -5,8 +5,16 @@ date: '2022-06-14'
 output: html_document
 ---
 
-# Creates map of site locations for IMaRS MBON
+# USage
+
+## Creates map of site locations for IMaRS MBON
 Uses topography and coastline data from NOAA.
+Creates a map of station locations with an inset map of Florida
+
+
+## Kriging Maps
+Uses pigment data and creates kriged maps using the `fields` package and some 
+modified code from Enrique Montes
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
