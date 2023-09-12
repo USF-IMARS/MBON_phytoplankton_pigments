@@ -146,6 +146,9 @@ pig_dat
 
 # set size options of figures
 knitr::opts_chunk$set(fig.width = 19, fig.height = 9.7)
+
+# set theme
+theme_set(theme_calc(base_size = 12, base_family = "serif"))
 ```
 
 ```{r concentration-vs-time, fig.height=15, fig.width=30}
@@ -166,13 +169,7 @@ ggplot(pig_dat,
                      date_labels = "%B\n%Y") +
     facet_wrap(~name_of_water_body, nrow = 3,
                scales = "free_y") +
-    ggthemes::theme_calc() +
-    # theme_classic() +
-    theme(
-        text = element_text(family = "times"),
-        axis.title.y = element_markdown(margin = margin(r = 30, 
-                                                        l = 15))
-        )
+    theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
 ```
 
 ```{r scatter-plot-pigment-tchlor-a}
@@ -195,26 +192,30 @@ ggplot(pig_dat,
     scale_shape_manual(values = c(21, 22, 24)) +
     coord_cartesian(ylim = c(0, NA)) +
     facet_grid(name_of_water_body ~ season) +
-    theme_bw()
+    theme_bw(base_family = "serif", base_size = 12)
 ```
 
 # ---- Plot Histogram and Violin Plot ----
 Plot all pigments for each season
-```{r hist-viol, fig.height=9.7, fig.width=19}
+```{r hist-viol, fig.height=9.7, fig.width=30}
 pig_long <-
     pig_dat %>%
     pivot_longer(
         cols      = tot_chl_a:tchl_a_tpg, 
         names_to  = "pigment",
         values_to = "conc") %>%
-    select(season, pigment, conc, name_of_water_body) %>%
+    select(season, pigment, conc, name_of_water_body, year) %>%
     nest(.by = pigment) %>%
     mutate(
         hist = map2(
             .x = data, 
             .y = pigment,
             ~ .x  %>%
-                ggplot(aes(conc, fill = season)) +
+                ggplot(aes(conc, 
+                           fill = season
+                           # fill = name_of_water_body
+                           # fill = as.character(year)
+                           )) +
                 geom_histogram(position = "stack", 
                                bins     = 40,
                                na.rm    = TRUE) +
@@ -227,12 +228,13 @@ pig_long <-
                                    expand = c(0, 0)) +
                 scale_y_continuous(expand = c(0, 0)) + 
                 coord_cartesian(xlim = c(0, NA)) +
-                facet_wrap(facet = ~ name_of_water_body) +
-                # theme_tufte(base_family = "serif") +
-                theme_calc(base_family = "serif") +
+                # facet_wrap(facet = ~ name_of_water_body) +
+                facet_grid(
+                  facet  =  name_of_water_body ~  as.character(year) + season,
+                  scales = "free_x") +
                 theme(
-                     axis.title.x = element_markdown(margin = margin(t = 20, 
-                                                                      b = 5))
+                  axis.title.x = 
+                    element_markdown(margin = margin(t = 20, b = 5))
                 )
             ),
         viol = map2(
@@ -251,8 +253,6 @@ pig_long <-
                      title = .y,
                      y     = "Concentration",
                      x     = "Season") +
-            
-                theme_calc(base_family = "serif") + 
                 scale_y_continuous(expand = c(0, 0)) +
                 coord_cartesian(ylim = c(0, NA)) +
                 facet_wrap(facet = ~ name_of_water_body) +
@@ -266,6 +266,11 @@ pig_long %>%
     walk(.x = .$hist,
          .f = ~ print(.x))  %>% 
     walk(.x = .$viol,
+         .f = ~ print(.x)) 
+
+pig_long %>%
+    # slice_sample(n = 5) %T>%
+    walk(.x = .$hist,
          .f = ~ print(.x)) 
 ```
 
@@ -304,9 +309,8 @@ chl_a_box <-
           coord_cartesian(y = ylims) +
 
           # theme
-          ggthemes::theme_tufte() +
+          ggthemes::theme_tufte(base_family = "serif", base_size = 12) +
           theme(
-            text = element_text(size = 24, family = "serif"),
             axis.title.y = element_markdown(
                margin = margin(
                  r = 30,
@@ -353,7 +357,7 @@ if (FALSE) {
 ```
 
 
-```{r size-fractionation-boxplots, fig.height=10, fig.width=20}
+```{r size-fractionation-boxplots}
 size_frac_plt <-
     pig_dat %>%
     pivot_longer(
@@ -394,9 +398,10 @@ size_frac_plt <-
                        )) +
                 geom_boxplot(na.rm = TRUE, linewidth = 0.2) +
                     {if (str_detect(y_name, "Percent")) {
-                        scale_y_continuous(labels = scales::label_percent(),
-                                           expand = c(0, 0)
-                                           )
+                        scale_y_continuous(
+                          labels = scales::label_percent(),
+                          expand = c(0, 0)
+                          )
                     } else {
                          scale_y_continuous(expand = c(0, 0))
                     }} +
@@ -409,19 +414,18 @@ size_frac_plt <-
                 ) +
                 scale_fill_brewer(palette = "Dark2") +
                 # theme_tufte() +
-                theme_calc() +
                 coord_cartesian(ylim = y_lim) +
 
                 theme(
-                    text = element_text(size = 24, family = "serif"),
                     plot.title = element_markdown(),
                     axis.text.x  = element_text(color = "black"),
                     axis.text.y  = element_text(color = "black"),
-                    axis.title.y = element_markdown(size = 24,
-                                                    margin = margin(r = 30, 
-                                                                    l = 15)),
-                    axis.title.x = element_markdown(margin = margin(t = 20, 
-                                                                    b = 5))
+                    axis.title.y = element_markdown(
+                      margin = margin(r = 30,
+                                      l = 15)),
+                    axis.title.x = element_markdown(
+                      margin = margin(t = 20,
+                                      b = 5))
                     
 
                 )
@@ -437,7 +441,7 @@ size_frac_plt$plt[[2]] /
 size_frac_plt$plt[[3]]
 ```
 
-```{r size-frac-stack-bar, fig.height=11, fig.width=30}
+```{r size-frac-stack-bar}
 plt_stack <-
   pig_dat %>%
   pivot_longer(
@@ -492,15 +496,8 @@ plt_stack <-
         ) +
         scale_x_discrete(guide = guide_axis(n.dodge = 1, angle = 90)) +
         facet_wrap(~season) +
-        # ggthemes::theme_tufte() +
-        # ggthemes::theme_clean() +
-        ggthemes::theme_calc() +
         theme(
-          text = element_text(size = 24, family = "serif"),
           legend.text = element_markdown(),
-          plot.title = element_text(size = 30),
-          strip.text.x = element_text(size = 20),
-          axis.text.x = element_text(size = 15),
           panel.spacing.x = unit(25, "pt"),
           panel.border = element_rect(fill = NA)
         )
@@ -535,7 +532,7 @@ if (FALSE) {
 }
 
 ```
-
+TODO: add absolute coverage
 ```{r size-frac-table}
 frac_gt <-
     pig_dat %>%
@@ -613,39 +610,67 @@ cmtx_avgs <-
 
 
 ```{r plotting-chemtax-data}
+shelf(ggridges)
 cmtx_long <-
-    cmtx_avgs  %>%
-    pivot_longer(
-        cols      = chloro:last_col(),
-        names_to  = "func_type",
-        values_to = "conc") %>%
-    nest(.by = func_type) %>%
-    ungroup() %>%
-    mutate(
-        hist = map2(
-            .x = data, 
-            .y = func_type,
-            ~ .x  %>%
-                ggplot(aes(conc, fill = season)) +
-                geom_histogram(position = "stack", 
-                               bins     = 40,
-                               na.rm    = TRUE) +
-                labs(
-                    title = .y,
-                    x     = "Log<sub>\u0065</sub>([PFT] + 1)",
-                    y     = "Frequency",
-                    fill  = "Season") +
-                scale_x_continuous(trans =log1p_trans()) +
-                facet_wrap(facet = ~ name_of_water_body) +
-                theme_tufte(base_family = "serif") +
-                theme(
-                     axis.title.x = element_markdown(margin = margin(t = 20, 
-                                                                      b = 5)),
-                     plot.title = element_text(size = 40),
-                     strip.text = element_text(size = 30)
-                )
-         )
+  cmtx_avgs %>%
+  pivot_longer(
+    cols      = chloro:last_col(),
+    names_to  = "func_type",
+    values_to = "conc"
+  ) %>%
+  nest(.by = func_type) %>%
+  ungroup() %>%
+  mutate(
+    hist = map2(
+      .x = data,
+      .y = func_type,
+      ~ .x %>%
+        ggplot(aes(conc, fill = season)) +
+        geom_histogram(
+          position = "stack",
+          bins = 40,
+          na.rm = TRUE
+        ) +
+        labs(
+          title = .y,
+          x     = "Log<sub>\u0065</sub>([PFT] + 1)",
+          y     = "Frequency",
+          fill  = "Season"
+        ) +
+        scale_x_continuous(trans = log1p_trans()) +
+        facet_grid(
+          facet  = season ~ .,
+          scales = "free_x",
+        ) +
+        theme(
+          axis.title.x = element_markdown(margin = margin(t = 20, b = 5))
+        )
+    ),
+    dens = map2(
+      .x = data,
+      .y = func_type,
+      ~ .x %>%
+        ggplot(aes(conc, y = season, fill = season)) +
+        geom_density_ridges(
+          na.rm = TRUE,
+          alpha = 0.25
+        ) +
+        labs(
+          title = .y,
+          x     = "Log<sub>\u0065</sub>([PFT] + 1)",
+          y     = "Frequency",
+          fill  = "Season"
+        ) +
+        scale_x_continuous(trans = log1p_trans()) +
+        theme(
+          axis.title.x = 
+            element_markdown(margin = margin(t = 20, b = 5))
+        )
+      
     )
+  )
+
+cmtx_long$dens
 cmtx_long$hist
 ```
 
@@ -687,7 +712,7 @@ cmtx_long <-
 ```
 
 
-```{r chemtax-stacked-bar, fig.width=30, fig.height=15}
+```{r chemtax-stacked-bar}
 # CHEMTAX stacked bar graph
 cmtx_long  %>% 
     filter(!is.na(conc)) %>%
@@ -706,15 +731,14 @@ cmtx_long  %>%
     labs(x     = "Station", 
          y     = "Percent (%)", 
          fill  = "Phytoplankton Functional Type",
-         color = "Phytoplankton Functional Type") +
+         color = "Phytoplankton Functional Type"
+         ) +
     scale_y_continuous(labels = scales::label_percent(),
                        expand = c(0, 0)) +
     
-    facet_wrap(~ season) +
-    
-    theme_calc()
+    facet_wrap(~ season) 
 ```
-```{r chemtax-stacked-bar-year-season, fig.width=30, fig.height=15}
+```{r chemtax-stacked-bar-year-season}
 tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
                '#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
 
@@ -746,12 +770,10 @@ cmtx_long %>%
     facet_wrap( ~ season_year, ncol = 4) +
     
     # theme
-    theme_calc() +
     theme(
-        text             = element_text(family = "serif", size = 16),
-        axis.title       = element_text(size = 18),
-        legend.position  = c(0.6, 0.05),
-        legend.direction = "horizontal"
+      axis.title       = element_text(size = 18),
+      legend.position  = c(0.6, 0.05),
+      legend.direction = "horizontal"
     ) 
 
 if (FALSE) {
@@ -768,7 +790,9 @@ if (FALSE) {
         device      = 'png')
     }
 ```
-```{r chemtax-stacked-bar-conc-year-season, fig.width=30, fig.height=15}
+
+
+```{r chemtax-stacked-bar-conc-year-season}
 # chemtax stacked bar graph (not ratio), organized by station
 cmtx_long %>% 
     summarize(conc = mean(conc, na.rm = TRUE),
@@ -793,11 +817,10 @@ cmtx_long %>%
     facet_wrap( ~ season_year, ncol = 4) +
     
     # theme
-    theme_calc() +
-    theme(text = element_text(family = "serif", size = 12),
-          axis.title.y     = element_markdown(size = 10),
-          legend.position  = c(0.6, 0.05),
-          legend.direction = "horizontal"
+    theme(
+      axis.title.y     = element_markdown(),
+      legend.position  = c(0.6, 0.05),
+      legend.direction = "horizontal"
           )
 
 if (FALSE) {
@@ -1043,8 +1066,7 @@ plt_pi <-
         shape = name_of_water_body)) +
   geom_point() +
   labs(color = "Season",
-       shape = "Water Body") +
-  theme_calc()
+       shape = "Water Body")
 
 plt_pi /
 (
@@ -1068,10 +1090,8 @@ test2 <-
         x = "Season",
         y = "Photoprotection Index (PI)") +
     
-    theme_classic() +
-    theme(legend.position = "none", 
-          text = element_text(family = "serif", size = 12)
-          )
+    theme_classic(base_family = "serif", base_size = 12) +
+    theme(legend.position = "none")
 
 # top plot
 (
