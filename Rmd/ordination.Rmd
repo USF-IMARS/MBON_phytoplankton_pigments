@@ -328,7 +328,7 @@ if (sv_arg$pca | sv_arg$overwrite) {
      glue(
        sv_arg$sv_nm[1],
        format(Sys.time(), "_%Y%m%d_%H%M%S"),
-       ".jpg"
+       ".jpeg"
      )
    ),
    plot        = pca_plt,
@@ -336,7 +336,7 @@ if (sv_arg$pca | sv_arg$overwrite) {
    base_width  = 19,
    dpi         = 600,
    units       = "in",
-   device      = "png"
+   device      = "jpeg"
  )
 } else {
     cli_alert_info(
@@ -357,7 +357,7 @@ if (sv_arg$pcoa | sv_arg$overwrite) {
      glue(
        sv_arg$sv_nm[2],
        format(Sys.time(), "_%Y%m%d_%H%M%S"),
-       ".jpg"
+       ".jpeg"
      )
    ),
    plot        = pcoa_plt,
@@ -365,7 +365,7 @@ if (sv_arg$pcoa | sv_arg$overwrite) {
    base_width  = 19,
    dpi         = 600,
    units       = "in",
-   device      = "png"
+   device      = "jpeg"
  )
 } else {
     cli_alert_info(
@@ -637,7 +637,7 @@ if (FALSE) {
         base_width  = 19,
         dpi         = 600, 
         units       = "in", 
-        device      = "png")
+        device      = "jpeg")
 }
 ```
 

@@ -352,7 +352,7 @@ save_maps <- function(maps, sv = FALSE, sv_name = NULL,
         filename <- here(sav_loc,
                          glue("{sv_name}_",
                               format(Sys.time(), "%y%m%d_%H%M%S") ,
-                              ".png"))
+                              ".jpeg"))
 
         cli_alert_info("Map file location: {.file {dirname(filename)}}")
         cli_alert_info("Map file name: {.file {basename(filename)}}")
@@ -360,6 +360,7 @@ save_maps <- function(maps, sv = FALSE, sv_name = NULL,
         ggsave(filename,
                plot   = maps,
                width  = 10,
-               height = 6)
+               height = 6,
+               device = "jpeg")
     }
 }

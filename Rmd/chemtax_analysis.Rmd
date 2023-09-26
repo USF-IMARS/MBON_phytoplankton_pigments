@@ -9,7 +9,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
-    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
     # broom # optional
     
@@ -20,7 +20,7 @@ librarian::shelf(
     cowplot
     )
 
-library("conflicted")
+# library("conflicted")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -384,7 +384,7 @@ if (sv_arg$lg_exist | sv_arg$overwrite) {
     base_width  = 10,
     dpi         = 600,
     units       = "in",
-    device      = "png"
+    device      = "jpeg"
   )
 } else {
     cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_lg} ",
@@ -407,7 +407,7 @@ if (sv_arg$sm_exist | sv_arg$overwrite) {
     base_width  = 10,
     dpi         = 600,
     units       = "in",
-    device      = "png"
+    device      = "jpeg"
   )
 } else {
     cli::cli_alert_info(c("Skipping saving of {.file cmtx_boxplot_sm} ",
@@ -556,7 +556,7 @@ sv_arg <-
   list(
     sv_loc    = here("data", "plots"),
     sv_nm     = "phyto_bloom",
-    overwrite = FALSE
+    overwrite = TRUE
   ) %>%
   c(
     .,
@@ -571,7 +571,7 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
         base_width  = 16,
         dpi         = 600, 
         units       = "in", 
-        device      = "png")
+        device      = "jpeg")
 } else {
    cli_alert_info(c("Skipping saving of {.file phyto_bloom} ",
                     "because exists ",
@@ -705,7 +705,7 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
      glue(
        sv_arg$sv_nm,
        format(Sys.time(), "_%Y%m%d_%H%M%S"),
-       ".jpg"
+       ".jpeg"
      )
    ),
    plot        = cmtx_szn_bar,
@@ -713,7 +713,7 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
    base_width  = 16,
    dpi         = 600,
    units       = "in",
-   device      = "png"
+   device      = "jpeg"
  )
 } else {
     cli_alert_info(

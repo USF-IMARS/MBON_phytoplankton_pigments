@@ -349,7 +349,7 @@ if (FALSE) {
           base_width  = 19,
           dpi         = 600,
           units       = "in",
-          device      = "png",
+          device      = "jpeg",
           bg          = "white"
         ))
     )
@@ -525,7 +525,7 @@ if (FALSE) {
           base_width  = 19,
           dpi         = 600,
           units       = "in",
-          device      = "png",
+          device      = "jpeg",
           bg          = "white"
         )
     )
@@ -787,7 +787,7 @@ if (FALSE) {
         base_width  = 19,
         dpi         = 600,
         units       = "in",
-        device      = 'png')
+        device      = "jpeg")
     }
 ```
 
@@ -833,7 +833,7 @@ if (FALSE) {
         base_width  = 19,
         dpi         = 600,
         units       = "in",
-        device      = 'png')
+        device      = "jpeg")
     }
 ```
 # Timeseries Plots
@@ -1123,7 +1123,7 @@ if (FALSE) {
         base_width  = 10,
         dpi         = 600,
         units       = "in",
-        device      = 'png'
+        device      = "jpeg"
     )
     }
 ```
@@ -1219,7 +1219,7 @@ if (FALSE) {
         base_width  = 10,
         dpi         = 600,
         units       = "in",
-        device      = 'png'
+        device      = "jpeg"
     )
 }
 ```

@@ -201,7 +201,7 @@ if (FALSE) {
         base_width  = 8,
         dpi         = 600, 
         units       = "in", 
-        device      = "png")
+        device      = "jpeg")
 }
 
 ```
@@ -262,7 +262,7 @@ for (szn in seasons) {
             base_width  = 8,
             dpi         = 600, 
             units       = "in", 
-            device      = "png")
+            device      = "jpeg")
         
     }
 }
@@ -403,13 +403,13 @@ if (FALSE) {
         filename    = here("data", "plots",
                            glue("seascape_nmds",
                             format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                            ".jpg")),
+                            ".jpeg")),
         plot        = xx,
         base_height = 8,
         base_width  = 14,
         dpi         = 600,
         units       = "in",
-        device      = "png"
+        device      = "jpeg"
         )
 }
 ```
