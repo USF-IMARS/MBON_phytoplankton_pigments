@@ -499,14 +499,48 @@ pig_stat <-
 ## 3.1 Size Fractionation
 diagnostic pigment calculations:
 $$
-dp = \\
- 1.41 \times \text{fuco} + \\
- 1.41 \times \text{perid} + \\
- 1.27 \times \text{hex fuco} + \\
- 0.35 \times \text{but fuco} +  \\
- 0.6 \times \text{allo} + \\
- 1.01 \times \text{total chl-b} + \\
- 0.86 \times \text{zea}
+\begin{align}
+& \text{Diagnostic Pigment} \\
+& dp = \\
+& (1.41 \times \text{fuco} + 
+   1.41 \times \text{perid})\space+ \\
+& (1.27 \times \text{hex fuco} +
+   0.35 \times \text{but fuco} +  
+   0.6 \times \text{allo})\space+ \\
+& (1.01 \times \text{total chl-b} +
+   0.86 \times \text{zea}); \\
+  
+\\
+
+& \text{Fraction}: \\
+
+& frac_{\text{micro}} = 
+     1.41 \times \text{fuco} + 
+     1.41 \times \text{perid}; \\
+            
+& frac_{\text{nano}} = 
+    1.27 \times \text{hex fuco} +
+    0.35 \times \text{but fuco} + 
+    0.6 \times \text{allo}; \\
+                
+& frac_{\text{pico}} = 
+    1.01 \times \text{total chl-b} +
+    0.86 \times \text{zea} \\
+
+\\
+    
+& \text{Biomass}: \\
+
+& B_{\text{micro}} =
+    frac_{\text{micro}} \times \text{Chlor-a} \\
+    
+& B_{\text{nano}} = 
+    frac_{\text{nano}} \times \text{Chlor-a} \\
+
+& B_{\text{pico}} =
+    frac_{\text{pico}} \times \text{Chlor-a} \\
+
+ \end{align} 
 $$
 
 fractions:
