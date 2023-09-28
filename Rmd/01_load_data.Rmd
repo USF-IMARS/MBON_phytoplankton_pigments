@@ -815,7 +815,8 @@ rm(val)
 
 # ---- 6.0 Save data ----
 
-1. Combined pigment data  
+1A. Combined pigment data - selected columns
+1B. Combined pigment data - all columns
 2. Average, standard deviation and variance of combined pigment
 3. Log transformed combine pigment data
 4. Average, standard deviation and variance of log combined pigment
@@ -829,11 +830,30 @@ path_out <- here("data", "processed", "load_data")
 # ovrwrt_sv <- TRUE
 ovrwrt_sv <- FALSE
 
-# 1. combined date
+# 1A. combined date
+df_all %>%
+  # bad sample, contaminated with blue ink
+  filter(!str_detect(sample, "WS18120_103"))  %>%
+  select(
+      -c(pi, volfilt, filter_type:filter_storage_before_shipment_to_gfsc, 
+         comments:other, 
+         collected_with_positive_pressure_or_vaccuum:vx_ml)
+  )  %>%
+  relocate(water_type, .after = name_of_water_body) %>%
+  save_csv(
+    .data          = .,        
+    save_location  = path_out,
+    save_name      = "combined_pig_dat",
+    overwrite      = ovrwrt_sv,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+
+# 1B. combined date
 save_csv(
   .data          = df_all,        
   save_location  = path_out,
-  save_name      = "combined_pig_dat",
+  save_name      = "combined_pig_dat_all",
   overwrite      = ovrwrt_sv,
   verbose        = TRUE,
   time_stamp_fmt = NULL
