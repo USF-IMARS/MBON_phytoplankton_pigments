@@ -19,7 +19,6 @@ output: html_document
 
 ## 1.1 Load Libraries
 ```{r setup, include=FALSE}
-# root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
 if (!nzchar(system.file(package = "librarian"))) 
     install.packages("librarian")
@@ -27,13 +26,10 @@ if (!nzchar(system.file(package = "librarian")))
 librarian::shelf(
     librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
-    # broom # optional
     
     # additional
     rlang
 )
-
-# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
     dplyr::filter(), 
@@ -49,23 +45,23 @@ source(here("scripts", "misc_functions.R"))
 # useful for new projects
 source(here("scripts", "create_dir.R")) 
 
-loc <- here()
-
 create_dir(
-  .loc = loc,
+  .loc = here(),
   cust_dir = 
    c(
-     here(loc, "data", "raw", c("seascapes", "chemtax", "hplc", "microscopy"))
+     here("data", "raw", c("seascapes", "chemtax", "hplc", "microscopy"))
      ),
   showtree = TRUE,
   recurse  = 2)
+
+rm(create_dir)
 ```
 
-## 1.3 Get File Paths
+## 1.3 Get File Paths for HPLC Data
+
 ```{r file-paths}
-# find pigment data
+# path location to find HPLC data
 data_dir <- here("data", "raw", "hplc")
-path_out <- here("data", "processed")
 
 # pigment files
 file_pig <-
@@ -73,8 +69,6 @@ file_pig <-
   dir_ls(
     recurse = FALSE,
     type    = "file",
-    # included ^[^~]* to not match ~, means that a file is opened
-    # regexp  = "^[^~]*\\.xlsx$"
     regexp  = "^[^~]*\\.xlsx$"
   ) %>%
   str_sort() %>%
@@ -90,20 +84,34 @@ if (is_empty(file_pig)) {
     file_pig
 }
 ```
+
 ## 1.4 Load HPLC Data and Fix Issues
-Cleans name for tidying, renames some, creates date_time column, replace -9999 to
-NA, -8888 to 0 (is LOD), corrects formatting issues,
+
+Files:
+- M-K 06-12 report_may_and_sept_2016
+- M-K 09-02 report_nov16_mar17_jun17_oct17_jan18
+- M-K_05-17_report_mar16
+- M-K 10-11 part1 report
+- M-K 10-11 part2 report
+
+Issues
+- Tidy column names (janitor::make_clean_names)
+- Rename columns
+- Creates `date_time` column 
+- Ignore -9999 (missing) and -8888 (Limit of Detection) 
+- Corrects formatting issues
+
 ```{r load-data}
 shelf(readxl, janitor, hms)
+
 # ---- M-K 06-12 report_may_and_sept_2016 ----
 # fix date and add datetime
-df <-
+
+df1 <-
   read_xlsx(
     file_pig[1],
     sheet = 2,
     skip  = 8,
-    # -9999 = missing
-    # -8888 = below Limit of Detection (LOD)
     na    = c("-9999", "-8888"),
     .name_repair = make_clean_names
   ) %>%
@@ -130,13 +138,12 @@ df <-
 # fix date and add datetime
 # convert indicate_if_filters_are_replicates to character
 # fix gfc to gsfc
+
 df2 <-
   read_xlsx(
     file_pig[2],
     sheet = 2,
     skip  = 8,
-    # -9999 = missing
-    # -8888 = below Limit of Detection (LOD)
     na    = c("-9999", "-8888"),
     .name_repair = make_clean_names
   ) %>%
@@ -174,16 +181,16 @@ df2 <-
 # fix date and add datetime
 # fix water depth
 # fix indicate_if_filters_are_replicates as character
+
 df3 <-
   read_xlsx(
     file_pig[3],
     sheet = "Report",
     skip  = 8,
-    # -9999 = missing
-    # -8888 = below Limit of Detection (LOD)
     na    = c("-9999", "-8888"),
     .name_repair = make_clean_names
   ) %>%
+    
   # fix date and datetime
   mutate(
     time          = as_hms(time),
@@ -213,17 +220,18 @@ df3 <-
 # fix misspelled month
 # fix depth
 # fix date and add datetime
+ 
+
 df4 <-
   read_xlsx(
     file_pig[4],
     sheet = "Report",
     skip  = 8,
-    # -9999 = missing
-    # -8888 = below Limit of Detection (LOD)
     na    = c("-9999", "-8888"),
     .name_repair = janitor::make_clean_names
   ) %>%
-  # Fixed misspelled month
+  
+  # fixed misspelled month
   mutate(
     month = case_when(
       !month %in% c(month.name, month.abb) ~ str_extract(month, "\\w{3}"),
@@ -251,13 +259,13 @@ df4 <-
 # ---- M-K_05-17_report_mar16 ----
 # fix date and add datetime
 # date_extracted_month_day_year numeric to date, replace str to NA
+
+
 df5 <-
   read_xlsx(
     file_pig[5],
     sheet = "Report",
     skip  = 8,
-    # -9999 = missing
-    # -8888 = below Limit of Detection (LOD)
     na    = c("-9999", "-8888"),
     .name_repair = make_clean_names
   ) %>%
@@ -265,6 +273,7 @@ df5 <-
     lon = longitude,
     lat = latitude
   ) %>%
+  
   # fix date and add datetime
   mutate(
     gmt_time      = as_hms(gmt_time),
@@ -295,7 +304,12 @@ unshelf(readxl, janitor, hms)
 ```
 
 # 2.0 ---- Merge Data Reports ----
+
 ## 2.1 Mapped Column Names
+
+Over the year, column names coming from NASA had changed slightly. Here, the 
+names that are equal are represented here to match to when add rows.
+
 ```{r colnames}
 # select variables that match data sets
 params <- c(
@@ -332,10 +346,20 @@ params <- c(
 ```
 
 ## 2.2 Join Data
+
+Stages of data merging are preformed by combing the most alike data first.
+
+- df_merg = df3 and df2
+- df_merg = df_merg and df4
+- df_merg2 = df1 and df5
+- df_all = df_merg and df_merg2
+
 ```{r merge-df}
 shelf(paulponcet/statip)
+
 # ---- merge df 2, 3, 4 ----
-df_merg  <- full_join(df3, df2)
+
+df_merg <- full_join(df3, df2)
 
 df_merg <-
   mutate(
@@ -346,18 +370,129 @@ df_merg <-
     )
   )
 
-df_merg  <- 
-    full_join(df_merg, df4) %>%
-    
-    # one cell had "28A", converted to NA
-    mutate(sequential_sample_number = as.numeric(sequential_sample_number)) 
+df_merg <-
+  full_join(df_merg, df4) %>%
+  # one cell had "28A", converted to NA
+  mutate(sequential_sample_number = as.numeric(sequential_sample_number))
+
 
 # ---- merge df 1, 5 ----
-df_merg2 <- full_join(df, df5)
+
+df_merg2 <- full_join(df1, df5)
+
 
 # ---- full merge ----
-df_all <-
+
+df_all <- 
   full_join(df_merg, df_merg2, by = params) %>%
+  mutate(across(tot_chl_a:tchl_a_tpg, \(x) if_else(!is.na(x), x, 0)))
+```
+
+## 2.3 Add Seasonal Factor and Water Body Name
+
+The data was grouped into 4 seasons using months.
+
+Winter: 
+    Dec, Jan, Feb
+    
+Spring:  
+    Mar, Apr, May
+    
+Summer: 
+    Jun, Jul, Aug
+    
+Autumn: 
+    Sep, Nov, Oct
+
+Water Body Names: 
+
+- Florida Keys
+- West Florida Shelf
+- Southwest Florida Shelf
+
+```{r szn-water-body-var}
+
+# seasonal groups
+szn <-
+  list(
+    "Winter" = month.abb[c(12, 1, 2)], # Dec, Jan, Feb
+    "Spring" = month.abb[3:5],         # Mar, Apr, May
+    "Summer" = month.abb[6:8],         # Jun, Jul, Aug
+    "Autumn" = month.abb[9:11]         # Sep, Nov, Oct
+  ) %T>% print()
+
+
+# water body names
+water_body <- list(
+  "Florida Keys" = c(
+    glue("{1:18}"),
+    glue("9.{1:9}"), "9B", "24", "LK", "MR", "WS", "21.5"
+  ),
+  "Southwest Florida Shelf" = c(
+    glue("{30:68}"),
+    glue("57.{1:3}"), "KW1", "KW2", "KW4"
+  ),
+  "West Florida Shelf" = c(
+    "Z04-068", "CBH", "NBH", "EB1",
+    as.vector(outer(
+      c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG"),
+      c(1:12),
+      str_c
+    ))
+  )
+) %T>% print()
+
+```
+
+```{r add-season-water-body}
+df_all <-
+  df_all %>%
+  mutate(
+    # add season factor
+    month  = month(date_time_utc, label = TRUE, abbr = TRUE),
+    season = case_match(
+      month,
+      szn[[1]] ~ names(szn)[1],        # Winter
+      szn[[2]] ~ names(szn)[2],        # Spring
+      szn[[3]] ~ names(szn)[3],        # Summer
+      szn[[4]] ~ names(szn)[4],        # Autumn
+      .default = NA_character_
+    ),
+    season = fct(season, levels = names(szn)),
+    
+    # fix case of stations
+    station = str_replace_all(station, "\\s", ""),
+    station = str_to_upper(station),
+    
+    # correct water body name
+    name_of_water_body = case_match(
+     station,
+     water_body[[1]] ~ names(water_body)[1],
+     water_body[[2]] ~ names(water_body)[2],
+     water_body[[3]] ~ names(water_body)[3],
+     .default = NA_character_
+     ),
+    .after = month
+  ) %T>% print()
+```
+
+
+## 2.4 Fix Lat/Lon
+
+Then, the lat and lon columns were adjusted
+- lon < 0 (-84 to -79)
+- lat > 0 (24 - 27)
+- TB1 hard coded
+  - 27.8013 lat
+  - -82.8819 lon
+ 
+A second check to make sure the lat/lon for every station matched over time and
+would select the most frequently occuring as the correct one. 
+
+```{r fix-df}
+df_all <-
+  df_all %>%
+  
   # fix small errors with negative values
   mutate(
     lat = case_when(
@@ -370,119 +505,127 @@ df_all <-
     )
   ) %>%
     
-    # fix spelling and spacing of stations
-    mutate(
-        station = str_replace_all(station, "\\s", ""),
-        station = str_to_upper(station),
-        
-        # specifically TB1 was off, need to use NOAA AOML for coords
-        lat = case_when(station == "TB1" ~ 27.8013, 
-                        TRUE ~ lat),
-        lon = case_when(station == "TB1" ~ -82.8819, 
-                        TRUE ~ lon)
-    ) 
+  # fix spacing of stations
+  mutate(
 
-# ---- fix lat long ----
+    # specifically TB1 was off, need to use NOAA AOML for coords
+    lat = case_when(
+      station == "TB1" ~ 27.8013,
+      .default = lat
+    ),
+    lon = case_when(
+      station == "TB1" ~ -82.8819,
+      .default = lon
+    )
+  )
+
+
 # summarize most freq value for lat/lon per station
-indx <- df_all %>% 
-    select(station, lat, lon) %>%
-    # group_by(station) %>%
-    # summarise(n = n())
-    summarise(
-        .by = station,
-        # lat_mod = modeest::mlv(lat, method = "mfv"),
-        # lon_mod = modeest::mlv(lon, method = "mfv1"),
-        lat_mod = statip::mfv1(lat),
-        lon_mod = statip::mfv1(lon),
-        # sumss = sum(lat)
-        # .groups = "drop_last"
-    ) 
+dat_loc <- 
+  df_all %>% 
+  select(station, lat, lon) %>%
+  summarise(
+      .by = station,
+      lat_mod = statip::mfv1(lat),
+      lon_mod = statip::mfv1(lon),
+  ) 
 
-# left join indx to df_all
-df_all <- 
-    df_all %>%
-    # group_by(station) %>%
-    left_join(indx, by = "station") %>%
-    mutate(
-        lat = lat_mod, 
-        lon = lon_mod
-        ) %>%
-    select(-lat_mod, -lon_mod)
+# left join dat_loc to df_all
+df_all <-
+  df_all %>%
+  left_join(dat_loc, by = "station") %>%
+  mutate(
+    lat = lat_mod,
+    lon = lon_mod,
+    depth = if_else(is.na(depth), 1, depth),
+  ) %>%
+  select(-lat_mod, -lon_mod)
 
-rm(df, df2, df3, df4, df5, df_merg, df_merg2, params)
 unshelf(paulponcet/statip)
+
 ```
 
-## 2.4 Map Points of Data
+## 2.5 Map Points of Data
+
+Manual checking that each distinct station with lat/lon roughly matched their 
+expected locations.
+
 ```{r plot-points}
 map_plt <-
-    ggplot() +
-    geom_point(data = df_all,
-               aes(x     = lon, 
-                   y     = lat, 
-                   color = station),
-               
-               show.legend = FALSE) +
-    geom_point(
-        data = indx,
-        aes(x = lon_mod, 
-            y = lat_mod, 
-            group = station),
-        color = "purple",
-        shape = 21,
-        alpha = 25,
-        size = 3,
-        # fill  = NA ,
-        inherit.aes = FALSE,
-        show.legend = FALSE
-    )
+  ggplot() +
+  geom_point(
+    data = df_all,
+    aes(
+      x = lon,
+      y = lat,
+      color = name_of_water_body
+    ),
+    show.legend = FALSE
+  ) +
+  geom_point(
+    data = dat_loc,
+    aes(
+      x = lon_mod,
+      y = lat_mod,
+      group = station
+    ),
+    color = "purple",
+    shape = 21,
+    alpha = 25,
+    size  = 3,
+    inherit.aes = FALSE,
+    show.legend = FALSE
+  ) +
+    
+  # add station names
+  ggrepel::geom_text_repel(
+    data = distinct(df_all, station, lat, lon),
+    aes(
+      x = lon,
+      y = lat,
+      label = station
+    ),
+    min.segment.length = 0,
+    max.overlaps = 50,
+    size = 2
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+   ) +
+  theme_bw()
+
 
 map_plt
 
-if (interactive() & nzchar(system.file(package = "plotly")) & FALSE)
-    # will need plotly 
-    plotly::ggplotly(map_plt)
-
-rm(map_plt)
+if (interactive() & nzchar(system.file(package = "plotly"))) {
+  # will need plotly
+  plotly::ggplotly(map_plt)
+}
 ```
 
+## 2.6 Clean Workspace
+```{r clean-workspace}
+if (menu(c("Remove Variables", "Keep Variables"), 
+         title = "Do you want to remove variables?") == 1 ) {
+ rm(df1, df2, df3, df4, df5, df_merg, df_merg2, 
+    params, map_plt, szn, water_body, dat_loc)
+}
+```
+
+
+# 3.0 Calculate Summary Statistics
+
+Calculate for each season and water body:
+- Average,
+- Standard deviations 
+- Variance
+
 ```{r summary-statistics}
-# group by seasons
-# szn <-
-#   list(
-#     winter = c("Dec", "Jan", "Feb"),
-#     spring = c("Mar", "Apr", "May"),
-#     summer = c("Jun", "Jul", "Aug"),
-#     autumn = c("Sep", "Nov", "Oct")
-#   )
-szn <-
-  list(
-    winter = month.abb[c(12, 1, 2)], # Dec, Jan, Feb
-    spring = month.abb[3:5], # Mar, Apr, May
-    summer = month.abb[6:8], # Jun, Jul, "Aug"
-    autumn = month.abb[9:11] # Sep, Nov, Oct
-  )
-
-df_all <-
-  df_all %>%
-  mutate(
-    month  = month(date_time_utc, label = TRUE, abbr = TRUE),
-    season = case_match(
-      month,
-      szn$winter ~ "Winter",
-      szn$spring ~ "Spring",
-      szn$summer ~ "Summer",
-      szn$autumn ~ "Autumn",
-      .default = NA_character_
-    ),
-    .after = month
-  ) %T>% print()
-
-# average and standard deviations for each pigment
 pig_stat <-
   df_all %>%
   summarise(
-    .by = season,
+    .by = c(season, name_of_water_body),
     across(
       tot_chl_a:tchl_a_tpg,
       list(
@@ -494,10 +637,13 @@ pig_stat <-
   ) %T>% print()
 ```
 
-# 3.0 ---- Calculate size fractionation based on Uitz, 2006 ----
+# 3.0 ---- Calculate Community Composition from Diagnostic Biomarkers ----
 
-## 3.1 Size Fractionation
-diagnostic pigment calculations:
+Based on Uitz, 2006. 
+
+The coefficients were used in our calculation of diagnostic biomarker based size
+classes
+
 $$
 \begin{align}
 & \text{Diagnostic Pigment} \\
@@ -512,49 +658,39 @@ $$
   
 \\
 
-& \text{Fraction}: \\
+& \text{Fraction (% biomass)}: \\
 
-& frac_{\text{micro}} = 
+& frac~_{\text{micro}} = 
      1.41 \times \text{fuco} + 
      1.41 \times \text{perid}; \\
             
-& frac_{\text{nano}} = 
+& frac~_{\text{nano}} = 
     1.27 \times \text{hex fuco} +
     0.35 \times \text{but fuco} + 
     0.6 \times \text{allo}; \\
                 
-& frac_{\text{pico}} = 
+& frac~_{\text{pico}} = 
     1.01 \times \text{total chl-b} +
     0.86 \times \text{zea} \\
 
 \\
     
-& \text{Biomass}: \\
+& \text{Biomass}~(mg~L^{-1}): \\
 
 & B_{\text{micro}} =
-    frac_{\text{micro}} \times \text{Chlor-a} \\
+    frac~_{\text{micro}} \times \text{Chlor-a} \\
     
 & B_{\text{nano}} = 
-    frac_{\text{nano}} \times \text{Chlor-a} \\
+    frac~_{\text{nano}} \times \text{Chlor-a} \\
 
 & B_{\text{pico}} =
-    frac_{\text{pico}} \times \text{Chlor-a} \\
+    frac~_{\text{pico}} \times \text{Chlor-a} \\
 
  \end{align} 
 $$
-
-fractions:
-- micro : (1.41 * fuco + 1.41 * perid) / dp_w
-- nano  : (1.27 * hex_fuco + 0.35 * but_fuco + 0.6 * allo) / dp_w
-- pico  : (1.01 * tot_chl_b + 0.86 * zea) / dp_w
-
-biomass:
-- micro : fraction micro * total chlorophyll-a
-- nano  : fraction  nano * total chlorophyll-a
-- pico  : fraction  pico * total chlorophyll-a
-```{r size-fractionation}
+```{r diagnostic-biomarker-size-class}
 df_all <-
-      df_all %>%
+  df_all %>%
   mutate(
     # diagnostic pigment
     dp_w =
@@ -573,145 +709,30 @@ df_all <-
   )
 ```
 
-## 3.2 Save pigment data combined and mean/std dev
-```{r save-combined-data}
-save_csv(
-  .data          = df_all,        
-  save_location  = path_out,
-  save_name      = "combined_pig_dat",
-  overwrite      = FALSE,
-  verbose        = TRUE,
-  time_stamp_fmt = NULL
-)
 
-save_csv(
-  .data          = pig_stat,        
-  save_location  = path_out,
-  save_name      = "pig_summary_stat",
-  overwrite      = FALSE,
-  verbose        = TRUE,
-  time_stamp_fmt = NULL
-)
-```
+# 4.0 ---- Filter for FL Keys Data ----
 
+The data filtered for FL Keys is used in the CHEMTAX program. The cluster code 
+is added for the cluster code column in the CHEMTAX spreadsheet.
 
+Cluster Code:
+1 = Winter
+2 = Spring
+3 = Summer
+4 = Autunm
 
+The columns selected are the columns actually used in the CHEMTAX program and
+all other columns are removed. The results can be merged back in using the 
+`hplc_gsfc_id`.
 
-# 4.0 ---- Convert pigments to log ----
-
-```{r log-dat}
-# read combined pigment data 
-if (!exists("df_all")) {
-    pig_dat  <- read_csv(here(path_out,"combined_pig_dat.csv"),
-                         show_col_types = FALSE)
-} else {
-    pig_dat <- df_all
-}
-
-# transform pigments to log10 
-val     <- 0.001 # change to 1 or 0.001
-
-log_pig <-
-  pig_dat %>%
-  mutate(
-    across(
-      tot_chl_a:dp,
-      ~ log10(.x + val)
-    )
-  )
-
-
-# TODO: maybe I don't need to do this
-    # log_pig %>% 
-    #     select(season, tot_chl_a:dp) %>%
-    #     group_by(season) %>%
-    #     summarise(across(tot_chl_a:dp, 
-    #     .fn = list(mean = mean, sd = sd, var = var), na.rm = TRUE,
-    #            .names = "{.col}_{.fn}")) %>%
-    #             pivot_longer(2:last_col(), 
-    #              names_to  = "pigment", 
-    #              values_to = "log_conc")
-    
-log_pig_stat <-
-  log_pig %>%
-  pivot_longer(
-    tot_chl_a:dp,
-    names_to  = "pigment",
-    values_to = "log_conc"
-  ) %>%
-  filter(!is.na(log_conc)) %>%
-  # group_by(season, pigment) %>%
-
-  summarise(
-    .by = c(season, pigment),
-    log_avg = mean(log_conc),
-    log_sd  = sd(log_conc),
-    log_var = var(log_conc)
-  ) %>%
-  mutate(
-    .keep = "none",
-    season,
-    pigment,
-    avg = 10^log_avg - val,
-    sd  = 10^log_sd - val,
-    var = 10^log_var - val,
-    log_avg,
-    log_sd,
-    log_var
-  )
-
-log_pig_stat %>%
-    pivot_wider(
-        data         = .,
-        id_cols      = c(season), # *optional* vector of unaffected columns,
-        names_from   = pigment, # category column(s) to pivot wide
-        values_from  = c(log_avg:last_col()), # value column(s) that hold data for each category column
-        names_glue    = "{pigment}_{.value}",
-        names_repair = janitor::make_clean_names
-        )
-```
-
-# 5.0 ---- Filter for FL Keys specifically ----
 ```{r fl-keys-only}
-water_body <- list(
-  "Florida Keys" = c(
-    glue("{1:18}"),
-    glue("9.{1:9}"), "9B", "24", "LK", "MR", "WS", "21.5"
-  ),
-  "Southwest Florida Shelf" = c(
-    glue("{30:68}"),
-    glue("57.{1:3}"), "KW1", "KW2", "KW4"
-  ),
-  "West Florida Shelf" = c(
-    "Z04-068", "CBH", "NBH", "EB1",
-    as.vector(outer(
-      c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG"),
-      c(1:12),
-      str_c
-    ))
-  )
-) 
-
 # filter for Florida Keys and cluster by seasons
-chemtax_seasons <-
-  pig_dat %>%
-  mutate(
-    name_of_water_body = case_match(
-      station,
-      water_body[[1]] ~ names(water_body[1]),
-      water_body[[2]] ~ names(water_body[2]),
-      water_body[[3]] ~ names(water_body[3])
-    )
-  ) %>%
+fl_keys_chemtax_seasons <-
+  df_all %>%
   filter(name_of_water_body == "Florida Keys") %>%
-  mutate(
-    cluster_code = case_when(
-      season == "Winter" ~ 1,
-      season == "Spring" ~ 2,
-      season == "Summer" ~ 3,
-      season == "Autumn" ~ 4
-    )
-  ) %>%
+  mutate(cluster_code = as.numeric(season)) %>%
+  
+  # necessary columns 
   select(
     hplc_gsfc_id,
     cluster_code,
@@ -730,45 +751,133 @@ chemtax_seasons <-
     dv_chl_a,
     tot_chl_a
   )
-
-rm(water_body)
 ```
 
 
-## 5.1 Save data
-```{r save-data}
-overwrite_data <- FALSE
+# 5.0 ---- Convert pigments to log ----
 
-# log trans of pigment
+Convert all pigment values to logarithm.
+
+Calculate:
+- Log base 10
+- Average
+- Standard deviation
+- Variance
+
+```{r log-dat}
+# transform pigments to log10 and add small value
+val <- 0.001 # change to 1 or 0.001
+
+log_pig <- mutate(df_all, across(tot_chl_a:dp, ~ log10(.x + val)))
+
+# summarise
+log_pig_stat <-
+  log_pig %>%
+  pivot_longer(
+    tot_chl_a:dp,
+    names_to  = "pigment",
+    values_to = "log_conc"
+  ) %>%
+  filter(!is.na(log_conc)) %>%
+  summarise(
+    .by = c(season, name_of_water_body, pigment),
+    log_avg = mean(log_conc),
+    log_sd  = sd(log_conc),
+    log_var = var(log_conc)
+  ) %>%
+  mutate(
+    .keep = "none",
+    name_of_water_body,
+    season,
+    pigment,
+    avg = 10^log_avg - val,
+    sd  = 10^log_sd - val,
+    var = 10^log_var - val,
+    log_avg,
+    log_sd,
+    log_var
+  )
+
+log_pig_stat %>%
+  pivot_wider(
+    data         = .,
+    id_cols      = c(name_of_water_body, season),
+    names_from   = pigment,
+    values_from  = c(log_avg:last_col()),
+    names_glue   = "{pigment}_{.value}",
+    names_repair = janitor::make_clean_names
+  )
+
+rm(val)
+```
+
+
+
+# ---- 6.0 Save data ----
+
+1. Combined pigment data  
+2. Average, standard deviation and variance of combined pigment
+3. Log transformed combine pigment data
+4. Average, standard deviation and variance of log combined pigment
+5. Florida Keys filtered data with necessary columns to be used in CHEMTAX 
+
+```{r save-combined-data}
+# location to save data
+path_out <- here("data", "processed", "load_data")
+
+# overwrite or not
+# ovrwrt_sv <- TRUE
+ovrwrt_sv <- FALSE
+
+# 1. combined date
+save_csv(
+  .data          = df_all,        
+  save_location  = path_out,
+  save_name      = "combined_pig_dat",
+  overwrite      = ovrwrt_sv,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL
+)
+
+# 2. stats on combined date
+save_csv(
+  .data          = pig_stat,        
+  save_location  = path_out,
+  save_name      = "pig_summary_stat",
+  overwrite      = ovrwrt_sv,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL
+)
+
+# 3. log trans of pigment
 save_csv(
   .data          = log_pig,        
   save_location  = path_out,
   save_name      = "log_combined_pig_dat",
-  overwrite      = overwrite_data,
+  overwrite      = ovrwrt_sv,
   verbose        = TRUE,
   time_stamp_fmt = NULL
 )
 
-# mean, std dev, var
+# 4. log trans mean, std dev, var
 save_csv(
   .data          = log_pig_stat,        
   save_location  = path_out,
   save_name      = "log_pig_summary_stat",
-  overwrite      = overwrite_data,
+  overwrite      = ovrwrt_sv,
   verbose        = TRUE,
   time_stamp_fmt = NULL
 )
 
-# chemtax season clusters
+# 5. FL Keys chemtax season clusters
 save_csv(
-  .data          = chemtax_seasons,        
+  .data          = fl_keys_chemtax_seasons,        
   save_location  = path_out,
   save_name      = "chemtax_season_clust",
-  overwrite      = overwrite_data,
+  overwrite      = ovrwrt_sv,
   verbose        = TRUE,
   time_stamp_fmt = NULL
 )
 
-rm(overwrite_data)
+rm(ovrwrt_sv)
 ```
-
