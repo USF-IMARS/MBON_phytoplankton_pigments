@@ -7,13 +7,15 @@ fig_width: 19
 fig_height: 9.7 
 ---
 
-# What is produced here:
+# 1. Summary of
 + setup 
   - load libraries and data
 
++ load-data
+  - load data to be used in this script
+
 : concentration-vs-time 
-  - one pigment through time for each region, colored by season, 
-  - TODO: generalize to all pigments 
+  - one pigment through time for each region, colored by season
 
 : scatter-plot-pigment-tchlor-a 
   - scatter plot of pigment x to Tchlor-a per region
@@ -25,81 +27,30 @@ fig_height: 9.7
 : chla-boxplot
   - boxplot for each region of chlor-a for each season
   
-: size-fractionation-boxplots
+: size-class-boxplots
   - boxplot for fraction of each size class, separeted by season and region
   - boxplot for concentration of each size class, separeted by season and region
   - boxplot for fraction of each size class
   
 : size-frac-stack-bar
-  - stacked bar charts separated by region with each season broken into average for stations
+  - stacked bar charts separated by region with each season broken into average 
+    for stations
   
-
 : size-frac-table
   - table for seasonal average fraction for each size class 
 
-+ chemtax-data
-  - data manipulation
-
-: plotting-chemtax-data
-  - hist plots for all PFTs for Florida Keys, colored by season
-
-+ chemtax-add_labels
-  - add labels to variable and add missing season for years
-  
-: chemtax-stacked-bar
-  - stacked bar chart for PFT fraction for each stations and separated by season
-  
-: chemtax-stacked-bar-year-season
-  - stacked bar chart for PFT fraction for each stations and separated by year and season
-
-: chemtax-stacked-bar-conc-year-season
-  - stacked bar chart for PFT concentration for each stations and separated by year and season
-  
-: pft-ts-loess
-  - plot time series for each PFT concentration
-  - separate by PFT and add GAM smoother
-  - facets: full time series, day of year avg, month avg
-  
-: diat-ts-plt
-  - plot time series for each PFT concentration
-  - separate by PFT and add GAM smoother
-  - facets: full time series, day of year avg, month avg
-  
-: diat-ts
-  - data manipulation to compine diatom grp, cyano grp and hapt grp
-  - avg conc by station, PFT and date time
-
-: plt-stn-16
-  - plot cyano and diat across time
-  
-+ diat-ts1
-  - TODO: needs work
-  - linear model
-    * dino = season * year
-  - kruskal wallis on conc and year grouped by PFT
-  
-+ manova
-  - dunn test on conc and season/year per PFT
-  - MANOVA on PFT community and season
-  
 : photoprotective-index
   - calc ppc/tchlor-a
   - plot PI index against time and separate regions
   - boxplot of PI for seaon and separate regions with jitter axis
   
-+ kruskal-dunn-pi
-  - kruskal wallis on PI per season
-  - dunn test 
-  - kruskal wallis on PI per year
-  - dunn test
++ anova-pi-season-year
+  - kruskal wallis and dunn test on:
+    - PI per season
+    - PI per year
   
 : photoprotective-photosynthetic
   - plot PPC vs PSC and add linear regression for each season and region
-  
-+ station-seasonally-yearly-avgs
-
-+ lat-lon-table
-  - lat lon table for stations
   
 
 # ---- Load Libraries ----
@@ -128,7 +79,7 @@ theme_set(theme_calc(base_size = 12, base_family = "serif"))
 ```
 
 
-```{r load-date, include=FALSE}
+```{r load-data, include=FALSE}
 # set season names and order
 szn <- c("Winter", "Spring", "Summer", "Autumn")
 
@@ -169,36 +120,55 @@ ggplot(
   theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
 ```
 
-```{r scatter-plot-pigment-tchlor-a}
-ggplot(
-  pig_dat,
-  aes(
-    x = tot_chl_a,
-    y = fuco,
-    fill = name_of_water_body,
-    shape = name_of_water_body
-  )
-) +
-  geom_abline(slope = 1) +
-  geom_point(alpha = 0.50) +
-  labs(
-    x = "Total Chlorophyll-a",
-    y = "Fucoxanthin",
-    fill = "Region",
-    shape = "Region"
-  ) +
-  scale_y_continuous(expand = c(0, 0), na.value = 0) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_shape_manual(values = c(21, 22, 24)) +
-  coord_cartesian(ylim = c(0, NA)) +
-  facet_grid(name_of_water_body ~ season, scales = "free") +
-  theme_bw(base_family = "serif", base_size = 12)
+```{r scatter-plot-pigment-tchlor-a, fig.height=7, fig.width=10}
+pig_dat %>%
+  pivot_longer(
+    data      = .,
+    cols      = c(tot_chl_b:tchl), 
+    names_to  = "pigment",
+    values_to = "conc",
+  ) %>%
+  nest(.by = pigment) %>%
+  mutate(
+    plt = map2(
+      .x = pigment,
+      .y = data,
+      \(.x, .df) {
+        ggplot(
+          .df,
+          aes(
+            x = tot_chl_a,
+            y = conc,
+            fill = name_of_water_body,
+            shape = name_of_water_body
+          )
+        ) +
+          geom_abline(slope = 1) +
+          geom_point(alpha = 0.50) +
+          labs(
+            x = "Total Chlorophyll-a",
+            y = .x,
+            fill = "Region",
+            shape = "Region"
+          ) +
+          scale_y_continuous(expand = c(0, 0), na.value = 0) +
+          scale_x_continuous(expand = c(0, 0)) +
+          scale_shape_manual(values = c(21, 22, 24)) +
+          coord_cartesian(ylim = c(0, NA)) +
+          facet_grid(name_of_water_body ~ season, scales = "free") +
+          theme_bw(base_family = "serif", base_size = 12)
+      }
+    )
+  ) %>%
+ pull(plt)
 ```
 
 # ---- Plot Histogram and Violin Plot ----
+
 Plot all pigments for each season
+
 ```{r hist-viol, fig.height=9.7, fig.width=30}
-pig_long <-
+plt_pig_hist_viola <-
   pig_dat %>%
   pivot_longer(
     cols      = tot_chl_a:tchl_a_tpg,
@@ -271,7 +241,7 @@ pig_long <-
   )
 
 # show subset of plots
-pig_long %>%
+plt_pig_hist_viola %>%
     slice_sample(n = 5) %T>%
     walk(.x = .$hist,
          .f = ~ print(.x))  %>% 
@@ -520,11 +490,10 @@ plt_stack$plt
 
 # save plots
 if (FALSE) {
-  plt_stack %>%
-    ungroup() %>%
+  plt_stack %$%
     walk2(
-      .x = .$name_of_water_body,
-      .y = .$plt,
+      .x = name_of_water_body,
+      .y = plt,
       .f = \(.x, .y) {
         .x %>%
           str_to_lower() %>%
@@ -587,11 +556,25 @@ frac_gt <-
 
 frac_gt
 
+# save table as word docx (editable) or html (better formatted)
 if (FALSE) {
+  # as word .docx
   frac_gt %>%
     gtsave(
       filename = here(
-        "data", "plots", Sys.Date(),
+        "data", "plots", "plot_pigment",
+        glue(
+          "fract_table",
+          "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.docx"
+        )
+      )
+    )
+  
+  # as .html  
+  frac_gt %>%
+    gtsave(
+      filename = here(
+        "data", "plots", "plot_pigment",
         glue(
           "fract_table",
           "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.html"
@@ -628,18 +611,28 @@ plt_pi <-
         shape = name_of_water_body)) +
   geom_point() +
   labs(color = "Season",
-       shape = "Water Body")
+       shape = "Water Body",
+       x = "Date",
+       y = "Photoprotective Index \n\n(PPC/Total Chlorophyll-a)") +
+# theme
+    theme(
+      axis.title.y     = element_markdown(),
+      # legend.position  = c(0.6, 0.05),
+      # legend.direction = "horizontal"
+          )
 
-plt_pi /
-(
-  plt_pi + 
-  facet_grid(name_of_water_body ~ .) +
-  guides(color = "none",
-         shape = "none")
- )
+plt_pi_all_water_body <- 
+  plt_pi /
+  (
+    plt_pi + 
+    facet_grid(name_of_water_body ~ .) +
+    guides(color = "none",
+           shape = "none")
+   )
+
 
 # with SeaBass calculation for PPC
-test2 <- 
+plt_pi_box_base <- 
   ggplot(
     pigm_pi, 
     aes(
@@ -656,34 +649,59 @@ test2 <-
     theme(legend.position = "none")
 
 # top plot
-(
- test2 +  
- geom_boxplot(aes( x = season, fill = season))
-) /
-# bottom plot separated by water body
-(
-  test2 + 
-  geom_boxplot(
-    aes(x    = name_of_water_body, 
-        fill = name_of_water_body)) +
-  geom_beeswarm(
-    aes(x     = name_of_water_body, 
-        fill  = name_of_water_body,
-        color = as.factor(year))) +
-  facet_grid( ~ season)
-)
+pi_box_seasonal_water_body <- 
+  (
+   plt_pi_box_base +  
+   geom_boxplot(aes( x = season, fill = season))
+  ) /
+  # bottom plot separated by water body
+  (
+    plt_pi_box_base + 
+    geom_boxplot(
+      aes(x    = name_of_water_body, 
+          fill = name_of_water_body)) +
+    geom_quasirandom(
+      aes(x     = name_of_water_body, 
+          fill  = name_of_water_body,
+          color = as.factor(year))) +
+    facet_grid( ~ season)
+  )
 
 
+# view plots
+plt_pi_all_water_body
+pi_box_seasonal_water_body
+
+
+# save plots
 if (FALSE) {
+  # ratio vs time
   save_plot(
     filename = here(
-      "data", "plots",
+      "data", "plots", "plot_pigment",
       glue(
-        "pi_bar",
+        "pi_ppc_chl_all_water_body",
         "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
       )
     ),
-    plot        = last_plot(),
+    plot        = plt_pi_all_water_body,
+    base_height = 6,
+    base_width  = 10,
+    dpi         = 600,
+    units       = "in",
+    device      = "jpeg"
+  )
+
+  # boxplot ppc vs season
+  save_plot(
+    filename = here(
+      "data", "plots", "plot_pigment",
+      glue(
+        "pi_box_ppc_chl_all_water_body",
+        "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
+      )
+    ),
+    plot        = pi_box_seasonal_water_body,
     base_height = 6,
     base_width  = 10,
     dpi         = 600,
@@ -692,33 +710,165 @@ if (FALSE) {
   )
 }
 ```
-## PI vs Season
-```{r kruskal-dunn-pi}
+## ANOVA PI vs Season
+
+- Kruskal-Wallis: 
+    - non-parametric 
+    - season and year
+    
+- Dunn's Test
+    - pairwise test
+    - bonferroni adjusted p-values
+    
+PI ~ Season
+PI ~ Year
+
+```{r anova-pi-season-year}
+# function to run ANOVA on pi and arbitrary category
+anova_func <- 
+  list(
+    kw = \(.df, category) { 
+      formulas <- formula(paste("pi ~ ", category)) 
+      kruskal_test(formulas, data = .df)
+    },
+    # Dunn's test - pairwise with adj
+    dunn = \(.df, category) {
+        formulas <- formula(paste("pi ~ ", category)) 
+        dunn_test( 
+          data = .df,
+          formula = formulas,
+          p.adjust.method = "bonferroni"
+        ) %>%
+          mutate(
+            p = num(p, digits = 3),
+            p.adj = num(p.adj, digits = 3)
+          ) %>%
+          arrange(desc(p.adj))
+      }
+)
+
+
 # season factor
-kruskal_test(pi ~ season, data = pigm_pi)
-dunn_test( # pairwise with adj
-  data = pigm_pi,
-  pi ~ season, 
-  p.adjust.method = "bonferroni") %>%
-  mutate(
-      p = num(p, digits = 3),
-      p.adj = num(p.adj, digits = 3)
-  ) %>%
-  arrange(desc(p.adj))            
+anova_func$kw(.df = pigm_pi, category = "season")
+anova_func$dunn(.df = pigm_pi, category = "season")
+
 
 # year factor
-kruskal_test(data = pigm_pi, pi ~ year)
-dunn_test( # pairwise with adj
-  pigm_pi,
-  pi ~ year, 
-  p.adjust.method = "bonferroni") %>%
+anova_func$kw(.df = pigm_pi, category = "year")
+anova_func$dunn(.df = pigm_pi, category = "year")
+
+# each region
+pigm_anova <- 
+  pigm_pi %>%
+  nest(.by = name_of_water_body) %>%
   mutate(
-    p = num(p, digits = 3),
-    p.adj = num(p.adj, digits = 3)
-  ) %>%
-  arrange(desc(p.adj))
+    # by season
+    season_kw =
+      map2(
+        data,
+        "season",
+        anova_func$kw
+      ),
+    season_dunn =
+      map2(
+        data,
+        "season",
+        anova_func$dunn
+      ),
+    
+    # by year
+    year_kw =
+      map2(
+        data,
+        "year",
+        anova_func$kw
+      ),
+    year_dunn =
+      map2(
+        data,
+        "year",
+        anova_func$dunn
+      )
+  )
+
+# season
+pigm_anova %>%
+  unnest(
+    c(season_kw, season_dunn),
+    names_sep = "_"
+  )
+
+# year
+pigm_anova %>%
+  unnest(
+    c(year_kw, year_dunn),
+    names_sep = "_"
+  )
+
 ```
 
+```{r plt-anova}
+shelf(ggstatsplot)
+
+ggbetweenstats(
+  data  = pigm_pi,
+  x     = season, 
+  y     = pi, 
+  xlab = "Season",
+  ylab = "PI",
+  title = "Season: all regions",
+  type  = "nonparametric"
+  )
+
+ggbetweenstats(
+  data  = pigm_pi,
+  x     = year, 
+  y     = pi, 
+  title = "Yearly: all regions",
+  xlab = "Year",
+  ylab = "PI",
+  type  = "nonparametric"
+  )
+
+
+pigm_pi %>%
+  nest(.by = name_of_water_body) %$%
+
+  map2(
+    name_of_water_body,
+    data,
+    (\(water_name, .df) {
+      ggbetweenstats(
+        data =  .df,
+        x = season,
+        y = pi,
+        title = glue("Season: {water_name}"),
+        xlab = "Season",
+        ylab = "PI",
+        type = "nonparametric"
+      ) %>%
+        print()
+
+      ggbetweenstats(
+        data = .df,
+        x = year,
+        y = pi,
+        title = glue("Yearly: {water_name}"),
+        xlab = "Year",
+        ylab = "PI",
+        type = "nonparametric"
+      )
+    })
+  )
+
+
+
+
+
+
+```
+
+## 
 
 ```{r photoprotective-photosynthetic, fig.height=15, fig.width=30}
 # TODO: separate plots by region 
@@ -825,6 +975,57 @@ stop()
 # ----- This may be better in another file
 # -----------------------------------------------------------------------------
 # TODO: move to another file
+
++ chemtax-data
+  - data manipulation
+
+: plotting-chemtax-data
+  - hist plots for all PFTs for Florida Keys, colored by season
+
++ chemtax-add_labels
+  - add labels to variable and add missing season for years
+  
+: chemtax-stacked-bar
+  - stacked bar chart for PFT fraction for each stations and separated by season
+  
+: chemtax-stacked-bar-year-season
+  - stacked bar chart for PFT fraction for each stations and separated by year and season
+
+: chemtax-stacked-bar-conc-year-season
+  - stacked bar chart for PFT concentration for each stations and separated by year and season
+  
+: pft-ts-loess
+  - plot time series for each PFT concentration
+  - separate by PFT and add GAM smoother
+  - facets: full time series, day of year avg, month avg
+  
+: diat-ts-plt
+  - plot time series for each PFT concentration
+  - separate by PFT and add GAM smoother
+  - facets: full time series, day of year avg, month avg
+  
+: diat-ts
+  - data manipulation to compine diatom grp, cyano grp and hapt grp
+  - avg conc by station, PFT and date time
+
+: plt-stn-16
+  - plot cyano and diat across time
+  
++ diat-ts1
+  - TODO: needs work
+  - linear model
+    * dino = season * year
+  - kruskal wallis on conc and year grouped by PFT
+
++ manova
+  - dunn test on conc and season/year per PFT
+  - MANOVA on PFT community and season
+  
++ station-seasonally-yearly-avgs
+
++ lat-lon-table
+  - lat lon table for stations
+
 
 ```{r chemtax-data}
 #season_year order vector
