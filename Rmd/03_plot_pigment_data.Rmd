@@ -170,25 +170,29 @@ ggplot(
 ```
 
 ```{r scatter-plot-pigment-tchlor-a}
-ggplot(pig_dat, 
-       aes(x = tot_chl_a, 
-           y = fuco,
-           fill = name_of_water_body,
-           shape = name_of_water_body)) +
-    geom_abline(slope = 1) +
-    geom_point(alpha = 0.50) +
-    labs(
-        x = "Total Chlorophyll-a",
-        y = "Fucoxanthin",
-        fill = "Region",
-        shape = "Region"
-    ) +
-    scale_y_continuous(expand = c(0, 0), na.value = 0) +
-    scale_x_continuous(expand = c(0, 0)) +
-    scale_shape_manual(values = c(21, 22, 24)) +
-    coord_cartesian(ylim = c(0, NA)) +
-    facet_grid(name_of_water_body ~ season, scales = "free") +
-    theme_bw(base_family = "serif", base_size = 12)
+ggplot(
+  pig_dat,
+  aes(
+    x = tot_chl_a,
+    y = fuco,
+    fill = name_of_water_body,
+    shape = name_of_water_body
+  )
+) +
+  geom_abline(slope = 1) +
+  geom_point(alpha = 0.50) +
+  labs(
+    x = "Total Chlorophyll-a",
+    y = "Fucoxanthin",
+    fill = "Region",
+    shape = "Region"
+  ) +
+  scale_y_continuous(expand = c(0, 0), na.value = 0) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_shape_manual(values = c(21, 22, 24)) +
+  coord_cartesian(ylim = c(0, NA)) +
+  facet_grid(name_of_water_body ~ season, scales = "free") +
+  theme_bw(base_family = "serif", base_size = 12)
 ```
 
 # ---- Plot Histogram and Violin Plot ----
