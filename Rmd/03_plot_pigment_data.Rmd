@@ -7,7 +7,8 @@ fig_width: 19
 fig_height: 9.7 
 ---
 
-# 1. Summary of
+# 1. Summary:
+
 + setup 
   - load libraries and data
 
@@ -53,7 +54,10 @@ fig_height: 9.7
   - plot PPC vs PSC and add linear regression for each season and region
   
 
-# ---- Load Libraries ----
+# 2.0 ---- Load Libraries ----
+
+Handful of packages used in this script
+
 ```{r setup, include=FALSE}
 librarian::shelf(
     librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -78,6 +82,9 @@ knitr::opts_chunk$set(fig.width = 19, fig.height = 9.7)
 theme_set(theme_calc(base_size = 12, base_family = "serif"))
 ```
 
+## 2.1 Load Dataset
+
+Dataset includes metadata, pigment concentrations, and size class calculations
 
 ```{r load-data, include=FALSE}
 # set season names and order
@@ -90,6 +97,13 @@ pig_dat <-
   mutate(season = fct(season, levels = szn)) %T>%
   print()
 ```
+
+
+# 3.0 ---- Plotting ----
+
+## 3.1 Plot Concentration of Pigments vs Time
+
+All pigments plotted as a time series separated by region
 
 ```{r concentration-vs-time, fig.height=15, fig.width=30}
 ggplot(
@@ -119,6 +133,10 @@ ggplot(
   ) +
   theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
 ```
+
+## 3.2 Pigment Concentration vs Total Chlorophyll-a 
+
+All pigments vs chlor-a by season and region
 
 ```{r scatter-plot-pigment-tchlor-a, fig.height=7, fig.width=10}
 pig_dat %>%
@@ -163,9 +181,13 @@ pig_dat %>%
  pull(plt)
 ```
 
-# ---- Plot Histogram and Violin Plot ----
 
-Plot all pigments for each season
+## 3.3 Plot Histogram and Violin Plot
+
+Plot all pigments for each season as histogram and violin (density) plots.
+
+The histograms are separated by year, season and region. 
+The violin plots are separated by season and region
 
 ```{r hist-viol, fig.height=9.7, fig.width=30}
 plt_pig_hist_viola <-
@@ -202,7 +224,6 @@ plt_pig_hist_viola <-
         ) +
         scale_y_continuous(expand = c(0, 0)) +
         coord_cartesian(xlim = c(0, NA)) +
-        # facet_wrap(facet = ~ name_of_water_body) +
         facet_grid(
           name_of_water_body ~ as.character(year) + season,
           scales = "free_x"
@@ -248,6 +269,10 @@ plt_pig_hist_viola %>%
     walk(.x = .$viol,
          .f = ~ print(.x)) 
 ```
+
+## 3.4 Boxplot of Total Chlorophyll-a vs Season
+
+Box plots per region and season for chlor-a
 
 ```{r chla-boxplot}
 chl_a_box <-
@@ -330,7 +355,16 @@ if (FALSE) {
 }
 ```
 
-## Size Classes using Diagnostic Biomarker
+## 3.5 Size Classes using Diagnostic Biomarker
+
+Boxplots for each region and season of biomarkers for size classes
+- micro (> 20um)
+- nano (2 - 20um)
+- pico (< 2um)
+
+They are plotted by absolute value and percentages of the total
+
+
 ```{r size-class-boxplots}
 shelf(patchwork)
 
@@ -423,6 +457,13 @@ size_frac_plt$plt[[1]] /
 unshelf(patchwork)
 ```
 
+## 3.5.1 Size Classes for Each Station
+
+Stacked bar charts for each station for each region as percentages.
+Florida Keys - plotted West - East
+Southwest and West Florida Shelf - plotted 
+
+
 ```{r size-frac-stack-bar}
 plt_stack <-
   pig_dat %>%
@@ -436,14 +477,17 @@ plt_stack <-
     .x = data,
     .y = name_of_water_body,
     function(.x, .y) {
+      factor_order <-
+        ifelse(
+          str_detect(.y, "(?i)southwest"),
+          expression(fct_reorder(station, lat)),
+          expression(fct_reorder(station, lon))
+        )
+
       .x %>%
         mutate(
           water_name = .y,
-          station    = if_else(
-            str_detect(water_name, "(?i)keys"),
-            fct_reorder(station, lon),
-            fct_reorder(station, lat)
-          )
+          station = eval(factor_order)
         ) %>%
         ggplot(aes(
           x    = station,
@@ -454,7 +498,6 @@ plt_stack <-
           position = "fill",
           stat     = "identity",
           na.rm    = TRUE,
-          # position = position_dodge(width = 0.9)
         ) +
 
         # labels
@@ -466,7 +509,7 @@ plt_stack <-
         ) +
         scale_fill_brewer(
           palette = "Dark2",
-          labels  = c(
+          labels = c(
             "*f*<sub>micro</sub> (>20 &mu;m)",
             "*f*<sub>nano</sub> (2 - 20 &mu;m)",
             "*f*<sub>pico</sub> (<2 &mu;m)"
@@ -514,6 +557,22 @@ if (FALSE) {
     )
 }
 
+# 
+# pig_dat %>%
+#   mutate(
+#       .by = name_of_water_body,
+#     .keep = "used",
+#     lat, lon, name_of_water_body,
+#     station,
+#     
+#     rank = if_else(
+#         str_detect(name_of_water_body, "(?i)keys"),
+#         fct_reorder(station, -lon),
+#         fct_reorder(station, lat)
+#     ),
+#     rank = as.numeric(rank)
+#   ) %>%
+# arrange(name_of_water_body, rank)
 ```
 TODO: add absolute coverage
 ```{r size-frac-table}
