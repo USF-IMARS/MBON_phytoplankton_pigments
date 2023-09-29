@@ -557,22 +557,6 @@ if (FALSE) {
     )
 }
 
-# 
-# pig_dat %>%
-#   mutate(
-#       .by = name_of_water_body,
-#     .keep = "used",
-#     lat, lon, name_of_water_body,
-#     station,
-#     
-#     rank = if_else(
-#         str_detect(name_of_water_body, "(?i)keys"),
-#         fct_reorder(station, -lon),
-#         fct_reorder(station, lat)
-#     ),
-#     rank = as.numeric(rank)
-#   ) %>%
-# arrange(name_of_water_body, rank)
 ```
 TODO: add absolute coverage
 ```{r size-frac-table}
