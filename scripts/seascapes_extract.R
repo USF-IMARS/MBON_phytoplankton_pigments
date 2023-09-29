@@ -194,7 +194,12 @@ extract_seascapes <- function(filename,
         # broom # optional
         
         # additional
-        tabularaster, raster, sp, geosphere,
+        tabularaster, 
+        
+        # raster, sp, 
+        terra, sf,
+        
+        geosphere,
         measurements
     )
     
