@@ -813,7 +813,7 @@ rm(val)
 
 
 
-# ---- 6.0 Save data ----
+# ---- 6.0 Save Data ----
 
 1A. Combined pigment data - selected columns
 1B. Combined pigment data - all columns
