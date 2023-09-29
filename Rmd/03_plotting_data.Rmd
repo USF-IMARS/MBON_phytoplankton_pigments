@@ -136,15 +136,7 @@ szn <- c("Winter", "Spring", "Summer", "Autumn")
 pig_dat <-
   here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
   read_csv(show_col_types = FALSE) %>%
-  mutate(season = fct(season, levels = szn)) %>%
-  # bad sample, contaminated with blue ink
-  filter(!str_detect(sample, "WS18120_103"))  %>%
-  select(
-      -c(pi, volfilt, filter_type:filter_storage_before_shipment_to_gfsc, 
-         comments:other, 
-         collected_with_positive_pressure_or_vaccuum:vx_ml)
-  )  %>%
-  relocate(water_type, .after = name_of_water_body) %T>%
+  mutate(season = fct(season, levels = szn)) %T>%
   print()
 ```
 
@@ -281,11 +273,6 @@ pig_long %>%
          .f = ~ print(.x))  %>% 
     walk(.x = .$viol,
          .f = ~ print(.x)) 
-
-pig_long %>%
-    # slice_sample(n = 5) %T>%
-    walk(.x = .$hist,
-         .f = ~ print(.x)) 
 ```
 
 ```{r chla-boxplot}
@@ -344,18 +331,18 @@ chl_a_box$plt
 
 # Save Chl-a Boxplot
 if (FALSE) {
-  chl_a_box %>%
+  chl_a_box %$%
     walk2(
-      .x = .$name_of_water_body,
-      .y = .$plt,
-      .f = (\(.x)
+      .x = name_of_water_body,
+      .y = plt,
+      .f = \(.x, .y) {
       .x %>%
         str_to_lower() %>%
         str_replace_all("\\s", "_") %>%
         glue(., "_chla{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
         save_plot(
           filename    = .,
-          path        = here("data", "plots", Sys.Date()),
+          path        = here("data", "plots", "plotting_pigment"),
           plot        = .y,
           base_height = 9.7,
           base_width  = 19,
@@ -363,7 +350,8 @@ if (FALSE) {
           units       = "in",
           device      = "jpeg",
           bg          = "white"
-        ))
+        )
+      }
     )
 }
 ```
@@ -533,21 +521,23 @@ if (FALSE) {
     walk2(
       .x = .$name_of_water_body,
       .y = .$plt,
-      .f = ~ .x %>%
-        str_to_lower() %>%
-        str_replace_all(" ", "_") %>%
-        glue(., "_frac_bar{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
-        save_plot(
-          filename    = .,
-          path        = here("data", "plots", Sys.Date()),
-          plot        = .y,
-          base_height = 9.7,
-          base_width  = 19,
-          dpi         = 600,
-          units       = "in",
-          device      = "jpeg",
-          bg          = "white"
-        )
+      .f = \(.x, .y) {
+        .x %>%
+          str_to_lower() %>%
+          str_replace_all(" ", "_") %>%
+          glue(., "_frac_bar{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
+          save_plot(
+            filename    = .,
+            path        = here("data", "plots", "plot_pigment"),
+            plot        = .y,
+            base_height = 9.7,
+            base_width  = 19,
+            dpi         = 600,
+            units       = "in",
+            device      = "jpeg",
+            bg          = "white"
+          )
+      }
     )
 }
 
