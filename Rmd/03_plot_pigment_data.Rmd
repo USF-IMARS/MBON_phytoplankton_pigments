@@ -7,7 +7,7 @@ fig_width: 19
 fig_height: 9.7 
 ---
 
-# 1. Summary:
+# 1.0 ---- Summary of Document ----
 
 + setup 
   - load libraries and data
@@ -54,7 +54,9 @@ fig_height: 9.7
   - plot PPC vs PSC and add linear regression for each season and region
   
 
-# 2.0 ---- Load Libraries ----
+# 2.0 ---- Setup ----
+
+## 2.1 Load Libraries
 
 Handful of packages used in this script
 
@@ -82,11 +84,13 @@ knitr::opts_chunk$set(fig.width = 19, fig.height = 9.7)
 theme_set(theme_calc(base_size = 12, base_family = "serif"))
 ```
 
-## 2.1 Load Dataset
+## 2.2 Load Dataset
 
 Dataset includes metadata, pigment concentrations, and size class calculations
 
 ```{r load-data, include=FALSE}
+dir_plt_save <- here("data", "plots", "plot_pigment")
+
 # set season names and order
 szn <- c("Winter", "Spring", "Summer", "Autumn")
 
@@ -101,7 +105,7 @@ pig_dat <-
 
 # 3.0 ---- Plotting ----
 
-## 3.1 Plot Concentration of Pigments vs Time
+## 3.1 Scatter Plot Concentration of Pigments vs Time
 
 All pigments plotted as a time series separated by region
 
@@ -134,7 +138,7 @@ ggplot(
   theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
 ```
 
-## 3.2 Pigment Concentration vs Total Chlorophyll-a 
+## 3.2 Scatter Plot of Pigment Concentration vs Total Chlorophyll-a 
 
 All pigments vs chlor-a by season and region
 
@@ -182,7 +186,7 @@ pig_dat %>%
 ```
 
 
-## 3.3 Plot Histogram and Violin Plot
+## 3.3 Histogram and Violin Plots for Each Pigment
 
 Plot all pigments for each season as histogram and violin (density) plots.
 
@@ -334,14 +338,14 @@ if (FALSE) {
     walk2(
       .x = name_of_water_body,
       .y = plt,
-      .f = \(.x, .y) {
+      \(.x, .y) {
       .x %>%
         str_to_lower() %>%
         str_replace_all("\\s", "_") %>%
         glue(., "_chla{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
         save_plot(
           filename    = .,
-          path        = here("data", "plots", "plotting_pigment"),
+          path        = dir_plt_save,
           plot        = .y,
           base_height = 9.7,
           base_width  = 19,
@@ -355,9 +359,10 @@ if (FALSE) {
 }
 ```
 
-## 3.5 Size Classes using Diagnostic Biomarker
+# 4.0 ---- Size Classes using Diagnostic Biomarker ----
 
-Boxplots for each region and season of biomarkers for size classes
+
+## 4.1 Boxplots for Each Region and Season of Biomarkers for Each Size Classes
 - micro (> 20um)
 - nano (2 - 20um)
 - pico (< 2um)
@@ -457,7 +462,7 @@ size_frac_plt$plt[[1]] /
 unshelf(patchwork)
 ```
 
-## 3.5.1 Size Classes for Each Station
+## 4.2 Bar Chart for Size Classes for Each Station
 
 Stacked bar charts for each station for each region as percentages.
 Florida Keys - plotted West - East
@@ -537,14 +542,14 @@ if (FALSE) {
     walk2(
       .x = name_of_water_body,
       .y = plt,
-      .f = \(.x, .y) {
+      \(.x, .y) {
         .x %>%
           str_to_lower() %>%
           str_replace_all(" ", "_") %>%
           glue(., "_frac_bar{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
           save_plot(
             filename    = .,
-            path        = here("data", "plots", "plot_pigment"),
+            path        = dir_plt_save,
             plot        = .y,
             base_height = 9.7,
             base_width  = 19,
@@ -558,7 +563,22 @@ if (FALSE) {
 }
 
 ```
-TODO: add absolute coverage
+
+## 4.3 Table for Regional Size Classes Fractions for Each Season
+
+Calculations for each size class and season:
+- Average
+- Standard deviation  
+
+Table creation:
+- use `gt`
+- exported as `.html` and `.docx`
+
+
+**NOTE**: 
+when saving as word doc, the formatting **will not** adhere to what is expected 
+and will need manual editing to use.
+
 ```{r size-frac-table}
 frac_gt <-
   pig_dat %>%
@@ -568,32 +588,55 @@ frac_gt <-
     values_to = "frac"
   ) %>%
   summarise(
-    across(
-      .cols = frac,
-      .fns  = list(avg = mean, sd = sd),
-    ),
-    .by = c(season, size_frac)
+    .by = c(name_of_water_body, season, size_frac),
+    frac_avg = (mean(frac, na.rm = TRUE) * 100) %>% round(., 1),
+    frac_sd = (sd(frac, na.rm = TRUE) * 100) %>% round(., 1)
   ) %>%
-  mutate(
-    .keep = "none",
-    season,
-    size_frac,
-    f = glue::glue("{round(frac_avg, 2)}\u00B1{round(frac_sd, 2)}"),
+  pivot_wider(
+    names_from = "size_frac",
+    values_from = c(frac_avg, frac_sd)
   ) %>%
-  pivot_wider(names_from = "size_frac", values_from = "f") %>%
+  arrange(name_of_water_body, season) %>%
   gt(
     rowname_col   = "season",
-    groupname_col = NULL
+    groupname_col = "name_of_water_body"
+  ) %>%
+  cols_merge(
+    contains("micro"),
+    pattern = "{1} \u00B1 {2} %"
+  ) %>%
+  cols_merge(
+    contains("nano"),
+    pattern = "{1} \u00B1 {2} %"
+  ) %>%
+  cols_merge(
+    contains("pico"),
+    pattern = "{1} \u00B1 {2} %"
   ) %>%
   cols_label(
-    f_micro = md("***f*<sub>micro</sub>** (>20 &mu;m)"),
-    f_nano  = md("***f*<sub>nano</sub>** (2 - 20 &mu;m)"),
-    f_pico  = md("***f*<sub>pico</sub>** (<2 &mu;m)")
+    season = "Season",
+    contains("micro") ~ md("***f*<sub>micro</sub>** (>20 &mu;m)"),
+    contains("nano") ~ md("***f*<sub>nano</sub>** (2 - 20 &mu;m)"),
+    contains("pico") ~ md("***f*<sub>pico</sub>** (<2 &mu;m)")
   ) %>%
   tab_options(
-    table_body.hlines.width = 0,
-    table_body.vlines.width = 0,
-    stub.border.width = 0
+    table_body.hlines.width      = 0,
+    table_body.vlines.width      = 0,
+    stub.border.width            = 0,
+    row_group.as_column          = TRUE,
+    row_group.padding.horizontal = 20,
+    row_group.padding            = 200,
+    stub_row_group.font.weight   = "bold",
+    stub_row_group.border.width  = 0,
+    row_group.border.top.width   = px(5)
+  ) %>%
+  cols_align("center") %>%
+  tab_style(
+    cell_text(
+      v_align = "middle",
+      align   = "center"
+    ),
+    locations = cells_row_groups()
   ) %>%
   opt_table_font("serif")
 
@@ -604,30 +647,34 @@ if (FALSE) {
   # as word .docx
   frac_gt %>%
     gtsave(
-      filename = here(
-        "data", "plots", "plot_pigment",
-        glue(
-          "fract_table",
-          "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.docx"
+      filename =
+        here(
+          dir_plt_save,
+          glue(
+            "fract_table",
+            "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.rtf"
+          )
         )
-      )
     )
-  
-  # as .html  
+
+  # as .html
   frac_gt %>%
     gtsave(
-      filename = here(
-        "data", "plots", "plot_pigment",
-        glue(
-          "fract_table",
-          "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.html"
+      filename =
+        here(
+          dir_plt_save,
+          glue(
+            "fract_table",
+            "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.html"
+          )
         )
-      )
     )
 }
 ```
 
-# Photoprotective Index
+# 5.0 ---- Photoprotective Index ----
+
+## 5.1 PI Calculation
 
 $$
 \begin{align}
@@ -639,6 +686,12 @@ $$
 $$
 When PI < 1, means phyto are not being photoinhibited (?) because the total 
 chlorophyll-a is higher, but if PI > 1, then photoinhibited
+
+
+## 5.2 Scatter and Box Plots: PI:Chl-a Plots
+
+- Scatter: Time vs PI 
+- Box: Season vs PI and Season + Region vs PI
 
 TODO: correlate temperature with PPC and maybe PI ratio?
 ```{r photoprotective-index}
@@ -714,19 +767,18 @@ pi_box_seasonal_water_body <-
 # view plots
 plt_pi_all_water_body
 pi_box_seasonal_water_body
-
-
 # save plots
 if (FALSE) {
   # ratio vs time
   save_plot(
-    filename = here(
-      "data", "plots", "plot_pigment",
-      glue(
-        "pi_ppc_chl_all_water_body",
-        "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
-      )
-    ),
+    filename =
+      here(
+        dir_plt_save,
+        glue(
+          "pi_ppc_chl_all_water_body",
+          "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
+        )
+      ),
     plot        = plt_pi_all_water_body,
     base_height = 6,
     base_width  = 10,
@@ -737,13 +789,14 @@ if (FALSE) {
 
   # boxplot ppc vs season
   save_plot(
-    filename = here(
-      "data", "plots", "plot_pigment",
-      glue(
-        "pi_box_ppc_chl_all_water_body",
-        "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
-      )
-    ),
+    filename =
+      here(
+        dir_plt_save,
+        glue(
+          "pi_box_ppc_chl_all_water_body",
+          "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
+        )
+      ),
     plot        = pi_box_seasonal_water_body,
     base_height = 6,
     base_width  = 10,
@@ -753,7 +806,8 @@ if (FALSE) {
   )
 }
 ```
-## ANOVA PI vs Season
+
+## 5.3 ANOVA PI vs Season
 
 - Kruskal-Wallis: 
     - non-parametric 
@@ -850,6 +904,15 @@ pigm_anova %>%
 
 ```
 
+## 5.4 Statsplot of ANOVA
+
+Same as 5.3, but using `ggstatsplot` to show differences
+
+- PI vs season
+- PI vs year
+- PI vs season + region
+- PI vs year + region
+
 ```{r plt-anova}
 shelf(ggstatsplot)
 
@@ -911,7 +974,13 @@ pigm_pi %>%
 
 ```
 
-## 
+# 6.0 ---- PPC:PSC Ratio ----
+
+## 6.1 Scatter Plots with Linear Regression
+
+PPC vs PSC for region and season
+
+Linear regression for year factor and overall regression for region and season
 
 ```{r photoprotective-photosynthetic, fig.height=15, fig.width=30}
 # TODO: separate plots by region 
@@ -967,7 +1036,7 @@ pigm_pi %>%
 if (FALSE) {
   save_plot(
     filename = here(
-      "data", "plots",
+      dir_plt_save,
       glue(
         "psc_vs_ppc",
         "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
