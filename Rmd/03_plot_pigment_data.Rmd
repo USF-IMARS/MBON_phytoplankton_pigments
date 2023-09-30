@@ -86,7 +86,10 @@ theme_set(theme_calc(base_size = 12, base_family = "serif"))
 
 ## 2.2 Load Dataset
 
-Dataset includes metadata, pigment concentrations, and size class calculations
+Dataset includes 
+- metadata 
+- pigment concentrations
+- size class calculations
 
 ```{r load-data, include=FALSE}
 dir_plt_save <- here("data", "plots", "plot_pigment")
