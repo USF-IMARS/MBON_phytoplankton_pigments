@@ -4,8 +4,14 @@ author: "Anna Finch"
 date: '2022-06-24'
 output: html_document
 ---
-# 1.0 ---- Setup ----
-## 1.1 Load libraries
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+## 2.1 Load libraries
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
@@ -25,6 +31,90 @@ conflicts_prefer(
   dplyr::select()
     )
 
+source(here("scripts", "misc_functions.R"))
+```
+
+
+## 2.2 File Paths for CHEMTAX Data and Setup Variables
+
+5 datasets includes:
+- Seasonal clusters for each run of CHEMTAX
+  - Winter
+  - Spring
+  - Summer
+  - Autumn
+  
+- Overall averages for all clusters
+
+```{r file-paths-chemtax-data, include=FALSE}
+# set save directory
+dir_plt_save  <- here("data", "plots", "chemtax_analysis")
+dir_data_save <- here("data", "processed", "chemtax_analysis")
+
+dir_create(here(dir_plt_save, "boxplots"))
+
+# set season names and order
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- CHEMTAX file paths
+file_chem <-
+  here("data", "raw") %>%
+  dir_ls(
+    recurse = TRUE,
+    regexp  = "mbonpig.*\\.xls$") %>% 
+  str_sort() %>%
+  tibble(files = .) %T>% print()
+
+
+# ---- load metadata
+meta_data <-
+  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  select(hplc_gsfc_id:lat) %>%
+  mutate(season = fct(season, szn)) %>%
+  filter(
+    str_detect(name_of_water_body, "Florida Keys")
+    # sample was missed in orignial analysis
+    & !str_detect(sample, "WS18008_43")
+    ) %T>% print()
+
+# ---- load average seasonal CHEMTAX data
+# *not used beyond first plot*
+# average each season
+cmtx_all <-
+  file_chem %>%
+  filter(str_detect(files, "cluster")) %>%
+  mutate(
+    filename = basename(files) %>% tools::file_path_sans_ext(),
+    ranges   = c("D177:N178", "D273:N274", "D241:N242", "D305:N306"),
+    cluster  = str_extract(filename, "\\d$"),
+    season   = fct_inorder(szn),
+    data     = map2(
+      files, ranges,
+      ~ read_xls(
+        path  = .x,
+        sheet = "Notes",
+        range = .y,
+        .name_repair = janitor::make_clean_names
+      )
+    )
+  ) %>%
+  select(-c(1:ranges)) %>%
+  unnest(data) %T>% print()
+
+
+# ---- load merged cluster CHEMTAX data 
+cmtx_avgs_raw <-
+  pull(file_chem, files)[5] %>%
+  readxl::read_xls(
+    .,
+    sheet = "Avgs",
+    .name_repair = janitor::make_clean_names
+  ) %>%
+  filter(!str_detect(sample_id, "WS19210-59")) %T>% print()
+
+
+# ---- phyto full names
 phyto_name <-
   tibble(
     names = c(
@@ -33,19 +123,22 @@ phyto_name <-
       "Dinoflagellates", "Haptophytes 6", "Haptophytes 8",
       "Prasinophytes"
     )
+  ) %>%
+  bind_cols(shrt = names(cmtx_all)[-c(1:3)]) %>%
+    
+  # add rows for combined name
+  add_row(
+    shrt  = c("cyano", "diat", "hapt"),
+    names = c("Cyanobacteria", "Diatom", "Haptophyte")
   )
-
-file_chem <-
-  here("data", "raw") %>%
-  dir_ls(
-    recurse = TRUE,
-    regexp  = "mbonpig.*\\.xls$") %>% 
-  str_sort() %>%
-  tibble(files = .)
 ```
 
-## 1.2 Custom Plotting Functions 
-```{r functions}
+
+## 2.3 Line and Box Plot Plotting Functions 
+
+Default Line Plot and Box Plots
+
+```{r functions-line-box}
 # ---- line plot
 line_plt <- function(.dat, .var, .title) {
     
@@ -148,46 +241,11 @@ box_plt <- function(.dat, .var, .title) {
 ```
 
 
-# 2.0 ---- Average Plot (1 Value per PFT per Season) ----
-
-## 2.1 Load Average Phytoplankton Concentrations from CHEMTAX 
-
-This takes each season and averages them together.
-
-```{r load-avg-phyto-data}
-cmtx_all <-
-  file_chem %>%
-  filter(str_detect(files, "cluster")) %>%
-  mutate(
-    filename = basename(files) %>% tools::file_path_sans_ext(),
-    ranges = c("D177:N178", "D273:N274", "D241:N242", "D305:N306"),
-    cluster = str_trunc(filename, 1, "left", ellipsis = ""),
-    season = fct_inorder(c("Winter", "Spring", "Summer", "Autumn")),
-    data = map2(
-      files, ranges,
-      ~ read_xls(
-        path  = .x,
-        sheet = 2,
-        range = .y,
-        .name_repair = janitor::make_clean_names
-      )
-    )
-  ) %>%
-  select(-c(1:ranges)) %>%
-  unnest(data)
-
-# ---- phyto full names
-phyto_name <- 
-    phyto_name %>%
-    bind_cols(shrt = names(cmtx_all)[-c(1:3)]) %>%
-    # add rows for combined name
-    add_row(shrt  = c("cyano", "diat", "hapt"),
-            names = c("Cyanobacteria", "Diatom", "Haptophyte"))
-```
-
-## 2.2 Plot: Average Per Season per PFT (Line)
+# 3.0 ---- Line Plot: Average Seasonal PFT vs Season ----
 
 Not super useful
+
+Average PFT in concentration of total chlorophyll-a (mg m^-3)
 
 ```{r line-plt}
 cmtx_all %>%
@@ -212,29 +270,12 @@ cmtx_all %>%
   )
 ```
 
+# 4.0 ---- Box Plots ----
 
-
-# 3.0 ---- Box Plots ----
-
-## 3.1 Load All Phytoplankton Concentrations
+## 4.1 Load All Phytoplankton Concentrations
 
 ```{r load-comb-data}
-cmtx_avgs_raw <-
-  pull(file_chem, files)[5] %>%
-  readxl::read_xls(
-    .,
-    sheet = 1,
-    .name_repair = janitor::make_clean_names
-  )
-
-meta_data <-
-  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
-  read_csv(show_col_types = FALSE) %>%
-  select(hplc_gsfc_id:lat) %>%
-  mutate(season = fct(season, c("Winter", "Spring", "Summer", "Autumn"))) %>%
-  filter(name_of_water_body == "Florida Keys")
-
-
+# ---- join metadata and chemtax data
 cmtx_avgs <-
   full_join(
     meta_data,
@@ -257,41 +298,51 @@ cmtx_avgs_no_dupes <-
   distinct(date_time_utc, station, depth, .keep_all = TRUE)
 
 # ---- save chemtax data with metadata
-if (
-  !file_exists(here("data", "processed", "chemtax_w_meta.csv"))
-  | !file_exists(here("data", "processed", "chemtax_w_meta_rm_dup.csv"))
-  ) {
-  cmtx_avgs <- 
-    cmtx_avgs %>%
-    pivot_longer(
-      cols      = chloro:pras,
-      names_to  = "phyto",
-      values_to = "conc"
-    ) %>%
-    left_join(phyto_name, by = c("phyto" = "shrt"))
-
-  write_csv(
-    cmtx_avgs,
-    here("data", "processed", "chemtax_w_meta.csv")
-  )
-
-  write_csv(
-    cmtx_avgs_no_dupes,
-    here("data", "processed", "chemtax_w_meta_rm_dup.csv")
-  )
-} else {
-  cli::cli_alert_info(c(
-    "Skipping saving of ",
-    "{.file chemtax_with_metadata.csv} ",
-    "because already exists!"
-  ))
-}
+# if (
+#   !file_exists(here(dir_data_save, "chemtax_w_meta.csv"))
+#   | !file_exists(here(dir_data_save, "chemtax_w_meta_rm_dup.csv"))
+#   ) {
+#   
+#   cmtx_avgs <-
+#     cmtx_avgs %>%
+#     pivot_longer(
+#       cols      = chloro:pras,
+#       names_to  = "phyto",
+#       values_to = "conc"
+#     ) %>%
+#     left_join(phyto_name, by = c("phyto" = "shrt"))
+# 
+#   save_csv(
+#     .data          = cmtx_avgs,        
+#     save_location  = dir_data_save,
+#     save_name      = "chemtax_w_meta",
+#     overwrite      = FALSE,
+#     verbose        = TRUE,
+#     time_stamp_fmt = NULL
+#     )
+# 
+#   save_csv(
+#     .data          = cmtx_avgs_no_dupes,        
+#     save_location  = dir_data_save,
+#     save_name      = "chemtax_w_meta_rm_dup",
+#     overwrite      = FALSE,
+#     verbose        = TRUE,
+#     time_stamp_fmt = NULL
+#     )
+#   
+# } else {
+#   cli::cli_alert_info(c(
+#     "Skipping saving of ",
+#     "{.file chemtax_with_metadata.csv} ",
+#     "because already exists!"
+#   ))
+# }
 
 cmtx_avgs <-
   cmtx_avgs_no_dupes %>%
   pivot_longer(
-    cols = chloro:pras,
-    names_to = "phyto",
+    cols      = chloro:pras,
+    names_to  = "phyto",
     values_to = "conc"
   ) %>%
   left_join(phyto_name, by = c("phyto" = "shrt"))
@@ -301,7 +352,8 @@ cmtx_avgs_w <- cmtx_avgs_no_dupes
 rm(file_chem, meta_data, cmtx_avgs_raw, cmtx_avgs_no_dupes)
 ```
 
-## 3.2 Plot: Individuals for Each PFT per Season (Box)
+## 4.2 Box Plot: Individuals for Each PFT per Season
+
 ```{r boxplots, fig.height=15, fig.width=20}
 # ---- avg season line plots
 cmtx_avgs_plt <-
@@ -320,12 +372,13 @@ cmtx_avgs_plt <-
   )
 
 cmtx_avgs_plt$plt
+
 ```
 
-# 4.0 ---- PFT multi-plots ----
+# 5.0 ---- PFT multi-plots ----
 
 
-## 4.1 Plot: FTs with a more dynamic range of values (Box)
+## 5.1 Box Plot: Larger Dynamic Range PFTs
 
 
 ```{r box-lg-dynm, fig.height=15, fig.width=20}
@@ -362,7 +415,9 @@ box_lg <-
 box_lg
 ```
 
-## 4.2 Plot: PFTs with Greater Dynamic Range (Box)
+## 5.2 Box Plot: Smaller Dynamic Ranged PFTs
+
+
 ```{r box-sm-dynm, fig.height=15, fig.width=20}
 box_sm <-
   cmtx_avgs %>%
@@ -400,11 +455,13 @@ box_sm <-
 box_sm
 ```
 
-## 4.3 Save: Large and Small Range Boxplots
+## 5.3 Save: Large and Small Range Boxplots
+
 ```{r save-plt}
+# save arguments
 sv_arg <-
   list(
-    sv_loc    = here("data", "plots", "boxplots"),
+    sv_loc    = here(dir_plt_save, "boxplots"),
     sv_nm     = str_c("cmtx_boxplot_", c("sm", "lg")),
     overwrite = FALSE
   ) %>%
@@ -414,16 +471,18 @@ sv_arg <-
     lg_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[2]) %>% is_empty()
   )
 
+# save larger dynamic range
 if (sv_arg$lg_exist | sv_arg$overwrite) {
   save_plot(
-    filename = here(
-      sv_arg$sv_loc,
-      glue(
-        sv_arg$sv_nm[2],
-        format(Sys.time(), "_%Y%m%d_%H%M%S"),
-        ".jpeg"
-      )
-    ),
+    filename =
+      here(
+        sv_arg$sv_loc,
+        glue(
+          sv_arg$sv_nm[2],
+          format(Sys.time(), "_%Y%m%d_%H%M%S"),
+          ".jpeg"
+        )
+      ),
     plot        = box_lg,
     base_height = 6,
     base_width  = 10,
@@ -436,20 +495,24 @@ if (sv_arg$lg_exist | sv_arg$overwrite) {
     c(
       "Skipping saving of {.file cmtx_boxplot_lg} ",
       "because exists ",
-      "and/or overwrite is set {.var FALSE}")
+      "and/or overwrite is set {.var FALSE}"
     )
+  )
 }
 
+
+# save smaller dynamic range
 if (sv_arg$sm_exist | sv_arg$overwrite) {
   save_plot(
-    filename = here(
-      "data", "plots", "boxplots",
-      glue(
-        sv_arg$sv_nm[1],
-        format(Sys.time(), "_%Y%m%d_%H%M%S"),
-        ".jpeg"
-      )
-    ),
+    filename =
+      here(
+        sv_arg$sv_loc,
+        glue(
+          sv_arg$sv_nm[1],
+          format(Sys.time(), "_%Y%m%d_%H%M%S"),
+          ".jpeg"
+        )
+      ),
     plot        = box_sm,
     base_height = 6,
     base_width  = 10,
@@ -463,15 +526,15 @@ if (sv_arg$sm_exist | sv_arg$overwrite) {
       "Skipping saving of {.file cmtx_boxplot_sm} ",
       "because exists ",
       "and/or overwrite is set {.var FALSE}"
-      )
     )
+  )
 }
 
 rm(sv_arg)
 ```
 
-# 5.0 ---- Perform Kruskal-Wallis and Dunn Test ----
-## 5.1 K-W Test with PFT on season
+# 6.0 ---- Perform Kruskal-Wallis and Dunn Test ----
+## 6.1 K-W Test with PFT on season
 
 Here Kruskal-Wallis was performed to identify if there was any signficant 
 difference between each season and a PFT.
@@ -494,15 +557,16 @@ cmtx_dunn <-
   # remove PFT with no signficant difference
   filter(!(phyto %in% p_gt_05$phyto)) %>%
   group_by(phyto) %>%
-  dunn_test(conc ~ season, 
-            p.adjust.method = "bonferroni") 
+  dunn_test(
+    conc ~ season, 
+    p.adjust.method = "bonferroni"
+    ) 
 
-p_gt_05
 cmtx_kruskal
+p_gt_05
 cmtx_dunn %>%
   filter(p.adj <= 0.05) %>% 
-  unite("groups", group1, group2, sep = "-") %>%
-  print()
+  unite("groups", group1, group2, sep = "-") 
 
 ```
 Based on the results, Diatom 1 did not have any signficant difference between 
@@ -510,21 +574,25 @@ each season.
 
 From the pairwise Dunn's test, only 30 pairs were signficantly different.
 
-# 6.0 ---- Combine PFT Sub Groups ----
+# 7.0 ---- Combine PFT Sub Groups ----
+
 i.e. diatom 1 + diatom 2 = diatom
 ```{r station-seasonally-yearly-avgs}
-cmtx_avgs_w <- 
-    cmtx_avgs_w %>%
-    
-    # combine group into main group
-    mutate(
-        diat  = diat1 + diat2,
-        cyano = cyano2 + cyano4,
-        hapt  = hapt6 + hapt8,
-        total = chloro + crypto + diat + dino + hapt + pras + cyano
-        ) 
+cmtx_avgs_w <-
+  cmtx_avgs_w %>%
+  # combine group into main group
+  mutate(
+    diat  = diat1 + diat2,
+    cyano = cyano2 + cyano4,
+    hapt  = hapt6 + hapt8,
+    total = chloro + crypto + diat + dino + hapt + pras + cyano
+  )
 ```
-## 6.1  Stations 10, 16, WS: Plot Cyano and Diat vs time and 
+
+
+## 7.1  Stations 10, 16, WS: Plot Cyano and Diat vs time and 
+
+
 ```{r cmtx-summary}
 # cmtx_season_avgs <-
 cmtx_avgs_w %>%
@@ -541,7 +609,23 @@ cmtx_avgs_w %>%
   )
 ```
 
-## 6.2 Plot: Calculate Fraction and Plot 3 Stations with 2 PFTs (Diatom and Cyano)
+
+## 7.2 Plot: Calculate Fraction and Plot 3 Stations with 2 PFTs (Diatom and Cyano)
+
+Stations:
+- 10
+- 16
+- WS
+
+PFT:
+- cyanobacteria (cyano2 and cyano4)
+- diatom (diat1 and diat2)
+
+Shows opposing signals where lower diatoms shows increase in cyano relatively
+
+Issue is this doesn't show abosolute, where cyano could have incrased thus the
+ratio is farther off.
+
 ```{r plt-cyano-diat, fig.height=8, fig.width=16}
 cmtx_fract <-
     cmtx_avgs_w  %>%
@@ -603,11 +687,15 @@ cmtx_sub_ln_plt <-
 
 cmtx_sub_ln_plt
 ```
-## 6.3 Save Subset of PFT and Stations
+
+
+## 7.3 Save Subset of PFT and Stations
+
+
 ```{r save-dia-cyano}
 sv_arg <-
   list(
-    sv_loc    = here("data", "plots"),
+    sv_loc    = dir_plt_save,
     sv_nm     = "phyto_bloom",
     overwrite = TRUE
   ) %>%
@@ -634,7 +722,10 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
-# 7.0 ---- Average of Season and Stations per PFT ----
+
+# 8.0 ---- Average of Season and Stations per PFT ----
+
+
 ```{r view-avgs}
 # by season
 cmtx_fract %>%
@@ -662,7 +753,11 @@ cmtx_fract %>%
   ) # %>%
     # View(title = "phyto_avg_by_station") 
 ```
-# 8.0 ---- PFT Fractions Plot ----
+
+
+# 9.0 ---- PFT Fractions Plot ----
+
+
 ```{r config-frac}
 cmtx_fract_long <-
   cmtx_fract %>%
@@ -688,7 +783,10 @@ cmtx_fract_long <-
 cmtx_fract_long
 ```
 
+
 ## 8.1 Plot: Seasonal Fraction of each PFT (Bar)
+
+
 ```{r plt-fracs, fig.width=20, fig.height=10}
 # alternate color palette
 # tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
@@ -736,11 +834,15 @@ cmtx_szn_bar <-
 
 cmtx_szn_bar      
 ```
+
+
 ## Save seasonal faction of each PFT
+
+
 ```{r save-season-frac}
 sv_arg <-
   list(
-    sv_loc    = here("data", "plots"),
+    sv_loc    = dir_plt_save,
     sv_nm     = "pft_prcnt_season",
     overwrite = FALSE
   ) %>%
@@ -782,7 +884,10 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
+
 # TODO: test table of PFT proportions
+
+
 ```{r}
 shelf(gt)
 gt_pft <-
