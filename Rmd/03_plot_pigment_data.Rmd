@@ -88,10 +88,12 @@ theme_set(theme_calc(base_size = 12, base_family = "serif"))
 
 ## 2.2 Load Dataset
 
-Dataset includes 
-- metadata 
-- pigment concentrations
-- size class calculations
+Merged pigment data is created in `01_load_data.Rmd`
+- "combined_pig_dat.csv"
+- includes: 
+  - metadata 
+  - pigment concentrations
+  - size class calculations
 
 ```{r load-data, include=FALSE}
 dir_plt_save <- here("data", "plots", "plot_pigment")
@@ -1149,7 +1151,7 @@ stop()
 #                     "Summer 2020", "Autumn 2020", "Winter 2020-2021", "Spring 2021")
 
 cmtx_avgs <-
-    here("data", "processed", "chemtax_w_meta_rm_dup.csv") %>%
+    here("data", "processed", "chemtax_w_meta_wide.csv") %>%
     read_csv(show_col_types = FALSE) %>%
     filter(!str_detect(station, "60")) %>%
     mutate(
