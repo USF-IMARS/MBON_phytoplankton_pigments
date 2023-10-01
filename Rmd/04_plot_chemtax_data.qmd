@@ -113,7 +113,7 @@ pig_dat <-
 #                     "Summer 2020", "Autumn 2020", "Winter 2020-2021", "Spring 2021")
 
 cmtx_avgs <-
-    here("data", "processed", "chemtax_w_meta_rm_dup.csv") %>%
+    here("data", "processed", "chemtax_w_meta.csv") %>%
     read_csv(show_col_types = FALSE) %>%
     filter(!str_detect(station, "60")) %>%
     mutate(

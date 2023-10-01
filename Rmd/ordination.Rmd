@@ -33,7 +33,7 @@ source(here("scripts", "misc_functions.R"))
 ```{r chemtax-ctd}
 # CHEMTAX files
 cmtx_avgs <- 
-    here("data", "processed","chemtax_w_meta_rm_dup.csv") %>%
+    here("data", "processed","chemtax_w_meta.csv") %>%
     read_csv(show_col_types = FALSE) %>%
     mutate(
         season = fct_relevel(season, 
