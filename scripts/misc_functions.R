@@ -89,9 +89,9 @@ last_mod <-  function(fpath, check = TRUE) {
 #' @examples
 #' # ADD_EXAMPLES_HERE
 #' 
-file_expr <- function(loc       = here::here("data", "metadata", "aphia_id"),
-                      file_base = "aphia_taxa",
-                      exts      = "csv",
+file_expr <- function(loc       = here::here(),
+                      file_base = NULL,
+                      exts      = NULL,
                       time_stamp_fmt = "%Y%m%d_%H%M%S") {
     
     # ---- help for deciding time stamp format
@@ -150,7 +150,8 @@ file_expr <- function(loc       = here::here("data", "metadata", "aphia_id"),
                 glue(
                     !!file_base,
                     !!time_stamp_fmt,
-                    !!exts,
+                    "{.$exts}",
+                    # !!exts,
                     .null = ""
                 )
             )
@@ -159,7 +160,8 @@ file_expr <- function(loc       = here::here("data", "metadata", "aphia_id"),
     list(
         file_base = file_base,
         file_expr = file_expr,
-        file_loc  = loc
+        file_loc  = loc,
+        exts = exts
     )
     
     # ---- end of function
@@ -206,22 +208,22 @@ save_csv <- function(
     
     # ---- checking input parameters
     if (is.null(.data)) {
-        cli::cli_abort(
+        cli_abort(
             c("Check input, {.var {col_yellow(\".data\")}} is `NULL`.", 
               "{col_red(\"Stopping\")}"))
     }
     if (is.null(save_location)) {
-        cli::cli_abort(
+        cli_abort(
             c("Check input, {.var {col_yellow(\"save_location\")}} is `NULL`.",
               "{col_red(\"Stopping\")}"))
     }
     if (is.null(save_name)) {
-        cli::cli_abort(
+        cli_abort(
             c("Check input, {.var {col_yellow(\"save_name\")}} is `NULL`.",
               "{col_red(\"Stopping\")}"))
     }
     if (is.null(overwrite)) {
-        cli::cli_abort(
+        cli_abort(
             c("Check input, {.var {col_yellow(\"overwrite\")}} is `NULL`.",
               "{col_red(\"Stopping\")}"))
     }
@@ -240,11 +242,13 @@ save_csv <- function(
         return(data_f)
     }
     
-    data_f <- eval(data_f$file_expr)
+    data_f <- 
+      data_f %$% 
+      eval(file_expr)
     
     if (verbose) {
-        cli::cli_h1("Data Variable Name: {.var {save_name}}")
-        cli::cli_alert_info(
+        cli_h1("Data Variable Name: {.var {save_name}}")
+        cli_alert_info(
             c("File Information:\n",
               "Rows:      {nrow(.data)}\n",
               "Columns:   {ncol(.data)}\n",
@@ -252,11 +256,12 @@ save_csv <- function(
               "File Name: {.file {basename(data_f)}}")
         )
     }
+    
     # ---- check if folder exists and create otherwise
     if (!dir_exists(save_location)) {
         
         if (verbose) 
-            cli::cli_alert_info(
+            cli_alert_info(
                 "{col_green(\"Creating\")} folder location!")
         
         fs::dir_create(save_location)
@@ -274,26 +279,26 @@ save_csv <- function(
     if (!create_f && !overwrite) {
         # return early if no need to create
         if (verbose)
-            cli::cli_alert_info(
-                "File exist and {.emph is not} being {col_green(\"overwritten\")}!\n"
+            cli_alert_info(
+              "File exist and {.emph is not} being {col_green(\"overwritten\")}!\n"
             )
         return(invisible())
     }
     
     if (!create_f && overwrite && verbose) {
-        cli::cli_alert_info(
+        cli_alert_info(
             "File exist and {.emph is} being {col_red(\"overwritten\")}!")
     } else if (create_f && verbose) {
-        cli::cli_alert_info("File does not exists, {col_green(\"creating\")}!")
+        cli_alert_info("File does not exists, {col_green(\"creating\")}!")
     }
     
     
     # ---- saving file
-    if (verbose) cli::cli_alert_info("Saving file!")
+    if (verbose) cli_alert_info("Saving file!")
     
     if (utf_8) {
         # save with UTF-8 
-        cli::cli_alert_info(
+        cli_alert_info(
             c("Note: saving to indicate to excel as {.var UTF-8}.\n", 
               "Using: `{col_yellow(\"readr::write_excel_csv()\")}` ",
               "instead of `{col_red(\"readr::write_csv()\")}`"))
@@ -310,7 +315,7 @@ save_csv <- function(
         )
     }
     
-    if (verbose) cli::cli_alert_success("Saved!\n\n")
+    if (verbose) cli_alert_success("Saved!\n\n")
     
     # ---- end of function
 }
@@ -322,14 +327,64 @@ save_csv <- function(
 ####                   Save gg Plots                    ####
 #                                                          #
 ##%######################################################%##
-file_sv <- function(plt, filename, device = c("jpeg", "svg"), 
-                    height = 15, width = 30, ...) {
+#' Save ggplots
+#' 
+#' ggplot objects can be saved using "jpeg" or "svg" device. 
+#'
+#'
+#' @param plt DESCRIPTION.
+#' @param filename DESCRIPTION.
+#' @param device DESCRIPTION.
+#' @param height DESCRIPTION.
+#' @param width DESCRIPTION.
+#' @param ... DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+save_gg <- function(
+        plt, 
+        save_location  = NULL,
+        save_name      = NULL,
+        # overwrite      = FALSE,
+        verbose        = TRUE,
+        time_stamp_fmt = "%Y%m%d_%H%M%S",
+        device         = c("jpeg", "svg"), 
+        height         = 15, 
+        width          = 30, 
+        ...
+        ) {
+    
+    library(cli)
+    
     device <- match.arg(device)
     
     height <- if (is.null(height)) 3.71 else height
     
+    # ---- file name
+    data_f <- 
+        file_expr(
+            save_location,
+            save_name,
+            exts = device,
+            time_stamp_fmt
+        )
+    
+    data_f <- 
+      data_f  %$% 
+      eval(file_expr)
+    
+    if (verbose) {
+        cli_h1("ggplot Object Data Name: {.var {save_name}}")
+        cli_alert_info(
+            c(
+              "Location:  {.file {save_location}}\n",
+              "File Name: {.file {basename(data_f)}}")
+        )
+    }
+
     cowplot::save_plot(
-        filename    = filename,
+        filename    = data_f,
         plot        = plt,
         base_height = height,
         base_width  = width,
@@ -337,5 +392,5 @@ file_sv <- function(plt, filename, device = c("jpeg", "svg"),
         ...
     )
     
-    # ---- end of function
+    # ---- end of function save_gg
 }
