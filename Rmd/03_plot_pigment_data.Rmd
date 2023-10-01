@@ -77,6 +77,8 @@ conflicts_prefer(
     dplyr::select()
 )
 
+source(here("scripts", "misc_functions.R"))
+
 # set size options of figures
 knitr::opts_chunk$set(fig.width = 19, fig.height = 9.7)
 
@@ -335,28 +337,30 @@ chl_a_box <-
 
 chl_a_box$plt
 
-# Save Chl-a Boxplot
+# save Chl-a Boxplot
 if (FALSE) {
   chl_a_box %$%
     walk2(
       .x = name_of_water_body,
       .y = plt,
       \(.x, .y) {
-      .x %>%
-        str_to_lower() %>%
-        str_replace_all("\\s", "_") %>%
-        glue(., "_chla{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
-        save_plot(
-          filename    = .,
-          path        = dir_plt_save,
-          plot        = .y,
-          base_height = 9.7,
-          base_width  = 19,
-          dpi         = 600,
-          units       = "in",
-          device      = "jpeg",
-          bg          = "white"
-        )
+        .x %>%
+          str_to_lower() %>%
+          str_replace_all("\\s", "_") %>%
+          glue(., "chla", .sep = "_") %>%
+          save_gg(
+            .y,
+            save_location  = dir_plt_save,
+            save_name      = .,
+            verbose        = TRUE,
+            time_stamp_fmt = "%Y%m%d_%H%M%S",
+            device         = "jpeg",
+            height         = 9.7,
+            width          = 19,
+            dpi            = 600,
+            units          = "in",
+            bg             = "white"
+          )
       }
     )
 }
@@ -548,18 +552,20 @@ if (FALSE) {
       \(.x, .y) {
         .x %>%
           str_to_lower() %>%
-          str_replace_all(" ", "_") %>%
-          glue(., "_frac_bar{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg") %>%
-          save_plot(
-            filename    = .,
-            path        = dir_plt_save,
-            plot        = .y,
-            base_height = 9.7,
-            base_width  = 19,
-            dpi         = 600,
-            units       = "in",
-            device      = "jpeg",
-            bg          = "white"
+          str_replace_all("\\s", "_") %>%
+          glue(., "frac_bar", .sep = "_") %>%
+          save_gg(
+            .y,
+            save_location  = dir_plt_save,
+            save_name      = .,
+            verbose        = TRUE,
+            time_stamp_fmt = "%Y%m%d_%H%M%S",
+            device         = "jpeg",
+            height         = 9.7,
+            width          = 19,
+            dpi            = 600,
+            units          = "in",
+            bg             = "white"
           )
       }
     )
@@ -645,32 +651,25 @@ frac_gt <-
 
 frac_gt
 
-# save table as word docx (editable) or html (better formatted)
+# save 2 tables as:
+# - word docx (editable)
+# - html (better formatted)
 if (FALSE) {
-  # as word .docx
-  frac_gt %>%
-    gtsave(
-      filename =
-        here(
-          dir_plt_save,
-          glue(
-            "fract_table",
-            "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.rtf"
-          )
+  file_expr(
+    loc            = dir_plt_save,
+    file_base      = "all_fract_table",
+    exts           = c("html", "docx"),
+    time_stamp_fmt = "%Y%m%d_%H%M%S"
+  ) %$%
+    eval(file_expr) %>%
+    walk(
+      .,
+      \(file_n) {
+        gtsave(
+          frac_gt,
+          filename = file_n
         )
-    )
-
-  # as .html
-  frac_gt %>%
-    gtsave(
-      filename =
-        here(
-          dir_plt_save,
-          glue(
-            "fract_table",
-            "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.html"
-          )
-        )
+      }
     )
 }
 ```
@@ -770,43 +769,41 @@ pi_box_seasonal_water_body <-
 # view plots
 plt_pi_all_water_body
 pi_box_seasonal_water_body
+
+
 # save plots
 if (FALSE) {
-  # ratio vs time
-  save_plot(
-    filename =
-      here(
-        dir_plt_save,
-        glue(
-          "pi_ppc_chl_all_water_body",
-          "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
-        )
-      ),
-    plot        = plt_pi_all_water_body,
-    base_height = 6,
-    base_width  = 10,
-    dpi         = 600,
-    units       = "in",
-    device      = "jpeg"
+
+  # ratio vs time 
+  save_gg(
+    plt            = plt_pi_all_water_body,
+    save_location  = dir_plt_save,
+    save_name      = "pi_ppc_chl_all_water_body",
+    verbose        = TRUE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = "jpeg",
+    height         = 6,
+    width          = 10,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
   )
 
   # boxplot ppc vs season
-  save_plot(
-    filename =
-      here(
-        dir_plt_save,
-        glue(
-          "pi_box_ppc_chl_all_water_body",
-          "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
-        )
-      ),
-    plot        = pi_box_seasonal_water_body,
-    base_height = 6,
-    base_width  = 10,
-    dpi         = 600,
-    units       = "in",
-    device      = "jpeg"
+  save_gg(
+    plt            = pi_box_seasonal_water_body,
+    save_location  = dir_plt_save,
+    save_name      = "pi_box_ppc_chl_all_water_body",
+    verbose        = TRUE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = "jpeg",
+    height         = 6,
+    width          = 10,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
   )
+
 }
 ```
 
@@ -987,7 +984,8 @@ Linear regression for year factor and overall regression for region and season
 
 ```{r photoprotective-photosynthetic, fig.height=15, fig.width=30}
 # TODO: separate plots by region 
-pigm_pi %>%
+plt_ppc_psc <- 
+  pigm_pi %>%
   filter(
       !(str_detect(season, "Winter")
       & str_detect(name_of_water_body, "Keys")
@@ -1036,21 +1034,21 @@ pigm_pi %>%
     legend.position = "bottom"
   ) 
 
+plt_ppc_psc
+
 if (FALSE) {
-  save_plot(
-    filename = here(
-      dir_plt_save,
-      glue(
-        "psc_vs_ppc",
-        "{format(Sys.time(), '_%Y%m%d_%H%M%S')}.jpeg"
-      )
-    ),
-    plot        = last_plot(),
-    base_height = 6,
-    base_width  = 10,
-    dpi         = 600,
-    units       = "in",
-    device      = "jpeg"
+ save_gg(
+    plt            = plt_ppc_psc,
+    save_location  = dir_plt_save,
+    save_name      = "psc_vs_ppc",
+    verbose        = TRUE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = "jpeg",
+    height         = 20,
+    width          = 30,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
   )
 }
 ```
@@ -1065,8 +1063,8 @@ Spring is the season with the most PPC promience
 
 
 
-
-```{r}
+# STOP HERE
+```{r stop}
 stop()
 ```
 
