@@ -575,7 +575,7 @@ if (FALSE) {
 
 ```
 
-## 4.3 Table for Regional Size Classes Fractions for Each Season
+## 4.3 Table: Regional Size Classes Fractions for Each Season
 
 Calculations for each size class and season:
 - Average
@@ -599,12 +599,12 @@ frac_gt <-
     values_to = "frac"
   ) %>%
   summarise(
-    .by = c(name_of_water_body, season, size_frac),
+    .by      = c(name_of_water_body, season, size_frac),
     frac_avg = (mean(frac, na.rm = TRUE) * 100) %>% round(., 1),
-    frac_sd = (sd(frac, na.rm = TRUE) * 100) %>% round(., 1)
+    frac_sd  = (sd(frac, na.rm = TRUE) * 100) %>% round(., 1)
   ) %>%
   pivot_wider(
-    names_from = "size_frac",
+    names_from  = "size_frac",
     values_from = c(frac_avg, frac_sd)
   ) %>%
   arrange(name_of_water_body, season) %>%
