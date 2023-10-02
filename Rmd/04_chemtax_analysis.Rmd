@@ -399,10 +399,7 @@ cmtx_avgs_plt$plt
 
 ```
 
-# 5.0 ---- PFT multi-plots ----
-
-
-## 5.1 Box Plot: Larger Dynamic Range PFTs
+## 4.3 Box Plot: Larger Dynamic Range PFTs
 
 
 ```{r box-lg-dynm, fig.height=15, fig.width=20}
@@ -439,7 +436,7 @@ box_lg <-
 box_lg
 ```
 
-## 5.2 Box Plot: Smaller Dynamic Ranged PFTs
+## 4.4 Box Plot: Smaller Dynamic Ranged PFTs
 
 
 ```{r box-sm-dynm, fig.height=15, fig.width=20}
@@ -479,7 +476,7 @@ box_sm <-
 box_sm
 ```
 
-## 5.3 Save: Large and Small Range Boxplots
+## 4.5 Save: Large and Small Range Boxplots
 
 ```{r save-plt}
 # save arguments
@@ -549,8 +546,9 @@ if (sv_arg$sm_exist | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
-# 6.0 ---- Perform Kruskal-Wallis and Dunn Test ----
-## 6.1 K-W Test with PFT on season
+# 5.0 ---- Perform Kruskal-Wallis and Dunn Test ----
+
+## 5.1 K-W Test with PFT on season
 
 Here Kruskal-Wallis was performed to identify if there was any signficant 
 difference between each season and a PFT.
@@ -592,9 +590,9 @@ From the pairwise Dunn's test, only 30 pairs were signficantly different.
 
 
 
-# 7.0 ---- Combine PFT Sub Groups ----
+# 6.0 ---- Combine PFT Sub Groups ----
 
-## 7.1 Add: PFT Groups Together
+## 6.1 Add: PFT Groups Together
 
 Groups to be combined have multiple types but are merged for ease of use
 - diatom:
@@ -649,7 +647,7 @@ cmtx_fract_l <-
   left_join(phyto_name, by = c("phyto" = "shrt")) %T>% print()
 ```
 
-## 7.2 View Averages for Both Seasonal and per Station
+## 6.2 View Averages for Both Seasonal and per Station
 
 ```{r view-avgs}
 format_pct <- 
@@ -714,7 +712,7 @@ cmtx_fract_l %>%
  arrange(season) %T>% print()
 ```
 
-## 7.3 Plot: Average PFT per Season with Standard Deviation Error Bars
+## 6.3 Plot: Average PFT per Season with Standard Deviation Error Bars
 
 Calculate per PFT:
 - average 
@@ -806,7 +804,7 @@ if (sv_arg$pft_avg | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
-## 7.4  Plot: Seasonal Fraction of each PFT (Bar)
+## 6.4  Plot: Seasonal Fraction of each PFT (Bar)
 
 
 ```{r plt-fracs, fig.width=20, fig.height=10}
@@ -887,7 +885,7 @@ if (sv_arg$pft_season_avg | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
-## 7.5 Table: PFT Percentages per Season
+## 6.5 Table: PFT Percentages per Season
 
 
 ```{r table-pft-proportions}
@@ -1016,9 +1014,9 @@ if (FALSE) {
 
 
 
-# 8.0 ---- Time Series of 3 Stations with 2 PFTs -----
+# 7.0 ---- Time Series of 3 Stations with 2 PFTs -----
 
-## 8.1 Plot: Calculate Fraction and Plot 3 Stations with 2 PFTs (Diatom and Cyano)
+## 7.1 Plot: Calculate Fraction and Plot 3 Stations with 2 PFTs (Diatom and Cyano)
 
 Stations 10, 16, WS: Plot Cyano and Diat vs time and 
 
@@ -1116,7 +1114,7 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
-## 8.2 Timeseries with Diatoms
+## 7.2 Timeseries with Diatoms
 ```{r diat-ts}
 # time series for diatom at specific stations
 cmtx_longer3 <-
