@@ -32,6 +32,15 @@ conflicts_prefer(
     )
 
 source(here("scripts", "misc_functions.R"))
+
+# set colors
+# alternate color palette
+# tol_muted <- 
+# c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
+#   '#CC6677', '#882255', '#AA4499')
+
+tol_muted <- khroma::color("muted", names = FALSE)(9)
+
 ```
 
 
@@ -59,7 +68,7 @@ CHEMTAX data is created from CHEMTAX program
 dir_plt_save  <- here("data", "plots", "chemtax_analysis")
 dir_data_save <- here("data", "processed", "chemtax_analysis")
 
-# dir_create(here(dir_plt_save, "boxplots"))
+dir_create(here(dir_plt_save))
 
 # set season names and order
 szn <- c("Winter", "Spring", "Summer", "Autumn")
@@ -801,12 +810,6 @@ rm(sv_arg)
 
 
 ```{r plt-fracs, fig.width=20, fig.height=10}
-# alternate color palette
-# tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
-#                '#CC6677', '#882255', '#AA4499')
-
-tol_muted <- khroma::color("muted", names = FALSE)(9)
-
 cmtx_avg_season_fract_l %>%
   ggplot(
     aes(
@@ -1112,6 +1115,66 @@ if (sv_arg$phyto_bl | sv_arg$overwrite) {
 rm(sv_arg)
 ```
 
+## 8.2 Timeseries with Diatoms
+```{r diat-ts}
+# time series for diatom at specific stations
+cmtx_longer3 <-
+  cmtx_w %>%
+  filter(str_detect(station, "10|WS|16")) %>%
+  mutate(
+    diat  = diat1 + diat2,
+    cyano = cyano2 + cyano4,
+    hapt  = hapt6 + hapt8
+  ) %>%
+  # remove columns
+  select(-c(diat1, diat2, cyano2, cyano4, hapt6, hapt8)) %>%
+  pivot_longer(
+    cols      = chloro:hapt,
+    names_to  = "func_type",
+    values_to = "conc"
+  ) %>%
+  reframe(
+    pick(season),
+    avg_conc = mean(conc),
+    .by      = c(station, func_type, date_time_utc)
+  ) %>%
+  distinct()
+```
+
+
+```{r plt-stn-16, fig.width=30, fig.height=15}
+# station 16 with diat and cyano
+cmtx_longer3 %>% 
+    filter(str_detect(func_type, "diat|cyano") & station == "16") %>% 
+    ggplot(aes(x     = date_time_utc, 
+               y     = avg_conc, 
+               color = func_type, 
+               fill  = func_type)
+           ) +
+    geom_point() +
+    geom_line() +
+    facet_wrap(facets = ~ "station") +
+    ggthemes::theme_clean()
+```
+
+```{r diat-ts1}
+# was commented out
+aov(dino ~ season * as.factor(year),# + season:as.factor(year), 
+    data = cmtx_w) %>%
+    summary()
+
+lm(chloro ~ season + year, 
+   data = cmtx_w) %>%
+    summary()
+
+# this was done in `04_chemtax_analysis`
+# cmtx_kruskal2 <- 
+    # cmtx_l %>%
+    # filter(!is.na(func_type)) %>%
+    # group_by(func_type) %>%
+    # kruskal_test(conc ~ season_year) %>%
+    # arrange(desc(p))
+```
 
 
 
