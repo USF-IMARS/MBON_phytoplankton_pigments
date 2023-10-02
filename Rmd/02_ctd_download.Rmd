@@ -5,7 +5,10 @@ date: "2023-01-10"
 output: html_document
 ---
 
-# Steps:
+# 1.0 ---- Summary of Document ----
+
+
+Steps:
 1. Make sure to download libraries if you don't have
   i.e. install.packages("purrr")
 2. Check database URL
@@ -16,7 +19,9 @@ output: html_document
 5. Run function on cruise IDs
 
 
-# 1.0 Load libraries
+# 2.0 ---- Setup ----
+
+## 2.1 Load libraries
 ```{r setup}
 if (!nzchar(system.file(package = "librarian"))) 
     install.packages("librarian")
@@ -27,7 +32,7 @@ librarian::shelf(
     # broom # optional
     
     # additional
-    rerddap,
+    rerddap, cli,
     quiet = TRUE
 )
 
@@ -42,85 +47,166 @@ source(here("scripts", "misc_functions.R"))
 source(here("scripts", "ctd_download.R"))
 ```
 
-# 2.0 Set database
+## 2.2 Set database Website
+
 Once you find an ERDDAP with the data you want, you can change the location here
+
+TAMU ERDDAP publishes the CTD data from the SFP/MBON cruises
+- "https://gcoos5.geos.tamu.edu/erddap/"
+
+PFEG ERDDAP (not used)
+- "https://upwell.pfeg.noaa.gov/erddap/" 
+- contains meterological data
+  - wanted to use
+    - wind speed 
+    - Ekman transport
+
 ```{r set-database}
 # this database contains CTD data from Walton Smith Cruises
-database <- "https://gcoos5.geos.tamu.edu/erddap/"
-# database <- "https://upwell.pfeg.noaa.gov/erddap/" 
-Sys.setenv(RERDDAP_DEFAULT_URL = database)
-rm(database)
+"https://gcoos5.geos.tamu.edu/erddap/" %>%
+ Sys.setenv(RERDDAP_DEFAULT_URL = .)
+
 ```
 
-# 3.0 Set folder location and create vector of cruise IDs
-NOTE: WB22215 is WS22215
-      - WB = R/V Weatherbird II
-      - WS = R/V Walton Smith 
-      - this was on Weatherbird
-```{r loc-ids}
-# folder location
-loc      <- here("data", "raw", "ctd")
+## 2.3 Query ERDDAP for CTD Data and Compare to Cruise IDs from Pigment Data
 
-# cruise IDs
-cruiseID <- c("WS16074", "WS16130", "WS16263", "WS16319", "WS17086", "WS17170",
-              "WS17282", "WS18008", "SAV1803", "WS18120", "SAV18173", "WS18218",
-              "WS18285", "WS18351", "WS19028", "WS19119", "WS19210", "WS19266",
-              "WS19322", "WS20006", "WS20231", "WS20278", "WS20279", "WS20342",
-              "WS21032", "WS21093")
+Research vessel acronym:
+  - WS = R/V Walton Smith (majority)
+  - SAV = R/V Savannah
+  - WB = R/V Weatherbird II
+  - H = 
+  
+NOTE: some cruise IDs were modified because there is some slight difference in 
+      IDs during the same cruise. This is usually due to a delay in cruise start
+      date and was not changed prior to departure.
+      
+      
+```{r query-erddap-cruise-id}
+# folder locationt to save data
+dir_data_save <- here("data", "processed", "ctd")
+dir_data_load <- rstudioapi::selectDirectory()
+
+dir_create(dir_data_save)
+
+# cruise IDs covering all pigment data available
+cruise_id <-
+  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  mutate(
+    cruise_id = str_extract(sample, "\\w{1,3}\\d{3,5}"),
+    cruise_id = case_when(
+        str_detect(cruise_id, "SV18067") ~ "SAV1803",
+        str_detect(cruise_id, "SV18173") ~ "SAV18173",
+        str_detect(cruise_id, "WS20230") ~ "WS20231",
+        str_detect(cruise_id, "WS20278") ~ "WS20279",
+         .default = cruise_id
+    )
+    ) %>%
+  distinct(cruise_id) %>% 
+  pull(cruise_id) %T>%
+  print()
 
 # all cruises since 2016
-all_cruise <- 
-    ed_search_adv(
-        query     = "Walton Smith",
-        minTime   = "2016-01-01T01:00:00Z",
-        page_size = 3000) 
+# this covers all possible cruises to download more than neceessary
+all_cruise_info <-
+  ed_search_adv(
+    query     = "Walton Smith",
+    minTime   = "2016-01-01T01:00:00Z",
+    page_size = 3000
+  )
 
-num_stns <- length(all_cruise$info$title)
+all_cruise_ids <-
+  str_extract(all_cruise_info$info$title, "(WS|SAV|WB|H)\\d{3,5}") %>%
+  unique()
 
-all_cruise <-
-    str_extract(all_cruise$info$title, "(WS|SAV|WB|H)\\d{3,5}") %>%
-    unique()
+
+
+# ---- print info about cruise IDs found
+cli::cli_alert_info(
+  c(
+    "{col_green(\"Number of files queried\")}: ",
+    "{nrow(all_cruise_info$info)} files\n",
+    "{col_blue(\"Cruise IDs\")}:\n{all_cruise_ids}\n\n"
+  )
+)
 
 # shows cruises that don't exists
-cruiseID[!cruiseID %in% all_cruise]
+cli_alert_info(
+  c(
+    "{col_red(\"Pigment Cruise IDs not in ERDDAP\")}:\n",
+    "{cruise_id[!cruise_id %in% all_cruise_ids]}\n\n",
+    "Note: this cruise CTD data {col_red(\"does not exists\")}.\n\n"
+  )
+)
 
-# shows cruises that are not in our cruiseID list between 2016 and current
+# shows cruises that are not in our cruise_id list between 2016 and current
 # NOTES: I prefer this one as it will have extra data if needed
-all_cruise[!all_cruise %in% cruiseID]
+cli_alert_info(
+  c(
+    "{col_magenta(\"Extra Cruise IDs\")}:\n",
+    "{all_cruise_ids[!all_cruise_ids %in% cruise_id]}\n\n",
+    "NOTE: These cruises exist for the NOAA/MBON project but do not ",
+    "currently have pigment data available.\n\n"
+  )
+)
+
 ```
-# 4.0 Run ctd_downloads function and try each cruise ID for existing data
-This will take some time, ~ 30 - 60 min
+# 3.0 ---- CTD Data Download ----
+
+## 3.1 Download CTD Data from ERRDAP
+
+This will take some time to get every cruise, ~ 30 - 60 min.
+
+It may be better to filter for cruise IDs with pigment data first and allow to 
+run. 
+
+NOTE: if the connection to the server fails, it's most likely they kicked you
+      off because of the high request rates. This is to block spammers on the
+      system and they don't know that we're downloading data to use.
+
 ```{r download-ctd-data}
 tictoc::tic()
-for (cr_id in seq(all_cruise)) {
-    cat(sprintf("%2.2-d of %2.2-d Cruises\n", cr_id, length(all_cruise)))
-    try(ctd_downloads(IDS       = all_cruise[cr_id],
-                      path      = loc,
-                      verbose   = TRUE,
-                      overwrite = FALSE),
-        silent = FALSE)
-    }
+for (cr_id in seq(all_cruise_ids)) {
+  cat(sprintf("%2.2-d of %2.2-d Cruises\n", cr_id, length(all_cruise_ids)))
+  try(
+    ctd_downloads(
+      IDS = all_cruise_ids[cr_id],
+      path = dir_data_save,
+      verbose = TRUE,
+      overwrite = FALSE
+    ),
+    silent = FALSE
+  )
+}
 
 tictoc::toc()
 
 rm(cr_id)
 ```
 
-# 5.0 Find Path to All CTD Files and Extract Cruise ID and Station Name
+# 3.2 Extract Cruise ID and Station Name from All Files
+
+NOTE: some cruise IDs were modified because there is some slight difference in 
+      IDs during the same cruise. This is usually due to a delay in cruise start
+      date and was not changed prior to departure.
+
+Station names are not in a consistent format and here we correct it to match
+our naming.
 
 ```{r query-ctd-files}
 # get all CTD file names
 file_ctd <-
-  dir_ls(loc,
+  dir_ls(
+    path    = dir_data_save,
     recurse = TRUE,
-    regexp = "\\.csv$"
+    regexp  = "\\.csv$"
   ) %>%
   str_sort() %>%
   tibble(file = .) %>%
   mutate(
-    base = basename(file) %>%
-      path_ext_remove() %>%
-      str_to_upper()
+    base = basename(file),
+    base = path_ext_remove(base),
+    base = str_to_upper(base)
   ) %>%
   separate_wider_delim(base, "_",
     names = c("cruise_id", "stn"),
@@ -128,14 +214,16 @@ file_ctd <-
     cols_remove = FALSE
   ) %>%
   mutate(
-    # fix cruise IDs
+    # fix cruise IDs to match ours
     cruise_id = case_when(
+      str_detect(cruise_id, "SAV1803")  ~ "SV18067",
       str_detect(cruise_id, "SAV18173") ~ "SV18173",
-      str_detect(cruise_id, "SAV1803") ~ "SV18067",
-      str_detect(cruise_id, "WS20231") ~ "WS20230",
-      str_detect(cruise_id, "WS20279") ~ "WS20278",
+      str_detect(cruise_id, "WS20231")  ~ "WS20230",
+      str_detect(cruise_id, "WS20279")  ~ "WS20278",
       .default = cruise_id
     ),
+    
+    # extrat station name and fix to a standard format
     station = str_remove(stn, "(?i)(stn|sta)_?"),
     station = case_when(
       !str_detect(station, "Z\\d{2}") ~
@@ -148,18 +236,37 @@ file_ctd <-
     ),
     station = str_remove(station, "^0+"),
     station = case_when(
-      str_detect(station, "(?i)LK") ~ "LK",
+      str_detect(station, "(?i)LK")   ~ "LK",
       str_detect(station, "(?i)^21$") ~ "LK",
-      str_detect(station, "21.+5") ~ "21.5",
+      str_detect(station, "21.+5")    ~ "21.5",
       .default = station
     ),
     station = str_replace(station, "-", "_")
   ) %>%
-  filter(str_detect(station, "(?i)hex|test", negate = TRUE))
+  filter(str_detect(station, "(?i)hex|test", negate = TRUE)) %T>%
+  print()
 ```
 
-# 6.0 Summarize CTD Files
-Two version:
+# 4.0 ---- Summarize CTD Files ----
+
+## 4.1 Average Top 5 meters
+
+Data variables:
+- time     - date time (yyyy-mm-dd HH:MM:SS)
+- lat      - latitude  (decimal degrees)
+- lon      - longitude (decimal degrees)
+- depth    - depth (meter)
+- pressure - pressure (dB)
+- temp     - temperature (degrees C)
+- o_sat    - oxygen saturation (%)
+- do       - dissolved oxygen (mg L^-1 ?)
+- par      - photosynthetically active radiation ()
+- sal      - salinity (unitless)
+
+Uses the function: `read_ctd_csv`.
+
+Two ways of averaging top 5 meters:
+
 1. Using parallel processing `future_pmap()` (faster)
     - requires `furrr`, `future`, and `progressr` 
     - this runs each summarization in parallel using cores within the computure
@@ -168,62 +275,118 @@ Two version:
 2. Using normal sequential `pmap()`
     - slower, but is easier to implement
     - if not too many loops, this is preferred
-```{r load-ctd-data}
-shelf(furrr, progressr)
-handlers("cli")
-
-tictoc::tic() # <-- start clock
-plan(multisession, workers = 5)
-
-with_progress({
-  p <- progressor(steps = nrow(file_ctd))
     
-  ctd_dat_summary <-
-    file_ctd %>%
-    mutate(
+## 4.1.1 Averages by Parallel Processing
+
+Will try to run parallel processing and will skip if cannot find the packages
+
+```{r load-ctd-data}
+# look for `furrr` and `progressr` package, and will skip is not downloaded.
+parallel_pkgs <- c("furrr", "progressr")
+if (
+  nzchar(system.file(package = parallel_pkgs[1])) &
+    nzchar(system.file(package = parallel_pkgs[2]))
+) {
+  shelf(furrr, progressr)
+  handlers("cli")
+
+  tictoc::tic() # <-- start clock
+  plan(multisession, workers = 5)
+
+  with_progress({
+    p <- progressor(steps = nrow(file_ctd))
+
+    ctd_dat_summary <-
+      file_ctd %>%
+      mutate(
         data = future_pmap(
           p = p,
           list(file, cruise_id, station),
-          read_ctd_csv)) %>%
-    unnest(cols = data)
-})
+          read_ctd_csv
+        )
+      ) %>%
+      unnest(cols = data)
+  })
 
-plan(sequential)
+  plan(sequential)
 
+  tictoc::toc() # <-- end clock
 
-# If `ctd_dat_summary` was not created, run normal
-if (!exists("ctd_dat_summary")) {
-    tictoc::tic() # <-- start clock
-    
-    ctd_dat_summary <-
-      file_ctd %>%
-        mutate(
-          data = pmap(
-            .progress = TRUE,
-            list(file, cruise_id, station),
-             p = NULL,
-             read_ctd_csv
-             )
-        ) %>%
-        unnest(cols = data)
+  unshelf(furrr, future)
+} else {
+  cli_alert_warning(
+    c(
+      "The packages {.pkg {parallel_pkgs}} ",
+      "{col_red(\"were not found\")} in your search path.\n\n",
+      "If you want to do parallel processing, try:\n\n",
+      "\t{.code librarian::shelf({parallel_pkgs[1]}, {parallel_pkgs[2]})}"
+    )
+  )
 }
 
-tictoc::toc() # <-- end clock
-unshelf(furrr, future)
+rm(parallel_pkgs)
 ```
 
+## 4.1.2 Averages by Sequential Processing
 
+Slower method, but should work if the packages for parallel processing are not
+available
+
+```{r load-ctd-data}
+# If `ctd_dat_summary` was not created, run normal
+if (!exists("ctd_dat_summary")) {
+  tictoc::tic() # <-- start clock
+
+  ctd_dat_summary <-
+    file_ctd %>%
+    mutate(
+      data = pmap(
+        .progress = TRUE,
+        list(file, cruise_id, station),
+        p = NULL,
+        read_ctd_csv
+      )
+    ) %>%
+    unnest(cols = data)
+
+  tictoc::toc() # <-- end clock
+}
+
+```
+
+# 5.0 Save
+
+## 5.1 Save 5 meter Averaged CTD Data
 ```{r save-ctd-all}
+# view NAs in the data
+naniar::vis_miss(ctd_dat_summary)
+
 ctd_dat_summary %>%
   arrange(time) %>%
   save_csv(
     .data          = .,
-    save_location  = here("data", "processed"),
+    save_location  = dir_data_save,
     save_name      = "ctd_all",
     overwrite      = FALSE,
     verbose        = TRUE,
     time_stamp_fmt = NULL
   )
+```
+
+
+```{r}
+ctd_dat_summary %>%
+  ggplot(
+      aes(x = time,
+          y = temp)
+  ) +
+    geom_point()
+ctd_dat_summary %>%
+  ggplot(
+      aes(x = time,
+          y = sal)
+  ) +
+    geom_point()
 ```
 
 
