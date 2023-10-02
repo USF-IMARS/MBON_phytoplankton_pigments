@@ -190,6 +190,19 @@ read_ctd_csv <- function(
   depth = 5,
   p) {
     
+  vars <- c(
+      "time"      = "time",
+      "lat"       = "latitude",
+      "lon"       = "longitude", 
+      "depth"     = "depth",
+      "pressure"  = "sea_water_pressure",
+      "temp"      = "sea_water_temperature",
+      "o_sat"     = "oxygen_saturation", 
+      "do"        = "dissolved_oxygen",
+      "par"       = "photosynthetically_available_radiation",
+      "sal"       = "sea_water_salinity"
+  )  
+  
   out <-
     # ---- read file
     read_csv(
@@ -197,27 +210,28 @@ read_ctd_csv <- function(
       show_col_types = FALSE,
       name_repair = "unique_quiet"
     ) %>%
+    janitor::remove_empty("cols") %>%
       
     # ---- filter depth
-    filter(depth <= .env$depth) %>%
+    filter(depth <= .env$depth) 
+  
+
+  out <- out %>%
     
     # ---- select cols and rename
     select(
-      time,
-      lat      = latitude,
-      lon      = longitude, depth,
-      pressure = sea_water_pressure,
-      temp     = sea_water_temperature,
-      o_sat    = oxygen_saturation, do = dissolved_oxygen,
-      par      = any_of("photosynthetically_available_radiation"),
-      sal      = sea_water_salinity
+      any_of(vars),
+      everything(),
+      -contains("_qc")
     ) %>%
       
     # ---- calculate average
-    summarise(across(
-      .cols = everything(),
-      .fn = \(x) mean(x, na.rm = TRUE)
-    ))
+    summarise(
+      across(
+        .cols = c(time, dplyr::where(is.numeric)),
+        .fn   = \(x) mean(x, na.rm = TRUE)
+        )
+      )
     
   # ---- print update
   if (!is.null(p)) {
