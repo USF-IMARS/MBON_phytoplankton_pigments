@@ -313,7 +313,7 @@ cmtx_l %>%
 sv_arg <-
   list(
     sv_loc    = dir_plt_save,
-    sv_nm     = "oft_bar_percent_season", # edit name
+    sv_nm     = "pft_bar_percent_season", # edit name
     overwrite = FALSE
   ) %>%
   c(
