@@ -650,17 +650,23 @@ format_pct <-
   )
 
 # average by season
-cmtx_avg_season_fract_l <- 
+cmtx_avg_season_fract_l <-
   cmtx_fract_l %>%
   summarise(
     .by = c(names, phyto, season),
     across(
       .cols  = frac,
-      .fns   = (\(x) mean(x, na.rm = TRUE)),
-      .names = "{.col}_avg"
+      .fns   = list(
+          avg = (\(x) mean(x, na.rm = TRUE)),
+          sd = (\(x) sd(x, na.rm = TRUE))
+          ),
+      .names = "{.col}_{.fn}"
     )
   ) %>%
-  format_pct %>%
+  mutate(
+    percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg),
+    percent_sd = scales::label_percent(accuracy  = 0.01)(frac_sd)
+  ) %>%
  arrange(season) %T>% print()
 
 
@@ -676,7 +682,9 @@ cmtx_fract_l %>%
       .names = "{.col}_avg"
     )
   ) %>%
- format_pct %>%
+  mutate(
+    percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg)
+  ) %>%
  arrange(station) %T>% print()
 
 # average by station and season
@@ -690,8 +698,10 @@ cmtx_fract_l %>%
       .fns   = (\(x) mean(x, na.rm = TRUE)),
       .names = "{.col}_avg"
     )
+  )  %>%
+  mutate(
+    percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg)
   ) %>%
- format_pct %>%
  arrange(season) %T>% print()
 ```
 
@@ -879,36 +889,27 @@ rm(sv_arg)
 
 ```{r table-pft-proportions}
 shelf(gt)
-# gt_pft <-
- cmtx_avg_fract_l %>%
-     pivot_wider(
-       data         = .,
-       id_cols      = c(names, phyto), # *optional* vector of unaffected columns,
-       names_from   = c(season), # category column(s) to pivot wide
-       values_from  = c(percent_avg), # value column(s) that hold data for each category column
-       names_sep    = "_"
-       # names_repair = janitor::make_clean_names
-       ) %>%
-         
-  # cmtx_fract_w %>%
-  # summarise(
-  #   .by = season,
-  #   across(
-  #     contains("frac"),
-  #     list(
-  #       avg = \(x) mean(x)
-  #       # sd = \(x) sd(x)
-  #     )
-  #   )
-  # ) %>%
+gt_pft <-
+ cmtx_avg_season_fract_l %>%
+  mutate(
+    names = fct_reorder(names, frac_avg, .fun = mean, .desc = TRUE),  
+    percent_avg = str_remove(percent_avg, "%"),
+    percent_lbls = glue("{percent_avg} \u00B1 {percent_sd}")
+  ) %>%
+  arrange(names) %>%
+  pivot_wider(
+    data         = .,
+    id_cols      = c(names, phyto), 
+    names_from   = c(season), 
+    values_from  = c(percent_lbls)
+    )  %>%
+          
+  # ---- gt table for PFT average +/- std dev per season
   gt(
     data          = .,
-    # rowname_col   = "season",
     groupname_col = "names"
   ) %>%
-  # cols_hide(c(phyto, frac_avg)) %>%
   cols_hide(phyto) %>%
-  # cols_label(percent_avg = "Average (%)") %>%
   tab_options(
     table_body.hlines.width      = 0,
     table_body.vlines.width      = 0,
@@ -928,7 +929,46 @@ shelf(gt)
     ),
     locations = cells_row_groups()
   ) %>%
+  tab_spanner(
+    label   = "Avgerage Percent \u00B1 S.D.", 
+    columns = everything()) %>%
   opt_table_font("serif")
+
+
+# ---- save tables as html and docx
+if (FALSE) {
+  file_expr(
+    loc            = dir_plt_save,
+    file_base      = "pft_fraction_seasons",
+    exts           = c("html", "docx"),
+    time_stamp_fmt = "%Y%m%d_%H%M%S"
+  ) %$%
+  eval(file_expr) %>%
+  walk(
+    .,
+    \(file_n) {
+      gtsave(
+        gt_pft,
+        filename = file_n
+      )
+    }
+  )
+
+ 
+}
+ 
+# ----
+  # cmtx_fract_w %>%
+  # summarise(
+  #   .by = season,
+  #   across(
+  #     contains("frac"),
+  #     list(
+  #       avg = \(x) mean(x)
+  #       # sd = \(x) sd(x)
+  #     )
+  #   )
+  # ) %>%
   # cols_label(
   #   frac_chloro_avg = "Chloro",
   #   frac_crypto_avg = "Crypto",
@@ -953,37 +993,21 @@ shelf(gt)
   # opt_table_font("serif") %T>%
   # print()
 
+# if (FALSE) {
+#   gtsave(
+#     gt_pft,
+#     filename = here(
+#       "data", "plots",
+#       glue(
+#         "community_fractions",
+#         format(Sys.time(), "_%Y%m%d_%H%M%S"),
+#         ".docx"
+#       )
+#     )
+#   )
+# }
 
-if (FALSE) {
-  file_expr(
-    loc            = dir_plt_save,
-    file_base      = "community_fractions",
-    exts           = c("html", "docx"),
-    time_stamp_fmt = "%Y%m%d_%H%M%S"
-  ) %$%
-  eval(file_expr) %>%
-  walk(
-    .,
-    \(file_n) {
-      gtsave(
-        gt_pft,
-        filename = file_n
-      )
-    }
-  )
 
-  # gtsave(
-  #   gt_pft,
-  #   filename = here(
-  #     "data", "plots",
-  #     glue(
-  #       "community_fractions",
-  #       format(Sys.time(), "_%Y%m%d_%H%M%S"),
-  #       ".docx"
-  #     )
-  #   )
-  # )
-}
 ```
 
 
