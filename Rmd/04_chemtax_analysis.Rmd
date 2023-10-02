@@ -355,7 +355,7 @@ if (
 } else {
   cli::cli_alert_info(
     c(
-      "Skipping saving of {.file {sv_arg$sv_nm[1]}} ",
+      "Skipping saving of {.file chemtax_w_meta} ",
       "because exists ",
       "and/or overwrite is set {.var FALSE}"
     )
@@ -667,14 +667,14 @@ cmtx_avg_season_fract_l <-
       .cols  = frac,
       .fns   = list(
           avg = (\(x) mean(x, na.rm = TRUE)),
-          sd = (\(x) sd(x, na.rm = TRUE))
+          sd  = (\(x) sd(x, na.rm = TRUE))
           ),
       .names = "{.col}_{.fn}"
     )
   ) %>%
   mutate(
     percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg),
-    percent_sd = scales::label_percent(accuracy  = 0.01)(frac_sd)
+    percent_sd  = scales::label_percent(accuracy  = 0.01)(frac_sd)
   ) %>%
  arrange(season) %T>% print()
 
@@ -937,6 +937,7 @@ gt_pft <-
     columns = everything()) %>%
   opt_table_font("serif")
 
+gt_pft
 
 # ---- save tables as html and docx
 if (FALSE) {
