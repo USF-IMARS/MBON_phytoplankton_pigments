@@ -150,17 +150,17 @@ ggplot(
 All pigments vs chlor-a by season and region
 
 ```{r scatter-plot-pigment-tchlor-a, fig.height=7, fig.width=10}
-plt_pigment_vs_chlor <- 
+plt_pigment_vs_chlor <-
   pig_dat %>%
   pivot_longer(
     data      = .,
-    cols      = c(tot_chl_b:tchl), 
+    cols      = c(tot_chl_b:tchl),
     names_to  = "pigment",
     values_to = "conc",
   ) %>%
   nest(.by = pigment) %>%
   mutate(
-    plt = map2(
+    plt_chla = map2(
       .x = pigment,
       .y = data,
       \(.x, .df) {
@@ -176,8 +176,9 @@ plt_pigment_vs_chlor <-
           geom_abline(slope = 1) +
           geom_point(alpha = 0.50) +
           labs(
+            title = str_replace_all(.x, "_", " "),
             x = "Total Chlorophyll-a",
-            y = .x,
+            y = "Pigment Concentration",
             fill = "Region",
             shape = "Region"
           ) +
@@ -185,77 +186,102 @@ plt_pigment_vs_chlor <-
           scale_x_continuous(expand = c(0, 0)) +
           scale_shape_manual(values = c(21, 22, 24)) +
           coord_cartesian(ylim = c(0, NA)) +
-          facet_grid(name_of_water_body ~ season, scales = "free") +
+          facet_wrap(name_of_water_body ~ season, scales = "free") +
           theme_bw(base_family = "serif", base_size = 12)
+      }
+    ),
+    plt_time = map2(
+      .x = pigment,
+      .y = data,
+      \(.x, .df) {
+        ggplot(
+          .df,
+          aes(
+            x     = date_time_utc,
+            y     = conc,
+            color = season,
+            shape = name_of_water_body
+          )
+        ) +
+          geom_point(size = 2) +
+          labs(
+            title = str_replace_all(.x, "_", " "),
+            x     = "Year",
+            y     = "Concentration (mg m<sup>-3</sup>)",
+            color = "Season",
+            shape = "Region"
+          ) +
+          scale_y_continuous(expand = c(0, 0), na.value = 0) +
+          scale_x_datetime(
+            date_breaks = "6 month",
+            date_labels = "%B\n%Y",
+            limits = c(as_datetime("2015-11-01"), NA)
+          ) +
+          facet_wrap(
+            ~name_of_water_body,
+            nrow = 3,
+            scales = "free_y"
+          ) +
+        theme_bw(base_family = "serif", base_size = 12) +
+        theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
       }
     )
   )
 
-plt_pigment_vs_chlor$plt
-
-
+plt_pigment_vs_chlor$plt_time
+plt_pigment_vs_chlor$plt_chla[[1]]
 
 # ---- save plot
-# save arguments
-dir_create(here(dir_plt_save, "pigment_vs_chlor"))
-sv_arg <-
-  list(
-    sv_loc    = here(dir_plt_save, "pigment_vs_chlor"),
-    sv_nm     = "name", # edit name
-    overwrite = FALSE
-  ) %>%
-  c(
-    .,
-    exists = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
-  )
+if (FALSE) {
+  # save arguments
+  dir_create(here(dir_plt_save, "pigment_vs_chlor"))
 
-# save
-
-plt_pigment_vs_chlor %$%
-  walk2(
-    
-  )
-
-save_gg(
-    plt            = last_plot(), # edit if want specific plot
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[1],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 9.7,
-    width          = 19,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-
-
-if (sv_arg$exists | sv_arg$overwrite) {
-  save_gg(
-    plt            = last_plot(), # edit if want specific plot
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[1],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 9.7,
-    width          = 19,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file {sv_arg$sv_nm}} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
+  # save
+  plt_pigment_vs_chlor %$%
+    walk2(
+      pigment,
+      plt_chla,
+      \(.x, .y) {
+        save_gg(
+          plt            = .y, # edit if want specific plot
+          save_location  = here(dir_plt_save, "pigment_vs_chlor"),
+          save_name      = glue("{.x}_vs_chla"),
+          verbose        = TRUE,
+          time_stamp_fmt = NULL,
+          device         = "jpeg",
+          height         = 9.7,
+          width          = 19,
+          dpi            = 600,
+          units          = "in",
+          bg             = "white"
+        )
+      }
     )
-  )
-}
+  # save arguments
+  dir_create(here(dir_plt_save, "pigment_vs_time"))
 
-rm(sv_arg)
+  # save
+  plt_pigment_vs_chlor %$%
+    walk2(
+      pigment,
+      plt_time,
+      \(.x, .y) {
+        save_gg(
+          plt            = .y, # edit if want specific plot
+          save_location  = here(dir_plt_save, "pigment_vs_time"),
+          save_name      = glue("{.x}_time"),
+          verbose        = TRUE,
+          time_stamp_fmt = NULL,
+          device         = "jpeg",
+          height         = 9.7,
+          width          = 19,
+          dpi            = 600,
+          units          = "in",
+          bg             = "white"
+        )
+      }
+    )
+}
 
 
 ```
@@ -535,6 +561,74 @@ size_frac_plt$plt
 size_frac_plt$plt[[1]] /
   size_frac_plt$plt[[2]] /
   size_frac_plt$plt[[3]]
+
+# ---- save plot
+if (FALSE) {
+  dir_create(here(dir_plt_save, "size_class"))
+
+  # save size class fractions and absolute 
+   size_frac_plt %$%
+    walk2(
+      size_frac,
+      plt,
+      \(.x, .y) {
+        save_gg(
+          plt            = .y, 
+          save_location  = here(dir_plt_save, "size_class"),
+          save_name      = glue("size_class_{.x}"),
+          verbose        = TRUE,
+          time_stamp_fmt = NULL,
+          device         = "jpeg",
+          height         = 9.7,
+          width          = 19,
+          dpi            = 600,
+          units          = "in",
+          bg             = "white"
+        )
+      }
+    )
+  
+
+  # save stacked fractions
+  (size_frac_plt$plt[[1]] /
+  size_frac_plt$plt[[2]] /
+  size_frac_plt$plt[[3]] ) %>%
+  save_gg(
+          plt            = ., 
+          save_location  = here(dir_plt_save, "size_class"),
+          save_name      = glue("size_class_frac_stacked"),
+          verbose        = TRUE,
+          time_stamp_fmt = NULL,
+          device         = "jpeg",
+          height         = 9.7,
+          width          = 19,
+          dpi            = 600,
+          units          = "in",
+          bg             = "white"
+        )
+   
+  (size_frac_plt$plt[[4]] /
+  size_frac_plt$plt[[5]] /
+  size_frac_plt$plt[[6]] ) %>%
+  save_gg(
+          plt            = ., 
+          save_location  = here(dir_plt_save, "size_class"),
+          save_name      = glue("size_class_pct_stacked"),
+          verbose        = TRUE,
+          time_stamp_fmt = NULL,
+          device         = "jpeg",
+          height         = 9.7,
+          width          = 19,
+          dpi            = 600,
+          units          = "in",
+          bg             = "white"
+        )
+
+}
+
+
+
+
 
 unshelf(patchwork)
 ```
