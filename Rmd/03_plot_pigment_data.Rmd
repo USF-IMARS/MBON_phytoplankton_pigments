@@ -150,7 +150,8 @@ ggplot(
 All pigments vs chlor-a by season and region
 
 ```{r scatter-plot-pigment-tchlor-a, fig.height=7, fig.width=10}
-pig_dat %>%
+plt_pigment_vs_chlor <- 
+  pig_dat %>%
   pivot_longer(
     data      = .,
     cols      = c(tot_chl_b:tchl), 
@@ -188,8 +189,75 @@ pig_dat %>%
           theme_bw(base_family = "serif", base_size = 12)
       }
     )
+  )
+
+plt_pigment_vs_chlor$plt
+
+
+
+# ---- save plot
+# save arguments
+dir_create(here(dir_plt_save, "pigment_vs_chlor"))
+sv_arg <-
+  list(
+    sv_loc    = here(dir_plt_save, "pigment_vs_chlor"),
+    sv_nm     = "name", # edit name
+    overwrite = FALSE
   ) %>%
- pull(plt)
+  c(
+    .,
+    exists = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+  )
+
+# save
+
+plt_pigment_vs_chlor %$%
+  walk2(
+    
+  )
+
+save_gg(
+    plt            = last_plot(), # edit if want specific plot
+    save_location  = sv_arg$sv_loc,
+    save_name      = sv_arg$sv_nm[1],
+    verbose        = TRUE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = "jpeg",
+    height         = 9.7,
+    width          = 19,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
+  )
+
+
+if (sv_arg$exists | sv_arg$overwrite) {
+  save_gg(
+    plt            = last_plot(), # edit if want specific plot
+    save_location  = sv_arg$sv_loc,
+    save_name      = sv_arg$sv_nm[1],
+    verbose        = TRUE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = "jpeg",
+    height         = 9.7,
+    width          = 19,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
+  )
+} else {
+  cli::cli_alert_info(
+    c(
+      "Skipping saving of {.file {sv_arg$sv_nm}} ",
+      "because exists ",
+      "and/or overwrite is set {.var FALSE}"
+    )
+  )
+}
+
+rm(sv_arg)
+
+
 ```
 
 
