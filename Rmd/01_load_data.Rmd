@@ -901,3 +901,57 @@ save_csv(
 
 rm(ovrwrt_sv)
 ```
+
+
+# 7.0 Table: Latitudes and Longitude for Florida Keys
+
+Not sure what this is used for?
+
+```{r lat-lon-table}
+shelf(gt)
+lat_lon_dat <-
+  pig_dat %>%
+  filter(name_of_water_body == "Florida Keys") %>%
+  distinct(station, lat, lon)
+
+lat_lon_tbl <- 
+  lat_lon_dat %>%
+  gt(
+    rowname_col   = "station",
+    groupname_col = NULL
+  ) %>%
+  cols_label(
+    lat = md("Latitude (&deg;)"),
+    lon = md("Longitude (&deg;)")
+  ) %>%
+  tab_options(
+    table_body.hlines.width = 0,
+    table_body.vlines.width = 0,
+    stub.border.width       = 0
+  ) %>%
+  opt_table_font("serif")
+
+lat_lon_tbl
+
+# ---- save tables as html and docx
+if (FALSE) {
+  file_expr(
+    loc            = dir_plt_save,
+    file_base      = "fl_keys_stn_lat_lon",
+    exts           = c("html", "docx"),
+    time_stamp_fmt = "%Y%m%d_%H%M%S"
+  ) %$%
+  eval(file_expr) %>%
+  walk(
+    .,
+    \(file_n) {
+      gtsave(
+        gt_pft,
+        filename = file_n
+      )
+    }
+  )
+
+ 
+}
+```
