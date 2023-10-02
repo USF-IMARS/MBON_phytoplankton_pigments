@@ -90,6 +90,8 @@ tol_muted <-
 
 ## 2.2 Load Dataset
 
+Load dataset for CHEMTAX analysis
+
 ```{r load-data, include=FALSE}
 dir_plt_save <- here("data", "plots", "plot_chemtax_data")
 
