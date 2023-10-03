@@ -83,8 +83,8 @@ NOTE: some cruise IDs were modified because there is some slight difference in
       
 ```{r query-erddap-cruise-id}
 # folder path to save downloaded and average CTD data
-dir_data_dwnld_save <- here("data", "raw", "ctd") # download path
-dir_data_avg_save <- here("data", "processed", "ctd") # averaged path
+dir_data_dwnld_save <- here("data", "raw", "ctd")       # download path
+dir_data_avg_save   <- here("data", "processed", "ctd") # averaged path
 
 dir_create(dir_data_avg_save)
 
@@ -169,9 +169,9 @@ for (cr_id in seq(all_cruise_ids)) {
   cat(sprintf("%2.2-d of %2.2-d Cruises\n", cr_id, length(all_cruise_ids)))
   try(
     ctd_downloads(
-      IDS = all_cruise_ids[cr_id],
-      path = dir_data_dwnld_save,
-      verbose = TRUE,
+      IDS       = all_cruise_ids[cr_id],
+      path      = dir_data_dwnld_save,
+      verbose   = TRUE,
       overwrite = FALSE
     ),
     silent = FALSE
