@@ -637,7 +637,7 @@ env_var <-
   )
 
 # loop through vars and plot
-for (i in env_var[4]) {
+for (i in env_var) {
   temp <- ctd_dat_szn_water
 
   # filter CDOM because didn't have much prior to 2021
@@ -657,8 +657,7 @@ for (i in env_var[4]) {
         .grp2  = "water_body",
         .var_x = "hour",
         title  = i,
-        x      = "Hour",
-        y      = "PAR"
+        x      = "Hour"
       ) %T>%
       env_plt(
         .,
@@ -667,8 +666,7 @@ for (i in env_var[4]) {
         .grp2  = "season",
         .var_x = "hour",
         title  = i,
-        x      = "Hour",
-        y      = "PAR"
+        x      = "Hour"
       )
   } else {
     temp %>%
@@ -693,24 +691,24 @@ for (i in env_var[4]) {
 }
 
 
-temp %>%
-  filter(!if_any(all_of(env_var[1]), \(x) is.na(x))) %T>%
-  env_plt(
-    .,
-    .var_y = env_var[1],
-    .var_x = env_var[3],
-    .grp1  = "season",
-    .grp2  = "water_body",
-    title  = env_var[1]
-  ) %T>%
-  env_plt(
-    .,
-    .var_y = env_var[1],
-    .var_x = env_var[3],
-    .grp1  = "water_body",
-    .grp2  = "season",
-    title  = env_var[1]
-  )
+# temp %>%
+#   filter(!if_any(all_of(env_var[1]), \(x) is.na(x))) %T>%
+#   env_plt(
+#     .,
+#     .var_y = env_var[1],
+#     .var_x = env_var[3],
+#     .grp1  = "season",
+#     .grp2  = "water_body",
+#     title  = env_var[1]
+#   ) %T>%
+#   env_plt(
+#     .,
+#     .var_y = env_var[1],
+#     .var_x = env_var[3],
+#     .grp1  = "water_body",
+#     .grp2  = "season",
+#     title  = env_var[1]
+#   )
 ```
 
 ## 6.2B Plot Added Names: Envrionmental Variables Through Time, By Season and Region
