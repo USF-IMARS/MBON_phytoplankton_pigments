@@ -23,25 +23,26 @@ Steps:
 
 ## 2.1 Load libraries
 ```{r setup}
-if (!nzchar(system.file(package = "librarian"))) 
-    install.packages("librarian")
+if (!nzchar(system.file(package = "librarian"))) {
+  install.packages("librarian")
+}
 
 librarian::shelf(
-    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
-    forcats, lubridate, glue, fs, magrittr, here,
-    # broom # optional
-    
-    # additional
-    rerddap, cli,
-    quiet = TRUE
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+
+  # additional
+  rerddap, cli,
+  quiet = TRUE
 )
 
 # shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
-    dplyr::filter(), 
-    dplyr::select()
-    )
+  dplyr::filter(),
+  dplyr::select()
+)
 
 source(here("scripts", "misc_functions.R"))
 source(here("scripts", "ctd_download.R"))
@@ -64,8 +65,7 @@ PFEG ERDDAP (not used)
 ```{r set-database}
 # this database contains CTD data from Walton Smith Cruises
 "https://gcoos5.geos.tamu.edu/erddap/" %>%
- Sys.setenv(RERDDAP_DEFAULT_URL = .)
-
+  Sys.setenv(RERDDAP_DEFAULT_URL = .)
 ```
 
 ## 2.3 Query ERDDAP for CTD Data and Compare to Cruise IDs from Pigment Data
@@ -82,9 +82,9 @@ NOTE: some cruise IDs were modified because there is some slight difference in
       
       
 ```{r query-erddap-cruise-id}
-# folder locationt to save downloaded data and average CTD data
-dir_data_dwnld_save <- here("data", "raw", "ctd")
-dir_data_avg_save   <- here("data", "processed", "ctd")
+# folder path to save downloaded and average CTD data
+dir_data_dwnld_save <- here("data", "raw", "ctd") # download path
+dir_data_avg_save <- here("data", "processed", "ctd") # averaged path
 
 dir_create(dir_data_avg_save)
 
@@ -95,14 +95,14 @@ cruise_id <-
   mutate(
     cruise_id = str_extract(sample, "\\w{1,3}\\d{3,5}"),
     cruise_id = case_when(
-        str_detect(cruise_id, "SV18067") ~ "SAV1803",
-        str_detect(cruise_id, "SV18173") ~ "SAV18173",
-        str_detect(cruise_id, "WS20230") ~ "WS20231",
-        str_detect(cruise_id, "WS20278") ~ "WS20279",
-         .default = cruise_id
+      str_detect(cruise_id, "SV18067") ~ "SAV1803",
+      str_detect(cruise_id, "SV18173") ~ "SAV18173",
+      str_detect(cruise_id, "WS20230") ~ "WS20231",
+      str_detect(cruise_id, "WS20278") ~ "WS20279",
+      .default = cruise_id
     )
-    ) %>%
-  distinct(cruise_id) %>% 
+  ) %>%
+  distinct(cruise_id) %>%
   pull(cruise_id) %T>%
   print()
 
@@ -149,7 +149,6 @@ cli_alert_info(
     "currently have pigment data available.\n\n"
   )
 )
-
 ```
 # 3.0 ---- CTD Data Download ----
 
@@ -201,6 +200,7 @@ file_ctd <-
     recurse = TRUE,
     regexp  = "\\.csv$"
   ) %>%
+  str_subset("ctd_all", negate = TRUE) %>%
   str_sort() %>%
   tibble(file = .) %>%
   mutate(
@@ -216,13 +216,13 @@ file_ctd <-
   mutate(
     # fix cruise IDs to match ours
     cruise_id = case_when(
-      str_detect(cruise_id, "SAV1803")  ~ "SV18067",
+      str_detect(cruise_id, "SAV1803") ~ "SV18067",
       str_detect(cruise_id, "SAV18173") ~ "SV18173",
-      str_detect(cruise_id, "WS20231")  ~ "WS20230",
-      str_detect(cruise_id, "WS20279")  ~ "WS20278",
+      str_detect(cruise_id, "WS20231") ~ "WS20230",
+      str_detect(cruise_id, "WS20279") ~ "WS20278",
       .default = cruise_id
     ),
-    
+
     # extrat station name and fix to a standard format
     station = str_remove(stn, "(?i)(stn|sta)_?"),
     station = case_when(
@@ -236,9 +236,9 @@ file_ctd <-
     ),
     station = str_remove(station, "^0+"),
     station = case_when(
-      str_detect(station, "(?i)LK")   ~ "LK",
+      str_detect(station, "(?i)LK") ~ "LK",
       str_detect(station, "(?i)^21$") ~ "LK",
-      str_detect(station, "21.+5")    ~ "21.5",
+      str_detect(station, "21.+5") ~ "21.5",
       .default = station
     ),
     station = str_replace(station, "-", "_")
@@ -327,7 +327,7 @@ if (
 rm(parallel_pkgs)
 ```
 
-## 4.1.2 Averages by Sequential Processing
+## 4.1.2 Averages by Serial Processing
 
 Slower method, but should work if the packages for parallel processing are not
 available
@@ -351,12 +351,13 @@ if (!exists("ctd_dat_summary")) {
 
   tictoc::toc() # <-- end clock
 }
-
 ```
 
-# 5.0 Save
+# 5.0 Save CTD Data
 
-## 5.1 Save 5 meter Averaged CTD Data
+## 5.1 Save: Above 5 meter Averaged CTD Data
+
+
 ```{r save-ctd-all}
 # view NAs in the data
 naniar::vis_miss(ctd_dat_summary)
@@ -373,37 +374,441 @@ ctd_dat_summary %>%
   )
 ```
 
+# 6.0 ---- Plot CTD Data ----
 
-```{r}
-ctd_dat_summary %>%
-  ggplot(
-      aes(x = time,
-          y = temp)
-  ) +
-    geom_point()
-ctd_dat_summary %>%
-  ggplot(
-      aes(x = time,
-          y = sal)
-  ) +
-    geom_point()
+## 6.1 Add Seasonal Factor and Water Body Name
+
+This is for plotting of data only.
+
+This is not saved with CTD data because when merged with either pigment data or
+CHEMTAX data, these columns will already exist. 
+
+
+-- NOTE: some station names are weird and correcting them was attempted, but some
+         don't make it easy and are filtered out
+
+
+---
+Seasonal groups by month:
+
+- Winter: 
+  - Dec, Jan, Feb
+    
+- Spring:  
+  - Mar, Apr, May
+    
+- Summer: 
+  - Jun, Jul, Aug
+    
+- Autumn: 
+  - Sep, Nov, Oct
+
+
+Water Body Names: 
+
+- Florida Keys
+- West Florida Shelf
+- Southwest Florida Shelf
+
+
+```{r szn-water-body-var}
+# seasonal groups
+szn <-
+  list(
+    "Winter" = month.abb[c(12, 1, 2)], # Dec, Jan, Feb
+    "Spring" = month.abb[3:5], # Mar, Apr, May
+    "Summer" = month.abb[6:8], # Jun, Jul, Aug
+    "Autumn" = month.abb[9:11] # Sep, Nov, Oct
+  ) %T>% print()
+
+
+# water body names
+water_body <- list(
+  "Florida Keys" = c(
+    glue("{1:18}"),
+    glue("9.{1:9}"), "9B", "24", "LK", "MR", "WS", "21.5"
+  ),
+  "Southwest Florida Shelf" = c(
+    glue("{30:68}"),
+    glue("57.{1:3}"), "KW1", "KW2", "KW4"
+  ),
+  "West Florida Shelf" = c(
+    "Z04-068", "CBH", "NBH", "EB1", "GLIDER", "I1",
+    as.vector(outer(
+      c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG"),
+      c("", 1:13),
+      str_c
+    ))
+  )
+) %T>% print()
+
+# merge water body and season
+ctd_dat_szn_water <-
+  ctd_dat_summary %>%
+  mutate(
+    # edit station names extracted from file names
+    station = str_replace(station, "(57)(1|2|3)", "\\1.\\2"),
+    station = str_replace(station, "WS2", "WS"),
+    station = str_replace(station, "AMI1.2", "AMI1"),
+    station = str_replace(station, "AM1", "AMI"),
+    station = str_replace(station, "GP5.2", "GP5"),
+    station = str_replace(station, "GP1.5", "GP1"),
+    station = str_replace(station, "MRV2", "MR"),
+    station = str_remove(station, "(_?A|B|_REDO|SURF|_RECAST|_2|UP)$"),
+    
+    water_body = case_match(
+      station,
+      water_body[[1]] ~ names(water_body[1]),
+      water_body[[2]] ~ names(water_body[2]),
+      water_body[[3]] ~ names(water_body[3]),
+      .default = NA_character_
+    ),
+    water_body =
+      case_when(
+        str_detect(station, "(?i)Z0(3|4)_") ~ names(.env$water_body)[[3]],
+        str_detect(station, "(?i)(EK|UK)_") ~ names(.env$water_body)[[1]],
+        .default = water_body
+      ),
+    season = case_match(
+      month(time, label = TRUE, abbr = TRUE),
+      szn[[1]] ~ names(szn)[1],
+      szn[[2]] ~ names(szn)[2],
+      szn[[3]] ~ names(szn)[3],
+      szn[[4]] ~ names(szn)[4],
+    ),
+    season = fct(season, names(szn)),
+    do = if_else(do < 0, NA, do),
+    .after = station
+  ) %>%
+  filter(
+    !(is.na(season) |
+      is.na(water_body))
+  )
 ```
+
+
+## 6.2 Function: CTD Data Plot Function Through Time
+
+```{r plt-ctd-data, fig.height=15, fig.width=20}
+##%######################################################%##
+#                                                          #
+####                      CTD Plot                      ####
+#                                                          #
+##%######################################################%##
+#' CTD Plot
+#'
+#' Plot CTD environmental variables through time. X axis should be time and 
+#' y axis should an environmental parameter. There is potential for 2 grouping
+#' factors with one for color and one for faceting. If `.grp2` is left blank, 
+#' it will use the first grouping as a facet.
+#'
+#' @param .dat Data.frame or tibble object
+#' @param .var_y Y axis variable
+#' @param .grp1 Grouping factor for color
+#' @param .grp2 Grouping factor for facetting, default = `.grp1`
+#' @param print_plt To print the resulting plot.
+#' @param .var_x Optional: change x axis from a date time, but if time is not a
+#'               column in the `.dat`, it will error.
+#'
+#'
+#' @author Sebastian Di Geronimo (October 03, 2023)
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+env_plt <-
+  function(
+    .dat, 
+    .var_y, 
+    .grp1, 
+    .grp2 = .grp1, 
+    print_plt = TRUE, 
+    .var_x = "time",
+    ...) {
+    
+    # x axis label
+    x_lab <- .var_x
+     
+    if (str_detect(.var_x, "time")) x_lab <- "Date"
+
+    if (str_detect(.var_y, "(?i)par")) x_lab <- "Hour"
+
+    # plot data
+    plt <-
+      .dat %>%
+      ggplot(
+        aes(
+          x     = .data[[.var_x]],
+          y     = .data[[.var_y]],
+          color = .data[[.grp1]]
+        )
+      ) +
+      geom_hline(
+        data = select(.dat, -season),
+        aes(
+          yintercept = mean(.data[[.var_y]], na.rm = TRUE)
+        ),
+        color = "red",
+        alpha = 0.5
+      ) +
+      geom_point(
+        data  =  select(.dat, -all_of(.grp2)),
+        color = "grey70",
+        alpha = 0.5
+      ) +
+      geom_smooth(
+        data    = select(.dat, -all_of(.grp2)),
+        colour  = "grey70",
+        method  = "loess",
+        span    = 0.1,
+        formula = y ~ x,
+        se      = FALSE,
+        alpha   = 0.5
+      ) +
+      geom_smooth(
+        linetype = "dashed",
+        colour = "grey70",
+        method = "gam",
+        # span    = 0.1,
+        formula = y ~ s(x, bs = "cs"),
+        se = FALSE,
+        alpha = 0.5
+      ) +
+      geom_point() +
+      labs(
+         ...,
+        # title = .var_y,
+        # x     = x_lab,
+        color = NULL
+      ) +
+      facet_grid(rows = .data[[.grp2]] ~ .) +
+      guides(color = guide_legend(nrow = 1)) +
+      theme(legend.position = "top")
+
+    # add 1 year breaks if date time
+    if (str_detect(.var_x, "time")) {
+      plt <- 
+        plt + 
+        scale_x_datetime(
+          date_breaks = "1 year",
+          date_labels = "%Y"
+          ) +
+        theme(
+          panel.grid.major.x = element_line(
+              colour   = "gray50",
+              linetype = "dashed")
+          )
+    }
+
+
+    # print plot
+    if (print_plt) suppressWarnings(print(plt))
+  }
+```
+
+
+## 6.2.1 Plot: Envrionmental Variables Through Time, By Season and Region
+
+Variables used:
+- temp = temperature (degrees C)
+- sal = salinity (unitless)
+- do = dissolved oxygen (mg L^-1 ?)
+- par = photosynthetically active radiation (? W per something)
+- chlorophyll_concentration = ()
+- CDOM = not sure what this is measuring ()
+- chlorophyll_fluorescence = ()
+- beam_attenuation = ()
+- beam_transmission =  ()
+- sea_water_sigma_t = ()
+
+
+
+```{r plt-ctd-data, fig.height=15, fig.width=20}
+# names of vars that can be used
+names(ctd_dat_szn_water)
+
+# used vars
+env_var <-
+  c(
+    "temp", "sal", "do", "par", "chlorophyll_concentration", "CDOM",
+    "chlorophyll_fluorescence", "beam_attenuation", "beam_transmission",
+    "sea_water_sigma_t"
+  )
+
+# loop through vars and plot
+for (i in env_var[4]) {
+  temp <- ctd_dat_szn_water
+
+  # filter CDOM because didn't have much prior to 2021
+  if (str_detect(i, "(?i)cdom")) {
+    temp <- filter(temp, year(time) > 2020)
+  }
+
+  # PAR is better plotted hourly because it changes most in a day than time
+  if (str_detect(i, "(?i)par")) {
+    temp %>%
+      mutate(hour = hour(time)) %>%
+      filter(!if_any(all_of(i), \(x) is.na(x))) %T>%
+      env_plt(
+        .,
+        .var_y = i,
+        .grp1  = "season",
+        .grp2  = "water_body",
+        .var_x = "hour",
+        title  = i,
+        x      = "Hour",
+        y      = "PAR"
+      ) %T>%
+      env_plt(
+        .,
+        .var_y = i,
+        .grp1  = "water_body",
+        .grp2  = "season",
+        .var_x = "hour",
+        title  = i,
+        x      = "Hour",
+        y      = "PAR"
+      )
+  } else {
+    temp %>%
+      filter(!if_any(all_of(i), \(x) is.na(x))) %T>%
+      env_plt(
+        .,
+        .var_y = i,
+        .grp1  = "season",
+        .grp2  = "water_body",
+        title  = i,
+        x      = "Date"
+      ) %T>%
+      env_plt(
+        .,
+        .var_y = i,
+        .grp1  = "water_body",
+        .grp2  = "season",
+        title  = i,
+        x      = "Date"
+      )
+  }
+}
+
+
+temp %>%
+  filter(!if_any(all_of(env_var[1]), \(x) is.na(x))) %T>%
+  env_plt(
+    .,
+    .var_y = env_var[1],
+    .var_x = env_var[3],
+    .grp1  = "season",
+    .grp2  = "water_body",
+    title  = env_var[1]
+  ) %T>%
+  env_plt(
+    .,
+    .var_y = env_var[1],
+    .var_x = env_var[3],
+    .grp1  = "water_body",
+    .grp2  = "season",
+    title  = env_var[1]
+  )
+```
+
+## 6.2B Plot Added Names: Envrionmental Variables Through Time, By Season and Region
+
+This is the same as 6.2A, but allows parallel looping to include proper y axis 
+and title names using a list `env_var` with *var* for the column name and *name*
+as the proper name.
+
+```{r plt-ctd-data, fig.height=15, fig.width=20}
+env_var <-
+  list(
+    "var"  = c("temp", "sal"),
+    "name" = c("Temperature", "Salinity")
+  )
+
+env_var %$%
+  walk2(
+    var,
+    name,
+    \(i, j) {
+      print(j)
+      temp <- ctd_dat_szn_water
+
+      # filter CDOM because didn't have much prior to 2021
+      if (str_detect(i, "(?i)cdom")) {
+        temp <- filter(temp, year(time) > 2020)
+      }
+
+      # PAR is better plotted hourly because it changes most in a day than time
+      if (str_detect(i, "(?i)par")) {
+        temp %>%
+          mutate(hour = hour(time)) %>%
+          filter(!if_any(all_of(i), \(x) is.na(x))) %T>%
+          env_plt(
+            .,
+            .var_y = i,
+            .grp1  = "season",
+            .grp2  = "water_body",
+            .var_x = "hour",
+            title  = i,
+            x      = "Hour",
+            y      = j
+          ) %T>%
+          env_plt(
+            .,
+            .var_y = i,
+            .grp1  = "water_body",
+            .grp2  = "season",
+            .var_x = "hour",
+            title  = i,
+            x      = "Hour",
+            y      = j
+          )
+      } else {
+        temp %>%
+          filter(!if_any(all_of(i), \(x) is.na(x))) %T>%
+          env_plt(
+            .,
+            .var_y = i,
+            .grp1  = "season",
+            .grp2  = "water_body",
+            title  = j,
+            x      = "Date",
+            y      = j
+          ) %T>%
+          env_plt(
+            .,
+            .var_y = i,
+            .grp1  = "water_body",
+            .grp2  = "season",
+            title  = j,
+            x      = "Date",
+            y      = j
+          )
+      }
+    }
+  )
+
+```
+
 
 
 # TODO: remove to another location
 the cmtx_avgs variable doesn't exists here
 ```{r chemtax-ctd}
 if (FALSE) {
-    # cmtx_avgs created in chemtax_analysis.Rmd
-    cmtx_avgs <- 
-        here("data", "processed", "chemtax_w_meta_rm_dup.csv")  %>%
-        read_csv(show_col_types = FALSE) %>%
-        mutate(cruise_id = str_extract(sample, "[A-Z]{2,3}[0-9]{4,5}"), 
-               season    = as.character(season)) %>%
-        relocate(cruise_id, .before = 1)
-    
-    
-    ctd_join <-
+  # cmtx_avgs created in chemtax_analysis.Rmd
+  cmtx_avgs <-
+    here("data", "processed", "chemtax_analsysis", "chemtax_w_meta_wide.csv") %>%
+    read_csv(show_col_types = FALSE) %>%
+    mutate(
+      cruise_id = str_extract(sample, "[A-Z]{2,3}[0-9]{4,5}"),
+      season = as.character(season)
+    ) %>%
+    relocate(cruise_id, .before = 1)
+
+
+  ctd_join <-
     here("data", "processed") %>%
     dir_ls(regexp = "ctd_all") %>%
     sort(decreasing = TRUE) %>%
@@ -411,41 +816,46 @@ if (FALSE) {
     read_csv(show_col_types = FALSE) %>%
     mutate(time = as_datetime(time)) %>%
     filter(
-        between(time, 
-                min(cmtx_avgs$date_time_utc) - period("1 month"),
-                max(cmtx_avgs$date_time_utc) + period("1 month"))
-        ) 
-    
-    # join cmtx_avgs with ctd summary
-    env_cmtx <-
-      cmtx_avgs %>%
-      left_join(
-        ctd_join,
-        by = join_by(
-          "cruise_id",
-          "station"),
-        relationship = "many-to-many"
-      ) %>%
-      mutate(
-        time_diff = abs(difftime(date_time_utc, time.y, units = "mins")) %>%
-                    as.numeric(),
-        time_diff = if_else(is.na(time_diff), 1, time_diff)
-      ) %>%
-      filter(
-        .by = c(cruise_id, station, depth.x),
-        time_diff == min(time_diff)
-      ) %>%
-      select(-time_diff)
-
-    
-    write_csv(
-      env_cmtx,
-      file = here("data", "processed", 
-                   glue("cmtx_env_data_", 
-                        "{Sys.Date()}",
-                        ".csv")
-                  )
+      between(
+        time,
+        min(cmtx_avgs$date_time_utc) - period("1 month"),
+        max(cmtx_avgs$date_time_utc) + period("1 month")
+      )
     )
-    }
-```
 
+  # join cmtx_avgs with ctd summary
+  env_cmtx <-
+    cmtx_avgs %>%
+    left_join(
+      ctd_join,
+      by = join_by(
+        "cruise_id",
+        "station"
+      ),
+      relationship = "many-to-many"
+    ) %>%
+    mutate(
+      time_diff = abs(difftime(date_time_utc, time.y, units = "mins")) %>%
+        as.numeric(),
+      time_diff = if_else(is.na(time_diff), 1, time_diff)
+    ) %>%
+    filter(
+      .by = c(cruise_id, station, depth.x),
+      time_diff == min(time_diff)
+    ) %>%
+    select(-time_diff)
+
+
+  write_csv(
+    env_cmtx,
+    file = here(
+      "data", "processed",
+      glue(
+        "cmtx_env_data_",
+        "{Sys.Date()}",
+        ".csv"
+      )
+    )
+  )
+}
+```
