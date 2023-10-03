@@ -100,15 +100,6 @@ dir_create(here(dir_plt_save))
 # set season names and order
 szn <- c("Winter", "Spring", "Summer", "Autumn")
 
-#season_year order vector
-# seasonyr_order <- 
-# c("Spring 2016", "Summer 2016 (No Data)", "Autumn 2016", 
-#   "Winter 2016-2017 (No Data)", "Spring 2017", 
-#   "Summer 2017", "Autumn 2017", "Winter 2017-2018", "Spring 2018",
-#   "Summer 2018", "Autumn 2018", "Winter 2018-2019", "Spring 2019", 
-#   "Summer 2019", "Autumn 2019", "Winter 2019-2020", "Spring 2020 (No Data)",
-#   "Summer 2020", "Autumn 2020", "Winter 2020-2021", "Spring 2021")
-
 # load chemtax data in wide format
 cmtx_w <-
   here("data", "processed", "chemtax_analysis", "chemtax_w_meta_wide.csv") %>%
@@ -173,41 +164,34 @@ Format:
   - Jan and Feb = "{season} {year-1}-{year}"
   
 When a season and year factor was not sampled at all, added a no data
+- Summer 2016
+- Winter 2016 - 2017
+- Spring 2020 (COVID-19 delays)
+
+
 ```{r chemtax-add_labels}
+extra_fct <- 
+  c(
+    "Summer 2016 (No Data)",
+    "Winter 2016-2017 (No Data)", 
+    "Spring 2020 (No Data)"
+  )
 cmtx_l <-
   cmtx_l %>%
   arrange(date_time_utc) %>%
   mutate(
+    .after = season,
     season_year = case_when(
       str_detect(season, "Aut|Spr|Sum") ~ glue("{season} {year}"),
       str_detect(month, "Jan|Feb")      ~ glue("{season} {year-1}-{year}"),
-      str_detect(month, "Dec")          ~ glue("{season} {year}-{year+1}"),
-    ),
+      str_detect(month, "Dec")          ~ glue("{season} {year}-{year+1}")),
+    
     season_year = fct_inorder(season_year),
-    season_year = fct_expand(
-      season_year, 
-      "Summer 2016 (No Data)",
-      "Winter 2016-2017 (No Data)", 
-      "Spring 2020 (No Data)"
-    ),
-    season_year = fct_relevel(season_year,
-      "Summer 2016 (No Data)",
-      after = 1
-    ),
-    season_year = fct_relevel(season_year,
-      "Winter 2016-2017 (No Data)",
-      after = 3
-    ),
-    season_year = fct_relevel(season_year,
-      "Spring 2020 (No Data)",
-      after = 16
-    ),
-    .after = season
-  ) %>%
-  # added rows with the missing seasons so that the facet grid will have
-  # seasons by column
-  complete(season_year, season) %>%
-  mutate(station = fct_na_value_to_level(station, "3")) %T>% print()
+    season_year = fct_expand(season_year, extra_fct),
+    season_year = fct_relevel(season_year, extra_fct[1], after = 1),
+    season_year = fct_relevel(season_year, extra_fct[2], after = 3),
+    season_year = fct_relevel(season_year, extra_fct[3], after = 16)
+  ) %T>% print()
 ```
 
 
@@ -242,7 +226,7 @@ plt_cmtx_den_hist <-
         ) +
         scale_x_continuous(trans = log1p_trans()) +
         facet_grid(
-          facet  = season ~ .,
+          rows  = season ~ .,
           scales = "free_x",
         ) +
         theme(
@@ -384,7 +368,7 @@ cmtx_l %>%
     labels = label_percent(),
     expand = c(0, 0)
   ) +
-  facet_wrap(~season_year, ncol = 4) +
+  facet_wrap(~season_year, ncol = 4, drop = FALSE) +
 
   # theme
   theme(
@@ -432,7 +416,6 @@ if (sv_arg$exists | sv_arg$overwrite) {
 }
 
 rm(sv_arg)
-
 ```
 
 
@@ -461,7 +444,7 @@ cmtx_l %>%
   scale_fill_manual(values  = tol_muted) +
   scale_color_manual(values = tol_muted) +
   scale_y_continuous(expand = c(0, 0)) +
-  facet_wrap(~season_year, ncol = 4) +
+  facet_wrap(~season_year, ncol = 4, drop = FALSE) +
 
   # theme
   theme(
