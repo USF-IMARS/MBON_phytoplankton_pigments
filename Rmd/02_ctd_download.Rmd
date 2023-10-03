@@ -82,11 +82,11 @@ NOTE: some cruise IDs were modified because there is some slight difference in
       
       
 ```{r query-erddap-cruise-id}
-# folder locationt to save data
-dir_data_save <- here("data", "processed", "ctd")
-dir_data_load <- rstudioapi::selectDirectory()
+# folder locationt to save downloaded data and average CTD data
+dir_data_dwnld_save <- here("data", "raw", "ctd")
+dir_data_avg_save   <- here("data", "processed", "ctd")
 
-dir_create(dir_data_save)
+dir_create(dir_data_avg_save)
 
 # cruise IDs covering all pigment data available
 cruise_id <-
@@ -171,7 +171,7 @@ for (cr_id in seq(all_cruise_ids)) {
   try(
     ctd_downloads(
       IDS = all_cruise_ids[cr_id],
-      path = dir_data_save,
+      path = dir_data_dwnld_save,
       verbose = TRUE,
       overwrite = FALSE
     ),
@@ -197,7 +197,7 @@ our naming.
 # get all CTD file names
 file_ctd <-
   dir_ls(
-    path    = dir_data_save,
+    path    = dir_data_dwnld_save,
     recurse = TRUE,
     regexp  = "\\.csv$"
   ) %>%
@@ -365,7 +365,7 @@ ctd_dat_summary %>%
   arrange(time) %>%
   save_csv(
     .data          = .,
-    save_location  = dir_data_save,
+    save_location  = dir_data_avg_save,
     save_name      = "ctd_all",
     overwrite      = FALSE,
     verbose        = TRUE,
