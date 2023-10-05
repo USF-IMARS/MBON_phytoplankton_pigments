@@ -41,6 +41,16 @@ Load data sets:
 - Surface Averaged CTD Data created in `02_ctd_download.Rmd`
 - Merge CHETMAX-CTD
 
+
+The merging process:
+1. Remove depths from CHEMTAX that are not near the surface (i.e. < 5m)
+2. Remove rows where CTD data is not available
+
+Missing CTD data:
+  - WS16130, no CTD data available
+  - SV18067, no CTD data available
+  - WS18218, only a few exist
+  
 ```{r chemtax-ctd}
 dir_data_save <- here("data", "processed", "ordination")
 dir_plt_save  <- here("data", "plots", "ordination")
@@ -50,42 +60,64 @@ dir_create(here(dir_plt_save))
 # set season names and order
 szn <- c("Winter", "Spring", "Summer", "Autumn")
 
-# CHEMTAX files
-cmtx_avgs <- 
+# ---- CHEMTAX files
+cmtx_dat <- 
   here("data", "processed", "chemtax_analysis", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
   mutate(season = fct_relevel(season, szn)) %T>% print()
 
-# CTD data
+cmtx_dat %>%
+    mutate(.by = c(cruise, station),
+          stn_samp = n(),
+           .before = station) %>%
+    filter(
+      .by = c(cruise_id, station),
+      min(depth) == depth 
+      & depth < 20
+    ) %>%
+      arrange(-depth)
+
+# ---- CTD data
 ctd_dat_summary <- 
   here("data", "processed", "ctd", "ctd_all.csv") %>%
   read_csv(show_col_types = FALSE)  %>%
   mutate(time = ymd_hms(time)) %T>% print()
 
-# merge data
+
+# ---- merge data
 env_cmtx <-
-  cmtx_avgs %>% 
+  cmtx_dat %>%
+  filter(
+    .by = c(cruise_id, station),
+    min(depth) == depth &
+      depth < 20
+  ) %>%
   left_join(
-    ctd_dat_summary, 
+    ctd_dat_summary,
     by = join_by(
-      "cruise_id" == "cruise_id", 
+      "cruise_id" == "cruise_id",
       "station" == "station"
-      )
-  ) %T>% print()
+    )
+  ) %>%
+  distinct(sample, .keep_all = TRUE) %T>% print()
 
-env_cmtx %>%
-    janitor::get_dupes(cruise_id, station) #%>%
-    # filter(!str_detect(station, "MR|LK|WS"))
+# ---- filter PFT-CTD data for joint pairs without missing data
+env_cmtx_filt <-
+  env_cmtx  %>%
+  drop_na(chloro:pras, pressure, temp, par, sal) %>%
+  mutate(group = season) %T>% print()
 
-# find unmatched PFT rows
-# WS16130 doesnt exists
-# SV18067 - no CTD data available
-# WS18218 - only a few exist
+
+
+# ---- show unmatched PFT-CTD rows
 naniar::vis_miss(env_cmtx)
+naniar::vis_miss(ctd_dat_summary)
 
 filter(env_cmtx, is.na(file)) %>%
+  select(cruise_id, station, date_time_utc) %>%
   arrange(date_time_utc) %T>% print() %>% 
   distinct(., cruise_id) %T>% print()
+
 
 # ---- save CHEMTAX-CTD merged data
 save_csv(
@@ -99,130 +131,77 @@ save_csv(
   )
 ```
 
-# Create Matrix Version of CHEMTAX Seasonal Averages
-```{r cmtx-convert-matrix}
-cmtx_avgs <-
-  cmtx_avgs %>%
-  rowid_to_column() %>%
-  unite(
-    "sample_code",
-    rowid,
-    season,
-    remove = FALSE
-  ) %>%
-  select(-rowid)
-
-
-# convert to matrix
-cmtx_data_matrix <-
-  cmtx_avgs %>%
-  select(sample_code, chloro:pras) %>%
-  column_to_rownames(var = "sample_code") %T>% print()
-```
+## 2.3 Create Matrix Version of CHEMTAX Seasonal Averages
 
 
 
-# NOT USED: ---- PCoA ----
-```{r Bray-Curtis-Dissimilarity-Matrix}
-# cmtx_bray <- vegdist(cmtx_data_matrix, method = "bray")
-# 
-# cmtx_pcoa <- cmdscale(cmtx_bray, eig = TRUE)
-# 
-# ggords::ggpcoa(cmtx_pcoa, cmtx_data_matrix, )
-#     
-# 
-# 
-# pcoa <- pco(cmtx_bray, negvals = "zero", dround = 0)
-# 
-# plot(pcoa$vectors[,1], pcoa$vectors[,2], type = "p", xlab = "PCoA1", ylab = "PCoA2",
-#  axes = TRUE, main = "PCoA on CHEMTAX data")
-# 
-# text(pcoa$vectors[,1], pcoa$vectors[,2], labels(cmtx_bray), 
-#  cex = 0.9, xpd = TRUE)
-# 
-# 
-# pcoa.var.per <- round(pcoa$value/sum(pcoa$value)*100, 1)
-# 
-# cmtx_val <-pcoa$vectors
-# 
-# dat_pcoa <- data.frame(Sample = rownames(cmtx_val),
-#                        X=cmtx_val[,1],
-#                        Y=cmtx_val[,2]) %>% 
-#     separate(Sample, c("rowid", "season"))
-# 
-# barplot(mds.var.per)
-# 
-# ggplot(data=pcoa, aes(x=vectors[,1], y=vectors[,2], color=season)) +
-#   geom_point() +
-#   theme_bw() +
-#   xlab(paste("MDS1 - ", mds.var.per[1], "%", sep="")) +
-#   ylab(paste("MDS2 - ", mds.var.per[2], "%", sep="")) +
-#   ggtitle("MDS plot using avg(logFC) as the distance") 
-# 
-# pcoaVS$values # eigenvalue for each component. This is a measure of the variance explained by each dimension
-# pcoaVS$vectors # eigenvectors. Each column contains the scores for that dimension.
+# 3.0 ---- Run PCoA and PCA on CHEMTAX data ----
 
-# cmtx_data_matrix2 <- cmtx_avgs2 %>%
-#     mutate(group = season) %>%
-#     select(group, chloro:pras)
-# ggpca::ggPCoA(cmtx_data_matrix2) +
-#     theme_classic() +
-#     theme(text=element_text(family="serif", size=20))
+## 3.1 Function to Calculate and Plot PCoA
 
-```
+Function to calculate and plot PCoA
+
+This is very basic and no assumption checking was preformed. 
+
+Vectors can be plotted as well.
 
 
-# ---- Run PCoA and PCA on CHEMTAX data ----
-
-## Function to Calculate and Plot PCoA
-Doesn't work too well
 ```{r func-ord-plot}
-#' Plot PCoS using `ggplot2`
+#' Plot PCoA using `ggplot2`
 #'
 #' FUNCTION_DESCRIPTION
 #'
 #' @param data A data.frame or tibble with 1 grouping column and any number of 
 #'             numeric columns
+#' @param  vector_dat Data to add vectors to plot. Needs to have the same rows 
+#'                    of data
+#'                    Default: data, but can be other variables.        
 #' @param .group_var A grouping variable to add color to plot
 #' @param pc The principal components to plot
 #' @param level Confidence interval for ellipsis on grouping variable
 #' @param dist_meth Distance metric Default: "bray"
 #' @param .correct Correction method given to the function `pcoa`
 #'                 Default: "none"
-#'
+#' @param plt_vector Optional: to return plot with vectors
+#' 
 #' @return RETURN_DESCRIPTION
 #' @examples
 #' # ADD_EXAMPLES_HERE
 #' 
 gg_pcoa2 <- function(
-  data, 
-  Y = data,
-  .group_var = "group",
-  pc        = c(1, 2),
-  level     = 0.68, 
-  dist_meth = "bray",
-  .correct = c("none", "lingoes", "caillies")
-  ) {
- 
-  .correct <- match.arg(.correct)    
-       
-  stopifnot(length(pc) == 2)  
+    data,
+    vector_dat = data,
+    .group_var = NULL,
+    pc         = c(1, 2),
+    level      = 0.68,
+    dist_meth  = "bray",
+    .correct   = c("none", "lingoes", "caillies"),
+    plt_vector = FALSE) {
+    
+
+  # load library
+  library(ggrepel)
+  library(ggpp)
+    
+  .correct <- match.arg(.correct)
+
+  stopifnot(length(pc) == 2)
   stopifnot(between(pc[1], 1, nrow(data)) & pc[1] != pc[2])
-  stopifnot(between(pc[2], 1, nrow(data)) & pc[2] != pc[1]) 
- 
-  # calc distance matrix  
-  pcoa <- 
+  stopifnot(between(pc[2], 1, nrow(data)) & pc[2] != pc[1])
+
+  # calc distance matrix
+  pcoa <-
     vegdist(
-      data[, -1], 
-      method = dist_meth, 
-      na.rm  = TRUE) %>%
-  
+      data[, -1],
+      method = dist_meth,
+      na.rm  = TRUE
+    ) %>%
     # run PCoA
-    pcoa( correction = .correct, rn = NULL)
-  
+    pcoa(correction = .correct, rn = NULL)
+
 
   # extract eignvalues
-  eig  <- 
+  eig <-
     pcoa$values[, 2] %>%
     tibble(eigen = .) %>%
     mutate(
@@ -232,249 +211,198 @@ gg_pcoa2 <- function(
     )
 
   # extract site values
-  dat_pcoa <- 
+  dat_pcoa <-
     as_tibble(pcoa$vectors) %>%
     bind_cols("group" = data[[.group_var]], .) %>%
     rename_with(
       .cols = contains("Axis"),
       .fn   = \(x) str_replace(x, "Axis\\.", "PCoA")
     )
-       
+
   # extract column names for x and y axis
   x_var <- eig[pc[1], 3][[1]]
   y_var <- eig[pc[2], 3][[1]]
- 
-  Y <- select(Y, -{{.group_var}})
 
-    pr.coo <- pcoa$vectors
-    # if (x$correction[2] > 1) 
-    #     pr.coo <- x$vectors.cor
-    k <- ncol(pr.coo)
-    diag.dir <- diag(c(dir.axis1 = pc[1], dir.axis2 = pc[2]))
-    plot.axes <- pc
-    pr.coo[, plot.axes] <- pr.coo[, plot.axes] %*% diag.dir
-        
-    n <- nrow(Y)
-    points.stand <- scale(pr.coo[, plot.axes])
-    S <- cov(Y, points.stand)
-    
-    U <- 
-      S %*% diag((x$values$Eigenvalues[plot.axes]/(n - 1))^(-0.5))
-    
-    colnames(U) <- colnames(pr.coo[, plot.axes])
-    
-   # browser()
   
+
   # plot PCoA
-  plt <- 
-      ggplot(
-          data = dat_pcoa, 
-          aes(
-              x     = .data[[x_var]],
-              y     = .data[[y_var]], 
-              color = group)
-          ) +
-      geom_vline(
-        xintercept = 0, 
-        color      = "grey70", 
-        linetype   = "dashed", 
-        alpha      = 0.5
-        ) +
-      geom_hline(
-        yintercept = 0, 
-        color      = "grey70", 
-        linetype   = "dashed", 
-        alpha      = 0.5
-        ) +
-      geom_point(
-          aes(color = group),
-          size  = 1.5, 
-          alpha = 1
-        ) +
-      stat_ellipse(
-          aes(fill = group), 
-          level       = level, 
-          linetype    = 3, 
-          geom        = "polygon", 
-          alpha       = 0.02, 
-          show.legend = FALSE
-          ) + 
-      labs(
-        x = eig$labels[pc[1]],
-        y = eig$labels[pc[2]]
-      ) + 
-       
-      scale_color_discrete(name = "Season") +
+  plt <-
+    ggplot(
+      data = dat_pcoa,
+      aes(
+        x     = .data[[x_var]],
+        y     = .data[[y_var]],
+        color = group
+      )
+    ) +
+    geom_vline(
+      xintercept = 0,
+      color      = "grey70",
+      linetype   = "dashed",
+      alpha      = 0.5
+    ) +
+    geom_hline(
+      yintercept = 0,
+      color      = "grey70",
+      linetype   = "dashed",
+      alpha      = 0.5
+    )
+
+  # add vectors
+  if (plt_vector) {
       
-      # theme
-      theme_classic(base_family = "serif", base_size = 20) +
-      theme(
-          legend.position = "top"
-          ) +
-      geom_segment(data = as.data.frame(U), 
-                   aes(
-                       x = 0, xend = Axis.1,
-                       y = 0, yend = Axis.2,
-                       ),
-                   inherit.aes = FALSE)
-    
-   return(plt)
+    vector_dat   <- select(vector_dat, -{{ .group_var }})
+
+    pr_coo       <- pcoa$vectors
+    pr_coo[, pc] <- pr_coo[, pc] %*% diag(pc)
+
+    n <- nrow(vector_dat)
+    points.stand <- scale(pr_coo[, pc])
+    S <- cov(vector_dat, points.stand)
+
+    U <- S %*% diag((pcoa$values$Eigenvalues[pc] / (n - 1))^(-0.5))
+    colnames(U) <- colnames(pr_coo[, pc])
+    U <-
+      as.data.frame(U) %>%
+      rownames_to_column(var = "pft") %>%
+      rename(
+        "axis_x" = 2,
+        "axis_y" = 3
+      )
+
+    vect_list <-
+      list(
+      geom_segment(
+        data = U,
+        aes(
+          x = 0, xend = axis_x,
+          y = 0, yend = axis_y,
+        ),
+        alpha = 0.5,
+        arrow = arrow(),
+        inherit.aes = FALSE
+      ),
+      geom_text_repel(
+        data = U,
+        aes(
+          x = axis_x,
+          y = axis_y,
+          label = pft
+        ),
+        position = position_nudge_center(
+            x = 0.01,
+            y = 0.01,
+            center_x = 0,
+            center_y = 0
+            ),
+        # label.size = NA,
+        # label.padding = 0.1,
+        inherit.aes = FALSE
+        )
+      )
+  }
+  
+  # plot PCoA sites 
+  plt <-
+    plt +
+    vect_list[[1]] +
+    geom_point(
+      aes(color = group),
+      size = 1.5,
+      alpha = 1
+    ) +
+    stat_ellipse(
+      aes(fill = group),
+      level = level,
+      linetype = 3,
+      geom = "polygon",
+      alpha = 0.02,
+      show.legend = FALSE
+    ) +
+    vect_list[[2]] +
+    labs(
+      x = eig$labels[pc[1]],
+      y = eig$labels[pc[2]]
+    ) +
+
+    scale_color_discrete(name = "Season") +
+
+    # theme
+    theme_classic(base_family = "serif", base_size = 12) +
+    theme(
+      legend.position = "top"
+    )
+
   return(
     list(
       "plt"         = plt,
       "eigenvalues" = eig,
       "pcoa_data"   = dat_pcoa,
-      "other"       = pcoa
-      )
+      "U_vector"    = U
     )
-  
+  )
+
   # ---- end of function gg_pcoa2
 }
 ```
 
-## Calculate and Plot 
-```{r plt-pcoa-pca}
+## 3.2 Calculate and Plot 
+
+Perform PCoA using "Bray-Curtis" dissimilarity on PFTs
+
+Two different data can be used:
+1. Filtered PFT data that matches to CTD. There are no duplicates nor multiple 
+   depths since the CTD data was only average at the surface
+2. Unfiltered PFT data with both surface and depth at some stations
+
+Perform PCA on CTD Data
+
+Very simple, no vectors plotted
+```{r plt-pcoa-pca, fig.width=10, fig.height=6}
 # ---- PCoA on PFT groups
-cmtx_data_matrix2 <-
-    env_cmtx %>%
-    drop_na(chloro:pras, pressure:sal) %>% 
-    # filter(if_any(all_of(chloro:pras, pressure:sal), ~ !is.na))
-    distinct(sample, .keep_all = TRUE)  %>%
-    mutate(group = season) 
-
-
-
-## calc and plot PCoA
-# pcoa_plt <-
-  select(cmtx_data_matrix2, group, chloro:pras) %>%
+## calc and plot
+pcoa_dat <-
+  # select(cmtx_dat, season, chloro:pras) %>% # using all data
+   select(env_cmtx, season, chloro:pras) %>% # using filtered data with CTD
   gg_pcoa2(
-                    pc = c(1, 2),
-            .correct = "none")
-
-env_scaled <- 
-cmtx_data_matrix2 %>%
-    drop_na(chloro:pras, temp:sal) %>%
-    select(pressure:sal) %>%
-    mutate(
-      across(everything(), ~ scale(.)  %>% as.vector())
-    ) %>%
-    vegdist(., method = "euclidean")
-
-
-pcoa_plt$other %>%
-  ape::biplot.pcoa(
-    plot.axes = c(1, 2),
-    Y = cmtx_data_matrix2 %>%
-      drop_na(chloro:pras, temp:sal) %>%
-      select(chloro:pras) #%>%
-      # mutate(across(everything(), ~ scale(.) %>% as.vector()))
+    pc         = c(1, 2),
+    .correct   = "none",
+    .group_var = "season",
+    plt_vector = TRUE
   )
-
-    Y = cmtx_data_matrix2 %>%
-      drop_na(chloro:pras, temp:sal) %>%
-      select(chloro:pras) #%>%
-x <- pcoa_plt$other
-
-    pr.coo <- x$vectors
-    # if (x$correction[2] > 1) 
-    #     pr.coo <- x$vectors.cor
-    k <- ncol(pr.coo)
-    diag.dir <- diag(c(dir.axis1 = 1, dir.axis2 = 2))
-    plot.axes <- c(1, 2)
-    pr.coo[, plot.axes] <- pr.coo[, plot.axes] %*% diag.dir
-        
-    n <- nrow(Y)
-    points.stand <- scale(pr.coo[, plot.axes])
-    S <- cov(Y, points.stand)
-    
-    U <- 
-      S %*% diag((x$values$Eigenvalues[plot.axes]/(n - 1))^(-0.5))
-    
-    colnames(U) <- colnames(pr.coo[, plot.axes])
-    
-    
-    par(mai = c(1, 0.5, 1.4, 0))
-    
-    # plot using stats::biplot
-    biplot(pr.coo[, plot.axes], U)#, xlab = labels[1], ylab = labels[2])
-    
-    
-    # title
-    if (is.null(main)) {
-        title(main = c("PCoA biplot", "Response variables projected", 
-            "as in PCA with scaling 1"), line = 4)
-    } else {
-        title(main = main, family = "serif")
-    }
-    # if (k < 2) 
-    #     stop("There is a single eigenvalue. No plot can be produced.")
-    # if (k < plot.axes[1]) 
-    #     stop("Axis", plot.axes[1], "does not exist.")
-    # if (k < plot.axes[2]) 
-    #     stop("Axis", plot.axes[2], "does not exist.")
-    # if (!is.null(rn)) 
-    #     rownames(pr.coo) <- rn
-    # labels = colnames(pr.coo[, plot.axes])
-    # if (is.null(Y)) {
-    #     limits <- apply(pr.coo[, plot.axes], 2, range)
-    #     ran.x <- limits[2, 1] - limits[1, 1]
-    #     ran.y <- limits[2, 2] - limits[1, 2]
-    #     xlim <- c((limits[1, 1] - ran.x/10), (limits[2, 1] + 
-    #         ran.x/5))
-    #     ylim <- c((limits[1, 2] - ran.y/10), (limits[2, 2] + 
-    #         ran.y/10))
-    #     par(mai = c(1, 1, 1, 0.5))
-    #     plot(pr.coo[, plot.axes], xlab = labels[1], ylab = labels[2], 
-    #         xlim = xlim, ylim = ylim, asp = 1)
-    #     text(pr.coo[, plot.axes], labels = rownames(pr.coo), 
-    #         pos = 4, cex = 1, offset = 0.5)
-    #     if (is.null(main)) {
-    #         title(main = "PCoA ordination", line = 2)
-    #     }
-    #     else {
-    #         title(main = main, family = "serif", line = 2)
-    #     }
-    # }
-    # else {
-    # }
-    # invisible()
-
-
 
 # ---- PCA on environmental CTD
 # temp, par and sal
-env_data_matrix <- 
-    env_cmtx %>% 
-    # mutate(group = season) %>% 
-    select(temp, par, sal, season) %>% 
-    na.omit()
 
-## calc PCA 
-env_pca <- prcomp(env_data_matrix[1:3], scale. = TRUE)
+## calc
+env_pca <- 
+  select(env_cmtx_filt,  temp, sal, par, sal) %>%
+  prcomp(., scale. = TRUE)
+
+
+
 
 ## plot PCA
 pca_plt <-
   autoplot(
     env_pca,
-    data   = env_data_matrix,
+    data   = select(env_cmtx_filt,  season, temp, sal, par, sal),
     colour = "season"
   ) +
   scale_colour_discrete(name = "Season") +
   theme_classic() +
   theme(
-    text = element_text(family = "serif", size = 20),
-    legend.position = "bottom"
+    text = element_text(family = "serif", size = 12),
+    legend.position = "top"
   )
 
-pcoa_plt$plt    
-# pcoa_plt   
+pcoa_dat$plt    
 pca_plt
-```
 
-## Save PCA and PCoA
-```{r save-pcoa-pca}
+
+# Save PCA and PCoA
 save_gg(
-  plt            = pca_plt, # edit if want specific plot
+  plt            = pca_plt,
   save_location  = dir_plt_save,
   save_name      = "pft_pca",
   verbose        = TRUE,
@@ -489,97 +417,33 @@ save_gg(
 )
 
 save_gg(
-  plt            = pcoa_plt,
+  plt            = pcoa_dat$plt,
   save_location  = dir_plt_save,
   save_name      = "pft_pcoa",
   verbose        = TRUE,
   overwrite      = FALSE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
-  height         = 9.7,
-  width          = 19,
+  height         = 10,
+  width          = 10,
   dpi            = 600,
   units          = "in",
   bg             = "white"
 )
-# save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = c("pca", "pcoa"),
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     pca = dir_ls(.$sv_loc,
-#                  regexp = .$sv_nm[1]) %>% is_empty(),
-#     pcoa = dir_ls(.$sv_loc,
-#                  regexp = .$sv_nm[2]) %>% is_empty()
-#   )
 
-# # ---- save PCA
-# # if (sv_arg$pca | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = pca_plt, # edit if want specific plot
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 9.7,
-#     width          = 19,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# 
-# # } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# # }
-# 
-# rm(sv_arg)
-# 
-# 
-# # ---- save PCoA
-# if (sv_arg$pcoa | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = pcoa_plt, 
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[2],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 9.7,
-#     width          = 19,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# 
-# } else {
-#     cli_alert_info(
-#         c(
-#           "Skipping saving of ",
-#           "{.file {sv_arg$sv_nm[2]}} ",
-#           "because exists ",
-#           "and/or overwrite = {.var FALSE}"
-#         )
-#     )
-# }
-# rm(sv_arg)
 ```
 
-# ---- Pairwise Permanova Test ----
+# 4.0 ---- Pairwise Permanova Test ----
+
+
+## 4.1 Perform Permuatation MANOVA
+
+- CTD vars (temp, par and sal) vs season
+- PFTs vs season
+  - pairwise seasons
+
 ```{r permanova}
 # ---- function
-# run adonis2 on
-
 #' Pairwise Permutation MANOVA
 #'
 #' FUNCTION_DESCRIPTION
@@ -589,6 +453,7 @@ save_gg(
 #' @param pairs DESCRIPTION.
 #' @param formula DESCRIPTION.
 #' @param dist_method DESCRIPTION.
+#' @param strata DESCRIPTION.
 #'
 #' @return RETURN_DESCRIPTION
 #' @examples
@@ -598,125 +463,137 @@ szn_adonis2 <- function(
         pair_col, 
         pairs, 
         formula = NULL, # something like "season * station" 
-        dist_method = "bray") {
-    # browser()
-    pair_name <- str_flatten(pairs, collapse = "|")
-    
-    dat_pair  <- 
-        filter(
-            .data, 
-            str_detect( !!sym(pair_col),
-            pair_name))
-    
-    value <- select(dat_pair, chloro:pras)
+        dist_method = "bray",
+        strata = NULL) {
 
-    adon_test <- adonis2(
-        formula = as.formula(paste("value ~", formula)), 
-        data   = dat_pair, 
-        method = dist_method
-        # strata = # should probably add something here
+    dat_pair  <- filter(.data, str_detect( {{ pair_col }}, pairs))
+    value     <- select(dat_pair, chloro:pras) 
+    
+    if (!is.null(strata)) strata <- dat_pair[[strata]]
+    
+    permanova_results <- 
+      adonis2(
+        formula  = as.formula(paste("value ~", formula)), 
+        data     = dat_pair, 
+        method   = dist_method,
+        strata   =  strata 
         )   
     
-    pairwise_p <- adon_test[["Pr(>F)"]][1]
-    pairwise_p
+    
+    return(
+      list(
+        "pairwise_p" = permanova_results[["Pr(>F)"]][1],
+        "results"    = permanova_results
+        )
+    )
 }
 
-
-# ---
-
 set.seed(1082002)
-all_test_env <-
-  adonis2(
-    env_data_matrix[1:3] ~ season,
-    data   = env_data_matrix,
-    method = "bray"
-  )
+# CTD vs season
+adonis2(
+  select(env_cmtx_filt, temp, sal, par, sal) ~ season,
+  data   = select(env_cmtx_filt, season, temp, sal, par, sal),
+  method = "bray"
+)
 
-all_test <-
-  adonis2(
-    cmtx_data_matrix ~ season,
-    data   = cmtx_avgs,
-    method = "bray"
-  )
-   
+# PFT vs season
+adonis2(
+  select(env_cmtx_filt, chloro:pras) ~ season,
+  data   = select(env_cmtx_filt, season, chloro:pras),
+  method = "bray"
+)
+
+
 
 # create combinations of season to pairwise test
-cross_pairs <- 
-    cmtx_avgs %>%
-    select(season) %$%
-    combn(unique(as.character(season)), 2) %>%
-    t()
+permanova_r <-
+  combn(szn, 2) %>%
+  t() %>%
+  as_tibble() %>%
+  set_colnames(c("szn1", "szn2")) %>%
+  unite(season_pairs, szn1, szn2, sep = "|") %>%
+  mutate(
+    pairwise_p =
+      map(
+        .x = season_pairs,
+        .f =
+          ~ szn_adonis2(
+            .data    = cmtx_dat,
+            pairs    = .x,
+            pair_col = season,
+            formula  = "season",
+            strata   = NULL
+            # strata   = "station"
+          )
+      ),
+  ) %>%
+  unnest_wider(pairwise_p) %>%
+  # ---- correct p-values
+  mutate(
+    p_adjust = p.adjust(pairwise_p, method = "bonferroni"),
+    .before = results
+  ) %T>% print()
 
-colnames(cross_pairs) <- c("szn1", "szn2")
-
-cross_pairs <- 
-    cross_pairs %>% 
-    as_tibble() %>%
-    unite(season_pairs, szn1, szn2, sep = "|")
-
-set.seed(1234)
-cross_pairs %>%
-    mutate(
-       pairwise_p = map_dbl(
-           .x = season_pairs,
-           # .data = cmtx_avgs,
-           .f = ~ szn_adonis2(.data = cmtx_avgs, "season", pairs = .x, "season"),
-           .data = cmtx_avgs
-       ),
-       
-      # ---- correct p-values
-      p_adjust = p.adjust(pairwise_p, method = "bonferroni")     
-    )
-
-
+permanova_r$results
 ```
 
-# CCA Analysis 
-```{r cca, fig.height=9.7, fig.width=19}
-# extrafont::font_import()
-cca_matrix <- select(env_cmtx, chloro:pras)
+# 5.0 ---- CCA Analysis ----
 
-cmtx_cca <- cca(cca_matrix ~ temp +sal + par, 
-                data      = env_cmtx, 
-                na.action = na.omit)
+Perform CCA and Plot:
+
+PFTs vs CTD (temp, sal, PAR)
+
+```{r cca, fig.height=9.7, fig.width=19}
+cmtx_cca <- 
+  cca(
+    select(env_cmtx_filt, chloro:pras) ~ temp + sal + par, 
+    data      = env_cmtx_filt, 
+    na.action = na.omit
+    )
 
 plot(cmtx_cca, scaling = 1)
 
-new_lab <- list(temp = "Temp",
-                sal  = "Sal", 
-                par  = "PAR")
+new_lab <- 
+  list(
+    temp = "Temp",
+    sal  = "Sal", 
+    par  = "PAR"
+    )
 
 tol_muted2 <- c('#88CCEE', '#44AA99', '#117733', '#332288')
 
 cca_plt <-
-    ggord(
-        cmtx_cca,
-        size      = 4,
-        grp_in    = env_cmtx %>% drop_na(temp, par:sal) %$% as.factor(season),
-        ellipse   = FALSE,
-        ptslab    = TRUE,
-        addsize   = 6,
-        ylim      = c(-6.25, 6.25),
-        xlim      = c(-4, 5),
-        repel     = TRUE,
-        txt       = 6,
-        vec_lab   = new_lab,
-        grp_title = "Season"
-        ) +
-    theme_classic() +
-    theme(text = element_text(family = "serif", size = 20),
-          legend.position = "bottom")
+  ggord(
+    cmtx_cca,
+    size      = 4,
+    grp_in    = factor(env_cmtx_filt$season, szn), # season
+    ellipse   = FALSE,
+    ptslab    = TRUE,
+    addsize   = 6,
+    ylim      = c(-6.25, 6.25),
+    xlim      = c(-4, 5),
+    repel     = TRUE,
+    txt       = 6,
+    vec_lab   = new_lab,
+    grp_title = "Season"
+  ) +
+  geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.5, color = "grey") +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5, color = "grey") +
+  theme_classic() +
+  theme(
+    text = element_text(family = "serif", size = 20),
+    legend.position = "bottom"
+  )
 
 cca_plt
 
 gg_ordiplot(
   ord     = cmtx_cca,
-  groups  = # extract seasons
-    env_cmtx %>%
-      drop_na(temp, par:sal) %$% 
-      as.factor(season),
+  groups  = factor(env_cmtx_filt$season, szn), # season
   scaling = 1
-)
+  ) + 
+  theme_bw() 
+
 
 
 # ---- save cca plot
@@ -726,6 +603,7 @@ save_gg(
   save_name      = "pft_cca",
   verbose        = TRUE,
   overwrite      = FALSE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 9.7,
@@ -737,251 +615,3 @@ save_gg(
 ```
 
 
-```{r ctd-plt}
-ggplot(env_cmtx) +
-    geom_boxplot(aes(y = par)) +
-    facet_wrap(facet =  ~ season)
-
-
-ggplot(env_cmtx) +
-    geom_point(aes(x = date_time_utc, y = par, 
-                   color = season)) 
-# env_cmtx %>%
-#     # select(-c(cruise_code, indx, cruise.y)) %>%
-#     ggpairs(columns = 27:41, 
-#             mapping = aes(color = season))
-```
-
-
-
-
-
-# STOP: Not sure what's beyond
-
-
-
-
-
-
-```{r func-ord-plot}
-
-neword <- function(ord_in, grp_in = NULL, axes = c("1", "2"), ...) {
-    axes       <- glue("CCA {axes}")
-    obs        <- data.frame(ord_in$CCA$wa[, axes])
-    obs$Groups <- grp_in
-    addpts     <- data.frame(ord_in$CCA$v[, axes])
-    constr     <- data.frame(ord_in$CCA$biplot[, axes])
-    exp_var    <- summary(ord_in, scaling = 1)$concont$importance[2, axes]
-    axes       <- glue("{axes} ({round(100 * exp_var, 2)}%)")
-    
-    names(obs)[1:2] <- axes
-    ggord:::ggord.default(obs, 
-                          vecs = constr, 
-                          axes, 
-                          addpts = addpts, ...)
-}
-
-neword(cmtx_cca)
-```
-# ??? This function doesn't have a name
-```{r}
-function(ord,
-         groups,
-         scaling     = 1,
-         choices     = c(1, 2),
-         kind        = c("sd", "se", "ehull"),
-         conf        = NULL,
-         show.groups = "all",
-         ellipse     = TRUE,
-         label       = FALSE,
-         hull        = FALSE,
-         spiders     = FALSE,
-         pt.size     = 3,
-         plot        = TRUE) {
-    
-    groups <- as.factor(groups)
-    if (show.groups[1] == "all") {
-        show.groups <- as.vector(levels(groups))
-    }
-    
-    df_ord <- vegan::scores(ord, display = "sites", scaling = scaling, 
-        choices = choices)
-    
-    axis.labels <- ord_labels(ord)[choices]
-    
-    df_ord <- data.frame(x     = df_ord[, 1], 
-                         y     = df_ord[, 2], 
-                         Group = groups)
-    
-    df_mean.ord <- aggregate(df_ord[, 1:2], 
-                             by = list(df_ord$Group), 
-                             mean)
-    
-    colnames(df_mean.ord) <- c("Group", "x", "y")
-    
-    df_mean.ord <- df_mean.ord[df_mean.ord$Group %in% show.groups, ]
-    
-    if (is.null(conf)) {
-        rslt <- vegan::ordiellipse(
-            ord, 
-            groups      = groups, 
-            display     = "sites", 
-            scaling     = scaling, 
-            choices     = choices, 
-            kind        = kind, 
-            show.groups = show.groups, 
-            draw        = "none", 
-            label       = label)
-    } else {
-        rslt <- vegan::ordiellipse(
-            ord, 
-            groups      = groups, 
-            display     = "sites", 
-            scaling     = scaling,
-            choices     = choices, 
-            kind        = kind, 
-            show.groups = show.groups, 
-            draw        = "none", 
-            conf        = conf, 
-            label       = label)
-    }
-    
-    df_ellipse <- data.frame()
-    
-    for (g in show.groups) {
-        
-        df_ellipse <- rbind(
-            df_ellipse,
-            cbind(as.data.frame(with(df_ord[df_ord$Group == g, ], 
-            vegan:::veganCovEllipse(rslt[[g]]$cov, 
-                                    rslt[[g]]$center, 
-                                    rslt[[g]]$scale
-                                    ))), 
-            Group = g))
-    }
-    colnames(df_ellipse) <- c("x", "y", "Group")
-    
-    df_ellipse <- df_ellipse[, c(3, 1, 2)]
-    
-    rslt.hull <- vegan::ordihull(
-        ord, 
-        groups      = groups, 
-        scaling     = scaling, 
-        choices     = choices, 
-        show.groups = show.groups, 
-        draw        = "none")
-    
-    df_hull <- data.frame()
-    df_temp <- data.frame()
-    
-    for (g in show.groups) {
-        x       <- rslt.hull[[g]][, 1]
-        y       <- rslt.hull[[g]][, 2]
-        Group   <- rep(g, length(x))
-        df_temp <- data.frame(Group = Group, 
-                              x     = x, 
-                              y     = y)
-        df_hull <- rbind(df_hull, df_temp)
-    }
-    
-    df_spiders        <- df_ord
-    df_spiders$cntr.x <- NA
-    df_spiders$cntr.y <- NA
-    
-    for (g in show.groups) {
-        df_spiders[which(df_spiders$Group == g), 4:5] <- df_mean.ord[which(df_mean.ord == g), 2:3]
-    }
-    
-    df_spiders <- df_spiders[, c(3, 4, 5, 1, 2)]
-    df_spiders <- df_spiders[order(df_spiders$Group), ]
-    df_spiders <- df_spiders[df_spiders$Group %in% show.groups, ]
-    
-    xlab <- axis.labels[1]
-    ylab <- axis.labels[2]
-    
-    plt <- 
-        ggplot() + 
-        geom_point(data = df_ord, 
-                   aes(x     = x, 
-                       y     = y, 
-                       color = Group), 
-                   size = pt.size) + 
-        labs(
-            x = xlab,
-            y = ylab
-        )
-
-    if (ellipse == TRUE) {
-        plt <- 
-            plt + 
-            geom_path(data = df_ellipse, 
-                      aes(x     = x, 
-                          y     = y, 
-                          color = Group), 
-                      show.legend = FALSE)
-    }
-    
-    if (label == TRUE) {
-        plt <- 
-            plt + 
-            geom_text(data = df_mean.ord, 
-                      aes(x = x, 
-                          y = y, 
-                          label = Group, 
-                          color = Group), 
-                      show.legend = FALSE)
-    }
-    
-    if (hull == TRUE) {
-        plt <- 
-            plt + 
-            geom_path(data = df_hull, 
-                      aes(x = x, 
-                          y = y, 
-                          color = Group),
-                      show.legend = FALSE)
-    }
-    if (spiders == TRUE) {
-        plt <- plt + 
-            geom_segment(data = df_spiders, 
-                         aes(x     = cntr.x,
-                             xend  = x, 
-                             y     = cntr.y, 
-                             yend  = y, 
-                             color = Group), 
-                         show.legend = FALSE)
-    }
-    
-    plt <- plt + coord_fixed(ratio = 1)
-    
-    if (plot) {
-        print(plt)
-    }
-    
-    invisible(list(
-        df_ord      = df_ord, 
-        df_mean.ord = df_mean.ord, 
-        df_ellipse  = df_ellipse, 
-        df_hull     = df_hull, 
-        df_spiders  = df_spiders, 
-        plot        = plt
-        ))
-}
-```
-
-
-```{r}
-cca_new <- vegan::scores(
-    cmtx_cca, 
-    display = "sites", 
-    scaling = 1, 
-    choices = c(1, 2))
-
-ggord(cca_new, size = 1.5, 
-      grp_in = env_cmtx %>% drop_na(temp,par:sal) %$% as.factor(season),
-      ellipse = FALSE, 
-      ptslab = TRUE, 
-      addsize = 4, 
-      ylim = c(-6.25, 6.25), 
-      xlim = c(-5, 5))
-```
