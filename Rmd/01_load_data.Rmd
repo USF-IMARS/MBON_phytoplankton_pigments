@@ -383,9 +383,13 @@ df_merg2 <- full_join(df1, df5)
 
 # ---- full merge ----
 
-df_all <- 
+df_all <-
   full_join(df_merg, df_merg2, by = params) %>%
-  mutate(across(tot_chl_a:tchl_a_tpg, \(x) if_else(!is.na(x), x, 0)))
+  mutate(
+    across(tot_chl_a:tchl_a_tpg, \(x) if_else(!is.na(x), x, 0)),
+    cruise_id = str_extract(sample, "\\w{1,3}\\d{4,6}")
+    ) %>%
+  relocate(cruise_id, .before = sample) %T>% print()
 ```
 
 ## 2.3 Add Seasonal Factor and Water Body Name
@@ -502,12 +506,9 @@ df_all <-
     lon = case_when(
       lon > 0 ~ lon * (-1),
       .default = lon
-    )
-  ) %>%
+    ),
     
-  # fix spacing of stations
-  mutate(
-
+    # fix spacing of stations
     # specifically TB1 was off, need to use NOAA AOML for coords
     lat = case_when(
       station == "TB1" ~ 27.8013,
@@ -516,8 +517,15 @@ df_all <-
     lon = case_when(
       station == "TB1" ~ -82.8819,
       .default = lon
-    )
-  )
+    ),
+    cruise_id,
+    station = 
+      if_else(
+        str_detect(station, "9B") & str_detect(cruise_id, "WS19210"), 
+        "9.5", 
+        station
+        )
+  ) 
 
 
 # summarize most freq value for lat/lon per station
@@ -605,6 +613,7 @@ if (interactive() & nzchar(system.file(package = "plotly"))) {
 ```
 
 ## 2.6 Clean Workspace
+
 ```{r clean-workspace}
 if (menu(c("Remove Variables", "Keep Variables"), 
          title = "Do you want to remove variables?") == 1 ) {
@@ -824,11 +833,11 @@ rm(val)
 
 ```{r save-combined-data}
 # location to save data
-path_out <- here("data", "processed", "load_data")
+dir_data_save <- here("data", "processed", "load_data")
 
 # overwrite or not
-# ovrwrt_sv <- TRUE
 ovrwrt_sv <- FALSE
+# ovrwrt_sv <- TRUE
 
 # 1A. combined date
 df_all %>%
@@ -842,7 +851,7 @@ df_all %>%
   relocate(water_type, .after = name_of_water_body) %>%
   save_csv(
     .data          = .,        
-    save_location  = path_out,
+    save_location  = dir_data_save,
     save_name      = "combined_pig_dat",
     overwrite      = ovrwrt_sv,
     verbose        = TRUE,
@@ -852,7 +861,7 @@ df_all %>%
 # 1B. combined date
 save_csv(
   .data          = df_all,        
-  save_location  = path_out,
+  save_location  = dir_data_save,
   save_name      = "combined_pig_dat_all",
   overwrite      = ovrwrt_sv,
   verbose        = TRUE,
@@ -862,7 +871,7 @@ save_csv(
 # 2. stats on combined date
 save_csv(
   .data          = pig_stat,        
-  save_location  = path_out,
+  save_location  = dir_data_save,
   save_name      = "pig_summary_stat",
   overwrite      = ovrwrt_sv,
   verbose        = TRUE,
@@ -872,7 +881,7 @@ save_csv(
 # 3. log trans of pigment
 save_csv(
   .data          = log_pig,        
-  save_location  = path_out,
+  save_location  = dir_data_save,
   save_name      = "log_combined_pig_dat",
   overwrite      = ovrwrt_sv,
   verbose        = TRUE,
@@ -882,7 +891,7 @@ save_csv(
 # 4. log trans mean, std dev, var
 save_csv(
   .data          = log_pig_stat,        
-  save_location  = path_out,
+  save_location  = dir_data_save,
   save_name      = "log_pig_summary_stat",
   overwrite      = ovrwrt_sv,
   verbose        = TRUE,
@@ -892,7 +901,7 @@ save_csv(
 # 5. FL Keys chemtax season clusters
 save_csv(
   .data          = fl_keys_chemtax_seasons,        
-  save_location  = path_out,
+  save_location  = dir_data_save,
   save_name      = "chemtax_season_clust",
   overwrite      = ovrwrt_sv,
   verbose        = TRUE,
@@ -908,50 +917,65 @@ rm(ovrwrt_sv)
 Not sure what this is used for?
 
 ```{r lat-lon-table}
-shelf(gt)
-lat_lon_dat <-
-  pig_dat %>%
-  filter(name_of_water_body == "Florida Keys") %>%
-  distinct(station, lat, lon)
+if (
+  menu(
+    c("Yes, make lat/lon table", "No, I'm okay!"),
+    title = "Are you sure you want to proceed?"
+  ) == 1) {
+    
+  shelf(gt)
 
-lat_lon_tbl <- 
-  lat_lon_dat %>%
-  gt(
-    rowname_col   = "station",
-    groupname_col = NULL
-  ) %>%
-  cols_label(
-    lat = md("Latitude (&deg;)"),
-    lon = md("Longitude (&deg;)")
-  ) %>%
-  tab_options(
-    table_body.hlines.width = 0,
-    table_body.vlines.width = 0,
-    stub.border.width       = 0
-  ) %>%
-  opt_table_font("serif")
+  # create able for lat/lon
+  lat_lon_dat <-
+    df_all %>%
+    filter(name_of_water_body == "Florida Keys") %>%
+    distinct(station, lat, lon)
 
-lat_lon_tbl
+  lat_lon_tbl <-
+    lat_lon_dat %>%
+    gt(
+      rowname_col   = "station",
+      groupname_col = NULL
+    ) %>%
+    cols_label(
+      lat = md("Latitude (&deg;)"),
+      lon = md("Longitude (&deg;)")
+    ) %>%
+    tab_options(
+      table_body.hlines.width = 0,
+      table_body.vlines.width = 0,
+      stub.border.width       = 0
+    ) %>%
+    opt_table_font("serif")
 
-# ---- save tables as html and docx
-if (FALSE) {
-  file_expr(
-    loc            = dir_plt_save,
-    file_base      = "fl_keys_stn_lat_lon",
-    exts           = c("html", "docx"),
-    time_stamp_fmt = "%Y%m%d_%H%M%S"
-  ) %$%
-  eval(file_expr) %>%
-  walk(
-    .,
-    \(file_n) {
-      gtsave(
-        gt_pft,
-        filename = file_n
+  lat_lon_tbl
+
+  # ---- save tables as html and docx
+  if (FALSE) {
+    # save location
+    dir_plt_save <- here("data", "plots", "load_data")
+
+    dir.create(dir_plt_save)
+
+    # save table
+    file_expr(
+      loc            = dir_plt_save,
+      file_base      = "fl_keys_stn_lat_lon",
+      exts           = c("html", "docx"),
+      time_stamp_fmt = "%Y%m%d_%H%M%S"
+    ) %$%
+      eval(file_expr) %>%
+      walk(
+        .,
+        \(file_n) {
+          gtsave(
+            gt_pft,
+            filename = file_n
+          )
+        }
       )
-    }
-  )
-
- 
+  }
+  
+  unshelf(gt)
 }
 ```
