@@ -308,45 +308,6 @@ save_gg(
   bg             = "white"
   )
 
-# # save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = "pft_bar_percent_season", # edit name
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     exists = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
-#   )
-# 
-# # save
-# if (sv_arg$exists | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = last_plot(), # edit if want specific plot
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 9.7,
-#     width          = 19,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# rm(sv_arg)
-
 
 ```
 
@@ -408,44 +369,7 @@ save_gg(
   bg             = "white"
   )
 
-# # save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = "pft_bar_percent_season_year",
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     exists = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
-#   )
-# 
-# # save
-# if (sv_arg$exists | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = last_plot(),
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 9.7,
-#     width          = 19,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# rm(sv_arg)
+
 ```
 
 
@@ -500,44 +424,6 @@ save_gg(
   bg             = "white"
   )
 
-# # save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = "pft_bar_absolute_season_year", # edit name
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     exists = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
-#   )
-# 
-# # save
-# if (sv_arg$exists | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = last_plot(), # edit if want specific plot
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 9.7,
-#     width          = 19,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# rm(sv_arg)
 
 ```
 # 4.0 Timeseries Plots
@@ -619,48 +505,34 @@ plt_smooth <-
    ) 
 ```
 
-## 4.2 *WIP* IDK
-```{r diat-ts-plt, fig.width=30, fig.height=15}
-
-# (test2 +  # in PI chunk
-#  geom_boxplot(aes( x = season, fill = season))) + 
- # (plt_smooth +
- #  aes(x = date_time_utc)) +
- #  (plt_smooth +
- #    aes(x = yday(date_time_utc)) +
- #    labs(y = NULL)) +
- #  (plt_smooth +
- #    aes(x = month(date_time_utc)) +
- #    labs(y = NULL)) +
- #    patchwork::plot_layout(ncol = 4)
-```
 
 # 5.0 *WIP* MANOVA
 
 
 ```{r manova}
-# cmtx_dunn2 <- 
-    cmtx_l %>%
-    group_by(func_type) %>%
-    dunn_test(
-        conc ~ season_year, 
-        p.adjust.method = "bonferroni",
-        detailed = TRUE
-        ) %>%
-    mutate(
-        p     = num(p, digits = 3),
-        p.adj = num(p.adj, digits = 3),
+cmtx_dunn2 <-
+  cmtx_l %>%
+  group_by(func_type) %>%
+  dunn_test(
+    conc ~ season_year,
+    p.adjust.method = "bonferroni",
+    detailed = TRUE
+  ) %>%
+  mutate(
+    p     = num(p, digits = 3),
+    p.adj = num(p.adj, digits = 3),
+  ) %>%
+  nest(.by = func_type) %$%
+  walk2(
+    .x = func_type,
+    .y = data,
+    (\(x, y) mutate(y,
+      func_type = x,
+      .before = 1
     ) %>%
-    nest(.by = func_type) %$%
-    walk2(
-        .x = func_type,
-        .y = data,
-        (\(x, y) mutate(y, func_type = x,
-                        .before = 1) %>%
-             filter(p < 0.1) %>%
-             # arrange(p) %>%
-           print())
-    )
+      filter(p < 0.1) %>%
+      print())
+  )
 
 
 # MANOVA test

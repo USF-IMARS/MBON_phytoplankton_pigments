@@ -531,71 +531,6 @@ save_gg(
   bg             = "white"
   )
 
-# # save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = str_c("cmtx_boxplot", c("lg", "sm"), sep = "_"),
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     lg_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[1]) %>% is_empty(),
-#     sm_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[2]) %>% is_empty()
-#   )
-# 
-# # save larger dynamic range
-# if (sv_arg$lg_exist | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = box_lg,
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 6,
-#     width          = 10,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm[1]}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# 
-# # save smaller dynamic range
-# if (sv_arg$sm_exist | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = box_sm,
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[2],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 6,
-#     width          = 10,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm[2]} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# rm(sv_arg)
 ```
 
 # 5.0 ---- Perform Kruskal-Wallis and Dunn Test ----
@@ -831,44 +766,6 @@ save_gg(
   bg             = "white"
   )
 
-# # save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = "pft_avg_per_season",
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     pft_avg = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
-#   )
-# 
-# # save avg summary
-# if (sv_arg$pft_avg | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = last_plot(),
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 6,
-#     width          = 10,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# rm(sv_arg)
 ```
 
 ## 6.4  Plot: Seasonal Fraction of each PFT (Bar)
@@ -927,44 +824,6 @@ save_gg(
   bg             = "white"
   )
  
-# # save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = "pft_season_avg_prcnt",
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     pft_season_avg = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
-#   )
-# 
-# # save avg summary
-# if (sv_arg$pft_season_avg | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = last_plot(),
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 8,
-#     width          = 16,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# rm(sv_arg)
 ```
 
 ## 6.5 Table: PFT Percentages per Season
@@ -1041,56 +900,6 @@ if (FALSE) {
  
 }
  
-# ----
-  # cmtx_fract_w %>%
-  # summarise(
-  #   .by = season,
-  #   across(
-  #     contains("frac"),
-  #     list(
-  #       avg = \(x) mean(x)
-  #       # sd = \(x) sd(x)
-  #     )
-  #   )
-  # ) %>%
-  # cols_label(
-  #   frac_chloro_avg = "Chloro",
-  #   frac_crypto_avg = "Crypto",
-  #   frac_cyano_avg  = "Cyano",
-  #   frac_diat_avg   = "Diat",
-  #   frac_dino_avg   = "Dino",
-  #   frac_hapt_avg   = "Hapt",
-  #   frac_pras_avg   = "Pras"
-  # ) %>%
-  # tab_options(
-  #   table_body.hlines.width = 0,
-  #   table_body.vlines.width = 0,
-  #   stub.border.width = 0
-  # ) %>%
-  # # fmt_number(columns = starts_with("frac"), decimals = 4) %>%
-  # fmt_percent(columns = starts_with("frac"), decimals = 0) %>%
-  # tab_spanner(
-  #   label = "Average Fraction",
-  #   columns = frac_chloro_avg:frac_pras_avg
-  # ) %>%
-  # tab_stubhead("Season") %>%
-  # opt_table_font("serif") %T>%
-  # print()
-
-# if (FALSE) {
-#   gtsave(
-#     gt_pft,
-#     filename = here(
-#       "data", "plots",
-#       glue(
-#         "community_fractions",
-#         format(Sys.time(), "_%Y%m%d_%H%M%S"),
-#         ".docx"
-#       )
-#     )
-#   )
-# }
-
 
 ```
 
@@ -1172,44 +981,7 @@ save_gg(
   bg             = "white"
   )
 
-# # save arguments
-# sv_arg <-
-#   list(
-#     sv_loc    = dir_plt_save,
-#     sv_nm     = "stn_subset_frac_diat_cyano",
-#     overwrite = FALSE
-#   ) %>%
-#   c(
-#     .,
-#     phyto_bl = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
-#   )
-# 
-# # save
-# if (sv_arg$phyto_bl | sv_arg$overwrite) {
-#   save_gg(
-#     plt            = cmtx_sub_ln_plt,
-#     save_location  = sv_arg$sv_loc,
-#     save_name      = sv_arg$sv_nm[1],
-#     verbose        = TRUE,
-#     time_stamp_fmt = "%Y%m%d_%H%M%S",
-#     device         = "jpeg",
-#     height         = 8,
-#     width          = 16,
-#     dpi            = 600,
-#     units          = "in",
-#     bg             = "white"
-#   )
-# } else {
-#   cli::cli_alert_info(
-#     c(
-#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
-#       "because exists ",
-#       "and/or overwrite is set {.var FALSE}"
-#     )
-#   )
-# }
-# 
-# rm(sv_arg)
+
 ```
 
 ## 7.2 Timeseries with Diatoms
