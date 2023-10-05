@@ -93,7 +93,6 @@ cruise_id <-
   here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
   read_csv(show_col_types = FALSE) %>%
   mutate(
-    cruise_id = str_extract(sample, "\\w{1,3}\\d{3,5}"),
     cruise_id = case_when(
       str_detect(cruise_id, "SV18067") ~ "SAV1803",
       str_detect(cruise_id, "SV18173") ~ "SAV18173",
