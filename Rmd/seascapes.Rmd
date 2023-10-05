@@ -188,21 +188,38 @@ plt_ord <-
 
 plt_ord
 
-if (FALSE) { 
-    cowplot::save_plot(
-        filename = 
-            here("data", "plots",
-                 glue("seascape_cca",
-                      format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                      "jpeg")
-                 ),
-        plot        = plt_ord,
-        base_height = 10,
-        base_width  = 8,
-        dpi         = 600, 
-        units       = "in", 
-        device      = "jpeg")
-}
+# ---- save plot
+save_gg(
+  plt            = plt_ord, 
+  save_location  = dir_plt_save,
+  save_name      = "seascape_cca",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 10,
+  width          = 8,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+  )
+
+
+# if (FALSE) { 
+#     cowplot::save_plot(
+#         filename = 
+#             here("data", "plots",
+#                  glue("seascape_cca",
+#                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
+#                       "jpeg")
+#                  ),
+#         plot        = plt_ord,
+#         base_height = 10,
+#         base_width  = 8,
+#         dpi         = 600, 
+#         units       = "in", 
+#         device      = "jpeg")
+# }
 
 ```
 
@@ -249,22 +266,40 @@ for (szn in seasons) {
     
     print(cca_szn)
     
-    if (FALSE) {
-        cowplot::save_plot(
-            filename = 
-                here("data", "plots",
-                     glue("seascape_cca_{str_to_lower(szn)}",
-                          format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                          ".jpeg")
-                          ),
-            plot        = cca_szn,
-            base_height = 10,
-            base_width  = 8,
-            dpi         = 600, 
-            units       = "in", 
-            device      = "jpeg")
-        
-    }
+    
+    # ---- save plot
+    if (FALSE) 
+      save_gg(
+        plt            = cca_szn, 
+        save_location  = dir_plt_save,
+        save_name      = glue("seascape_cca_{str_to_lower(szn)}"),
+        verbose        = TRUE,
+        overwrite      = FALSE,
+        time_stamp_fmt = "%Y%m%d_%H%M%S",
+        device         = "jpeg",
+        height         = 10,
+        width          = 8,
+        dpi            = 600,
+        units          = "in",
+        bg             = "white"
+      )
+    
+    # if (FALSE) {
+    #     cowplot::save_plot(
+    #         filename = 
+    #             here("data", "plots",
+    #                  glue("seascape_cca_{str_to_lower(szn)}",
+    #                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
+    #                       ".jpeg")
+    #                       ),
+    #         plot        = cca_szn,
+    #         base_height = 10,
+    #         base_width  = 8,
+    #         dpi         = 600, 
+    #         units       = "in", 
+    #         device      = "jpeg")
+    #     
+    # }
 }
 
 ```
@@ -399,18 +434,34 @@ xx <-
 xx
 
 if (FALSE) {
-    cowplot::save_plot(
-        filename    = here("data", "plots",
-                           glue("seascape_nmds",
-                            format(Sys.time(), '_%Y%m%d_%H%M%S'),
-                            ".jpeg")),
-        plot        = xx,
-        base_height = 8,
-        base_width  = 14,
-        dpi         = 600,
-        units       = "in",
-        device      = "jpeg"
-        )
+    # ---- save plot
+    save_gg(
+      plt            = xx, 
+      save_location  = dir_plt_save,
+      save_name      = "seascape_nmds",
+      verbose        = TRUE,
+      overwrite      = FALSE,
+      time_stamp_fmt = "%Y%m%d_%H%M%S",
+      device         = "jpeg",
+      height         = 8,
+      width          = 14,
+      dpi            = 600,
+      units          = "in",
+      bg             = "white"
+      )
+    
+    # cowplot::save_plot(
+    #     filename    = here("data", "plots",
+    #                        glue("seascape_nmds",
+    #                         format(Sys.time(), '_%Y%m%d_%H%M%S'),
+    #                         ".jpeg")),
+    #     plot        = xx,
+    #     base_height = 8,
+    #     base_width  = 14,
+    #     dpi         = 600,
+    #     units       = "in",
+    #     device      = "jpeg"
+    #     )
 }
 ```
 ## ANONISM

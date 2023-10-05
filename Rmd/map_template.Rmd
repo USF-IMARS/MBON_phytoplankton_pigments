@@ -174,42 +174,62 @@ fullmap
 
 
 ```{r save-plt-map}
-if (FALSE) {
-  {    
-  map_save_name <-
-    here(
-      "data", "plots",
-      glue::glue(
-        "map",
-        format(Sys.time(), "_%Y%m%d_%H%M%S"),
-        ".{c('jpeg', 'svg')}"
-      )
-    )
-
-
-  save_plot(
-    filename    = map_save_name[1],
-    plot        = fullmap,
-    base_height = 6,
-    base_width  = 10,
-    dpi         = 600,
-    units       = "in",
-    device      = "jpeg"
+# ---- save plot
+walk(
+    c("jpeg", "svg"),
+save_gg(
+  plt            = fullmap,
+  save_location  = dir_plt_save,
+  save_name      = "map_locations",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = .x,
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
   )
+    
+)
 
-  save_plot(
-    filename    = map_save_name[2],
-    plot        = fullmap,
-    base_height = 6,
-    base_width  = 10,
-    dpi         = 600,
-    units       = "in",
-    device      = "svg"
-  )
-  
-  rm(map_save_name)
-  }
-}
+# if (FALSE) {
+#   {    
+#   map_save_name <-
+#     here(
+#       "data", "plots",
+#       glue::glue(
+#         "map",
+#         format(Sys.time(), "_%Y%m%d_%H%M%S"),
+#         ".{c('jpeg', 'svg')}"
+#       )
+#     )
+# 
+# 
+#   save_plot(
+#     filename    = map_save_name[1],
+#     plot        = fullmap,
+#     base_height = 6,
+#     base_width  = 10,
+#     dpi         = 600,
+#     units       = "in",
+#     device      = "jpeg"
+#   )
+# 
+#   save_plot(
+#     filename    = map_save_name[2],
+#     plot        = fullmap,
+#     base_height = 6,
+#     base_width  = 10,
+#     dpi         = 600,
+#     units       = "in",
+#     device      = "svg"
+#   )
+#   
+#   rm(map_save_name)
+#   }
+# }
 
 # clean up workspace
 suppressWarnings(rm(stn_map, inset_map, lat_lon_dat, exnt, exnt2))
@@ -302,7 +322,7 @@ pigm_dat1 <-
     
   # remove two samples that cause issues, don't need anymore
   # slice(-c(67, 115)) %>%
-  slice_sample(n = 10) %>%
+ slice_sample(n = 10) %>%
  mutate(
     krig = pmap(
       list(data, conc_name, szn_name, title),
@@ -312,7 +332,7 @@ pigm_dat1 <-
         conc_name = y,
         col_name  = "ratio_avg",
         # col_name  = "conc_avg",
-        loc_name  = z,
+        grp_name  = z,
         .title    = title,
         base_map  = base_map,
       ))
@@ -322,15 +342,43 @@ pigm_dat1 <-
 
 pigm_dat1 %>%
     slice_sample(n = 5) %$% map
+
 pigm_dat1 %>%
     slice_sample(n = 5) %$% dat
 
 if (FALSE) {
    # save krig maps
+    # pigm_dat1 %$%
+    # pwalk(list(map, sv_name),
+    #       save_maps,
+    #       sv = TRUE) 
+    
+    # save pigm_dat1
     pigm_dat1 %$%
-    pwalk(list(map, sv_name),
-          save_maps,
-          sv = TRUE) 
+      walk2(
+        .x = sv_name,
+        .y = map,
+        \(.x, .y) {
+          .x %>%
+            str_to_lower() %>%
+            str_replace_all("\\s", "_") %>%
+            # glue(., "common suffix", .sep = "_") %>% # remove if none needed
+            save_gg(
+              .y,
+              save_location  = dir_plt_save,
+              save_name      = .,
+              verbose        = TRUE,
+              time_stamp_fmt = "%Y%m%d_%H%M%S",
+              device         = "jpeg",
+              height         = 9.7,
+              width          = 19,
+              dpi            = 600,
+              units          = "in",
+              bg             = "white"
+            )
+        }
+      )
+    
 }
 
 ```
