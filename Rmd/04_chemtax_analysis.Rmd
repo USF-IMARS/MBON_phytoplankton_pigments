@@ -159,6 +159,17 @@ Default Line Plot and Box Plots
 
 ```{r functions-line-box}
 # ---- line plot
+#' Line Plot
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .dat DESCRIPTION.
+#' @param .var DESCRIPTION.
+#' @param .title DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
 line_plt <- function(.dat, .var, .title) {
     
     # set limits
@@ -202,6 +213,17 @@ line_plt <- function(.dat, .var, .title) {
 }
 
 # ---- box plot
+#' Box Plot
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .dat DESCRIPTION.
+#' @param .var DESCRIPTION.
+#' @param .title DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
 box_plt <- function(.dat, .var, .title) {
     
     # limits for plot
@@ -313,20 +335,20 @@ cmtx_all_w <-
 #   - this is signified with the same location and is usually +1 of sample ID
 # - 2. internal consistency at NASA where they use subset of sample 
 #   - this is signified with a ###.5
-janitor::get_dupes(cmtx_all_w, date_time_utc, station, depth) 
+janitor::get_dupes(cmtx_all_w, cruise_id, date_time_utc, station, depth) 
 
 # removing duplicates by averaging
 cmtx_w <-
   cmtx_all_w %>%
   reframe(
-    .by = c(date_time_utc, station, depth),
+    .by = c(cruise_id, date_time_utc, station, depth),
     pick(1:cluster_code),
     across(
       chloro:pras,
       \(x) mean(x, na.rm = TRUE)
     )
   ) %>%
-  distinct(date_time_utc, station, depth, .keep_all = TRUE) %T>% print()
+  distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE) %T>% print()
 
 # ---- save chemtax data with metadata
 if (
@@ -373,7 +395,7 @@ cmtx_l <-
   ) %>%
   left_join(phyto_name, by = c("phyto" = "shrt"))
 
-rm(file_chem, meta_data, cmtx_raw, cmtx_all_w)
+# rm(file_chem, meta_data, cmtx_raw, cmtx_all_w)
 ```
 
 ## 4.2 Box Plot: Individuals for Each PFT per Season
@@ -479,71 +501,101 @@ box_sm
 ## 4.5 Save: Large and Small Range Boxplots
 
 ```{r save-plt}
-# save arguments
-sv_arg <-
-  list(
-    sv_loc    = dir_plt_save,
-    sv_nm     = str_c("cmtx_boxplot", c("lg", "sm"), sep = "_"),
-    overwrite = FALSE
-  ) %>%
-  c(
-    .,
-    lg_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[1]) %>% is_empty(),
-    sm_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[2]) %>% is_empty()
+save_gg(
+  plt            = box_lg, 
+  save_location  = dir_plt_save,
+  save_name      = "cmtx_boxplot_lg",
+  verbose        = TRUE,
+  overwrite      = FALSE,  
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
   )
 
-# save larger dynamic range
-if (sv_arg$lg_exist | sv_arg$overwrite) {
-  save_gg(
-    plt            = box_lg,
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[1],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 6,
-    width          = 10,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
+save_gg(
+  plt            = box_sm, 
+  save_location  = dir_plt_save,
+  save_name      = "cmtx_boxplot_sm",
+  verbose        = TRUE,
+  overwrite      = FALSE,  
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
   )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file {sv_arg$sv_nm[1]}} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
-    )
-  )
-}
 
-
-# save smaller dynamic range
-if (sv_arg$sm_exist | sv_arg$overwrite) {
-  save_gg(
-    plt            = box_sm,
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[2],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 6,
-    width          = 10,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file {sv_arg$sv_nm[2]} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
-    )
-  )
-}
-
-rm(sv_arg)
+# # save arguments
+# sv_arg <-
+#   list(
+#     sv_loc    = dir_plt_save,
+#     sv_nm     = str_c("cmtx_boxplot", c("lg", "sm"), sep = "_"),
+#     overwrite = FALSE
+#   ) %>%
+#   c(
+#     .,
+#     lg_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[1]) %>% is_empty(),
+#     sm_exist = dir_ls(.$sv_loc, regexp = .$sv_nm[2]) %>% is_empty()
+#   )
+# 
+# # save larger dynamic range
+# if (sv_arg$lg_exist | sv_arg$overwrite) {
+#   save_gg(
+#     plt            = box_lg,
+#     save_location  = sv_arg$sv_loc,
+#     save_name      = sv_arg$sv_nm[1],
+#     verbose        = TRUE,
+#     time_stamp_fmt = "%Y%m%d_%H%M%S",
+#     device         = "jpeg",
+#     height         = 6,
+#     width          = 10,
+#     dpi            = 600,
+#     units          = "in",
+#     bg             = "white"
+#   )
+# } else {
+#   cli::cli_alert_info(
+#     c(
+#       "Skipping saving of {.file {sv_arg$sv_nm[1]}} ",
+#       "because exists ",
+#       "and/or overwrite is set {.var FALSE}"
+#     )
+#   )
+# }
+# 
+# 
+# # save smaller dynamic range
+# if (sv_arg$sm_exist | sv_arg$overwrite) {
+#   save_gg(
+#     plt            = box_sm,
+#     save_location  = sv_arg$sv_loc,
+#     save_name      = sv_arg$sv_nm[2],
+#     verbose        = TRUE,
+#     time_stamp_fmt = "%Y%m%d_%H%M%S",
+#     device         = "jpeg",
+#     height         = 6,
+#     width          = 10,
+#     dpi            = 600,
+#     units          = "in",
+#     bg             = "white"
+#   )
+# } else {
+#   cli::cli_alert_info(
+#     c(
+#       "Skipping saving of {.file {sv_arg$sv_nm[2]} ",
+#       "because exists ",
+#       "and/or overwrite is set {.var FALSE}"
+#     )
+#   )
+# }
+# 
+# rm(sv_arg)
 ```
 
 # 5.0 ---- Perform Kruskal-Wallis and Dunn Test ----
@@ -699,7 +751,7 @@ cmtx_fract_l %>%
   mutate(station = fct_reorder(station, lon)) %>%
   arrange(station) %>%
   summarise(
-    .by = c(station, season, names, phyto),
+    .by = c(crusise_id, station, season, names, phyto),
     across(
       .cols  = frac,
       .fns   = (\(x) mean(x, na.rm = TRUE)),
@@ -764,44 +816,59 @@ cmtx_w %>%
 
 
 # ---- save plot
-# save arguments
-sv_arg <-
-  list(
-    sv_loc    = dir_plt_save,
-    sv_nm     = "pft_avg_per_season",
-    overwrite = FALSE
-  ) %>%
-  c(
-    .,
-    pft_avg = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+save_gg(
+  plt            = last_plot(), # edit if want specific plot
+  save_location  = dir_plt_save,
+  save_name      = "pft_avg_per_season",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
   )
 
-# save avg summary
-if (sv_arg$pft_avg | sv_arg$overwrite) {
-  save_gg(
-    plt            = last_plot(),
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[1],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 6,
-    width          = 10,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file {sv_arg$sv_nm}} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
-    )
-  )
-}
-
-rm(sv_arg)
+# # save arguments
+# sv_arg <-
+#   list(
+#     sv_loc    = dir_plt_save,
+#     sv_nm     = "pft_avg_per_season",
+#     overwrite = FALSE
+#   ) %>%
+#   c(
+#     .,
+#     pft_avg = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+#   )
+# 
+# # save avg summary
+# if (sv_arg$pft_avg | sv_arg$overwrite) {
+#   save_gg(
+#     plt            = last_plot(),
+#     save_location  = sv_arg$sv_loc,
+#     save_name      = sv_arg$sv_nm[1],
+#     verbose        = TRUE,
+#     time_stamp_fmt = "%Y%m%d_%H%M%S",
+#     device         = "jpeg",
+#     height         = 6,
+#     width          = 10,
+#     dpi            = 600,
+#     units          = "in",
+#     bg             = "white"
+#   )
+# } else {
+#   cli::cli_alert_info(
+#     c(
+#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
+#       "because exists ",
+#       "and/or overwrite is set {.var FALSE}"
+#     )
+#   )
+# }
+# 
+# rm(sv_arg)
 ```
 
 ## 6.4  Plot: Seasonal Fraction of each PFT (Bar)
@@ -845,44 +912,59 @@ cmtx_avg_season_fract_l %>%
   )
 
 # ---- save plot
-# save arguments
-sv_arg <-
-  list(
-    sv_loc    = dir_plt_save,
-    sv_nm     = "pft_season_avg_prcnt",
-    overwrite = FALSE
-  ) %>%
-  c(
-    .,
-    pft_season_avg = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+save_gg(
+  plt            = last_plot(), # edit if want specific plot
+  save_location  = dir_plt_save,
+  save_name      = "pft_season_avg_prcnt",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 8,
+  width          = 16,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
   )
-
-# save avg summary
-if (sv_arg$pft_season_avg | sv_arg$overwrite) {
-  save_gg(
-    plt            = last_plot(),
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[1],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 8,
-    width          = 16,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file {sv_arg$sv_nm}} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
-    )
-  )
-}
-
-rm(sv_arg)
+ 
+# # save arguments
+# sv_arg <-
+#   list(
+#     sv_loc    = dir_plt_save,
+#     sv_nm     = "pft_season_avg_prcnt",
+#     overwrite = FALSE
+#   ) %>%
+#   c(
+#     .,
+#     pft_season_avg = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+#   )
+# 
+# # save avg summary
+# if (sv_arg$pft_season_avg | sv_arg$overwrite) {
+#   save_gg(
+#     plt            = last_plot(),
+#     save_location  = sv_arg$sv_loc,
+#     save_name      = sv_arg$sv_nm[1],
+#     verbose        = TRUE,
+#     time_stamp_fmt = "%Y%m%d_%H%M%S",
+#     device         = "jpeg",
+#     height         = 8,
+#     width          = 16,
+#     dpi            = 600,
+#     units          = "in",
+#     bg             = "white"
+#   )
+# } else {
+#   cli::cli_alert_info(
+#     c(
+#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
+#       "because exists ",
+#       "and/or overwrite is set {.var FALSE}"
+#     )
+#   )
+# }
+# 
+# rm(sv_arg)
 ```
 
 ## 6.5 Table: PFT Percentages per Season
@@ -1074,44 +1156,60 @@ cmtx_fract_l %>%
     panel.spacing = unit(20, "pt") 
   )
 
-# save arguments
-sv_arg <-
-  list(
-    sv_loc    = dir_plt_save,
-    sv_nm     = "stn_subset_frac_diat_cyano",
-    overwrite = FALSE
-  ) %>%
-  c(
-    .,
-    phyto_bl = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+# ---- save plot
+save_gg(
+  plt            = cmtx_sub_ln_plt, # edit if want specific plot
+  save_location  = dir_plt_save,
+  save_name      = "stn_subset_frac_diat_cyano",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 8,
+  width          = 16,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
   )
 
-# save
-if (sv_arg$phyto_bl | sv_arg$overwrite) {
-  save_gg(
-    plt            = cmtx_sub_ln_plt,
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[1],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 8,
-    width          = 16,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file {sv_arg$sv_nm}} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
-    )
-  )
-}
-
-rm(sv_arg)
+# # save arguments
+# sv_arg <-
+#   list(
+#     sv_loc    = dir_plt_save,
+#     sv_nm     = "stn_subset_frac_diat_cyano",
+#     overwrite = FALSE
+#   ) %>%
+#   c(
+#     .,
+#     phyto_bl = dir_ls(.$sv_loc, regexp = .$sv_nm) %>% is_empty()
+#   )
+# 
+# # save
+# if (sv_arg$phyto_bl | sv_arg$overwrite) {
+#   save_gg(
+#     plt            = cmtx_sub_ln_plt,
+#     save_location  = sv_arg$sv_loc,
+#     save_name      = sv_arg$sv_nm[1],
+#     verbose        = TRUE,
+#     time_stamp_fmt = "%Y%m%d_%H%M%S",
+#     device         = "jpeg",
+#     height         = 8,
+#     width          = 16,
+#     dpi            = 600,
+#     units          = "in",
+#     bg             = "white"
+#   )
+# } else {
+#   cli::cli_alert_info(
+#     c(
+#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
+#       "because exists ",
+#       "and/or overwrite is set {.var FALSE}"
+#     )
+#   )
+# }
+# 
+# rm(sv_arg)
 ```
 
 ## 7.2 Timeseries with Diatoms

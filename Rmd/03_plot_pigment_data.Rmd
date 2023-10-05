@@ -232,56 +232,49 @@ plt_pigment_vs_chlor$plt_time
 plt_pigment_vs_chlor$plt_chla[[1]]
 
 # ---- save plot
-if (FALSE) {
-  # save arguments
-  dir_create(here(dir_plt_save, "pigment_vs_chlor"))
+# save
+plt_pigment_vs_chlor %$%
+  walk2(
+    pigment,
+    plt_chla,
+    \(.x, .y) {
+      save_gg(
+        plt            = .y, 
+        save_location  = here(dir_plt_save, "pigment_vs_chlor"),
+        save_name      = glue("{.x}_vs_chla"),
+        verbose        = TRUE,
+        time_stamp_fmt = NULL,
+        device         = "jpeg",
+        height         = 9.7,
+        width          = 19,
+        dpi            = 600,
+        units          = "in",
+        bg             = "white"
+      )
+    }
+  )
 
-  # save
-  plt_pigment_vs_chlor %$%
-    walk2(
-      pigment,
-      plt_chla,
-      \(.x, .y) {
-        save_gg(
-          plt            = .y, # edit if want specific plot
-          save_location  = here(dir_plt_save, "pigment_vs_chlor"),
-          save_name      = glue("{.x}_vs_chla"),
-          verbose        = TRUE,
-          time_stamp_fmt = NULL,
-          device         = "jpeg",
-          height         = 9.7,
-          width          = 19,
-          dpi            = 600,
-          units          = "in",
-          bg             = "white"
-        )
-      }
-    )
-  # save arguments
-  dir_create(here(dir_plt_save, "pigment_vs_time"))
-
-  # save
-  plt_pigment_vs_chlor %$%
-    walk2(
-      pigment,
-      plt_time,
-      \(.x, .y) {
-        save_gg(
-          plt            = .y, # edit if want specific plot
-          save_location  = here(dir_plt_save, "pigment_vs_time"),
-          save_name      = glue("{.x}_time"),
-          verbose        = TRUE,
-          time_stamp_fmt = NULL,
-          device         = "jpeg",
-          height         = 9.7,
-          width          = 19,
-          dpi            = 600,
-          units          = "in",
-          bg             = "white"
-        )
-      }
-    )
-}
+# save
+plt_pigment_vs_chlor %$%
+  walk2(
+    pigment,
+    plt_time,
+    \(.x, .y) {
+      save_gg(
+        plt            = .y,
+        save_location  = here(dir_plt_save, "pigment_vs_time"),
+        save_name      = glue("{.x}_time"),
+        verbose        = TRUE,
+        time_stamp_fmt = NULL,
+        device         = "jpeg",
+        height         = 9.7,
+        width          = 19,
+        dpi            = 600,
+        units          = "in",
+        bg             = "white"
+      )
+    }
+  )
 
 
 ```
@@ -434,32 +427,30 @@ chl_a_box <-
 chl_a_box$plt
 
 # save Chl-a Boxplot
-if (FALSE) {
-  chl_a_box %$%
-    walk2(
-      .x = name_of_water_body,
-      .y = plt,
-      \(.x, .y) {
-        .x %>%
-          str_to_lower() %>%
-          str_replace_all("\\s", "_") %>%
-          glue(., "chla", .sep = "_") %>%
-          save_gg(
-            .y,
-            save_location  = dir_plt_save,
-            save_name      = .,
-            verbose        = TRUE,
-            time_stamp_fmt = "%Y%m%d_%H%M%S",
-            device         = "jpeg",
-            height         = 9.7,
-            width          = 19,
-            dpi            = 600,
-            units          = "in",
-            bg             = "white"
-          )
-      }
-    )
-}
+chl_a_box %$%
+  walk2(
+    .x = name_of_water_body,
+    .y = plt,
+    \(.x, .y) {
+      .x %>%
+        str_to_lower() %>%
+        str_replace_all("\\s", "_") %>%
+        glue(., "chla", .sep = "_") %>%
+        save_gg(
+          .y,
+          save_location  = dir_plt_save,
+          save_name      = .,
+          verbose        = TRUE,
+          time_stamp_fmt = "%Y%m%d_%H%M%S",
+          device         = "jpeg",
+          height         = 9.7,
+          width          = 19,
+          dpi            = 600,
+          units          = "in",
+          bg             = "white"
+        )
+    }
+  )
 ```
 
 # 4.0 ---- Size Classes using Diagnostic Biomarker ----
@@ -563,72 +554,63 @@ size_frac_plt$plt[[1]] /
   size_frac_plt$plt[[3]]
 
 # ---- save plot
-if (FALSE) {
-  dir_create(here(dir_plt_save, "size_class"))
+# save size class fractions and absolute
+size_frac_plt %$%
+  walk2(
+    size_frac,
+    plt,
+    \(.x, .y) {
+      save_gg(
+        plt            = .y,
+        save_location  = here(dir_plt_save, "size_class"),
+        save_name      = glue("size_class_{.x}"),
+        verbose        = TRUE,
+        time_stamp_fmt = NULL,
+        device         = "jpeg",
+        height         = 9.7,
+        width          = 19,
+        dpi            = 600,
+        units          = "in",
+        bg             = "white"
+      )
+    }
+  )
 
-  # save size class fractions and absolute 
-   size_frac_plt %$%
-    walk2(
-      size_frac,
-      plt,
-      \(.x, .y) {
-        save_gg(
-          plt            = .y, 
-          save_location  = here(dir_plt_save, "size_class"),
-          save_name      = glue("size_class_{.x}"),
-          verbose        = TRUE,
-          time_stamp_fmt = NULL,
-          device         = "jpeg",
-          height         = 9.7,
-          width          = 19,
-          dpi            = 600,
-          units          = "in",
-          bg             = "white"
-        )
-      }
-    )
-  
 
-  # save stacked fractions
-  (size_frac_plt$plt[[1]] /
+# save stacked fractions
+(size_frac_plt$plt[[1]] /
   size_frac_plt$plt[[2]] /
-  size_frac_plt$plt[[3]] ) %>%
+  size_frac_plt$plt[[3]]) %>%
   save_gg(
-          plt            = ., 
-          save_location  = here(dir_plt_save, "size_class"),
-          save_name      = glue("size_class_frac_stacked"),
-          verbose        = TRUE,
-          time_stamp_fmt = NULL,
-          device         = "jpeg",
-          height         = 9.7,
-          width          = 19,
-          dpi            = 600,
-          units          = "in",
-          bg             = "white"
-        )
-   
-  (size_frac_plt$plt[[4]] /
+    plt            = .,
+    save_location  = here(dir_plt_save, "size_class"),
+    save_name      = glue("size_class_frac_stacked"),
+    verbose        = TRUE,
+    time_stamp_fmt = NULL,
+    device         = "jpeg",
+    height         = 9.7,
+    width          = 19,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
+  )
+
+(size_frac_plt$plt[[4]] /
   size_frac_plt$plt[[5]] /
-  size_frac_plt$plt[[6]] ) %>%
+  size_frac_plt$plt[[6]]) %>%
   save_gg(
-          plt            = ., 
-          save_location  = here(dir_plt_save, "size_class"),
-          save_name      = glue("size_class_pct_stacked"),
-          verbose        = TRUE,
-          time_stamp_fmt = NULL,
-          device         = "jpeg",
-          height         = 9.7,
-          width          = 19,
-          dpi            = 600,
-          units          = "in",
-          bg             = "white"
-        )
-
-}
-
-
-
-
+    plt            = .,
+    save_location  = here(dir_plt_save, "size_class"),
+    save_name      = glue("size_class_pct_stacked"),
+    verbose        = TRUE,
+    time_stamp_fmt = NULL,
+    device         = "jpeg",
+    height         = 9.7,
+    width          = 19,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
+  )
 
 unshelf(patchwork)
 ```
@@ -708,32 +690,31 @@ plt_stack <-
 plt_stack$plt
 
 # save plots
-if (FALSE) {
-  plt_stack %$%
-    walk2(
-      .x = name_of_water_body,
-      .y = plt,
-      \(.x, .y) {
-        .x %>%
-          str_to_lower() %>%
-          str_replace_all("\\s", "_") %>%
-          glue(., "frac_bar", .sep = "_") %>%
-          save_gg(
-            .y,
-            save_location  = dir_plt_save,
-            save_name      = .,
-            verbose        = TRUE,
-            time_stamp_fmt = "%Y%m%d_%H%M%S",
-            device         = "jpeg",
-            height         = 9.7,
-            width          = 19,
-            dpi            = 600,
-            units          = "in",
-            bg             = "white"
-          )
-      }
-    )
-}
+plt_stack %$%
+  walk2(
+    .x = name_of_water_body,
+    .y = plt,
+    \(.x, .y) {
+      .x %>%
+        str_to_lower() %>%
+        str_replace_all("\\s", "_") %>%
+        glue(., "frac_bar", .sep = "_") %>%
+        save_gg(
+          .y,
+          save_location  = dir_plt_save,
+          save_name      = .,
+          verbose        = TRUE,
+          time_stamp_fmt = "%Y%m%d_%H%M%S",
+          device         = "jpeg",
+          height         = 9.7,
+          width          = 19,
+          dpi            = 600,
+          units          = "in",
+          bg             = "white"
+        )
+    }
+  )
+
 
 ```
 
@@ -936,39 +917,37 @@ pi_box_seasonal_water_body
 
 
 # save plots
-if (FALSE) {
+# ratio vs time
+save_gg(
+  plt            = plt_pi_all_water_body,
+  save_location  = dir_plt_save,
+  save_name      = "pi_ppc_chl_all_water_body",
+  verbose        = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
 
-  # ratio vs time 
-  save_gg(
-    plt            = plt_pi_all_water_body,
-    save_location  = dir_plt_save,
-    save_name      = "pi_ppc_chl_all_water_body",
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 6,
-    width          = 10,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
+# boxplot ppc vs season
+save_gg(
+  plt            = pi_box_seasonal_water_body,
+  save_location  = dir_plt_save,
+  save_name      = "pi_box_ppc_chl_all_water_body",
+  verbose        = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
 
-  # boxplot ppc vs season
-  save_gg(
-    plt            = pi_box_seasonal_water_body,
-    save_location  = dir_plt_save,
-    save_name      = "pi_box_ppc_chl_all_water_body",
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 6,
-    width          = 10,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
 
-}
 ```
 
 ## 5.3 ANOVA PI vs Season
@@ -1200,21 +1179,20 @@ plt_ppc_psc <-
 
 plt_ppc_psc
 
-if (FALSE) {
- save_gg(
-    plt            = plt_ppc_psc,
-    save_location  = dir_plt_save,
-    save_name      = "psc_vs_ppc",
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 20,
-    width          = 30,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-}
+save_gg(
+  plt            = plt_ppc_psc,
+  save_location  = dir_plt_save,
+  save_name      = "psc_vs_ppc",
+  verbose        = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 20,
+  width          = 30,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+ )
+
 ```
 Autumn has the most scatter, but looks to have more PSC relating to more
 production
