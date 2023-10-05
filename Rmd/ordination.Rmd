@@ -11,22 +11,25 @@ output: html_document
 
 ## 2.1 Load Libraries
 ```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
 
 librarian::shelf(
-    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
     # broom # optional
     
     # additional
-    vegan, gavinsimpson/ggvegan, fawda123/ggord, jfq3/ggordiplots,
+     vegan, gavinsimpson/ggvegan, fawda123/ggord, jfq3/ggordiplots,
     GGally, cowplot, ggfortify, ape,
     ecodist # not sure if needed
 )
 
-library("conflicted")
-
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+    dplyr::filter(), 
+    dplyr::select()
+    )
 
 source(here("scripts", "misc_functions.R"))
 ```
@@ -34,13 +37,13 @@ source(here("scripts", "misc_functions.R"))
 ## 2.2 Load Dataset
 
 Load data sets:
-- CHEMTAX Seasonal Averages
-- Surface Averaged CTD Data
+- CHEMTAX Seasonal Averages created in `04_chemtax_analysis.Rmd`
+- Surface Averaged CTD Data created in `02_ctd_download.Rmd`
 - Merge CHETMAX-CTD
 
 ```{r chemtax-ctd}
 dir_data_save <- here("data", "processed", "ordination")
-dir_plt_save <- here("data", "plots", "ordination")
+dir_plt_save  <- here("data", "plots", "ordination")
 
 dir_create(here(dir_plt_save))
 
@@ -55,28 +58,34 @@ cmtx_avgs <-
 
 # CTD data
 ctd_dat_summary <- 
-  rstudioapi::selectFile() %>%
-  # here("data", "processed", "ctd_all.csv") %>%
-  read_csv(show_col_types = FALSE) %T>% print()
+  here("data", "processed", "ctd", "ctd_all.csv") %>%
+  read_csv(show_col_types = FALSE)  %>%
+  mutate(time = ymd_hms(time)) %T>% print()
 
 # merge data
 env_cmtx <-
   cmtx_avgs %>% 
-  mutate(
-    cruise_code = str_remove(sample, "(_|-).*"),
-    .before = cruise) %>%
   left_join(
     ctd_dat_summary, 
     by = join_by(
-      "cruise_code" == "cruise_id", 
-      "station" == "stations"
+      "cruise_id" == "cruise_id", 
+      "station" == "station"
       )
   ) %T>% print()
 
-# find ones not matched
-naniar::vis_miss(env_cmtx)
-filter(env_cmtx, is.na(temp))
+env_cmtx %>%
+    janitor::get_dupes(cruise_id, station) #%>%
+    # filter(!str_detect(station, "MR|LK|WS"))
 
+# find unmatched PFT rows
+# WS16130 doesnt exists
+# SV18067 - no CTD data available
+# WS18218 - only a few exist
+naniar::vis_miss(env_cmtx)
+
+filter(env_cmtx, is.na(file)) %>%
+  arrange(date_time_utc) %T>% print() %>% 
+  distinct(., cruise_id) %T>% print()
 
 # ---- save CHEMTAX-CTD merged data
 save_csv(
@@ -84,6 +93,7 @@ save_csv(
     save_location  = dir_data_save,
     save_name      = "cmtx_env_data",
     overwrite      = FALSE,
+    # overwrite      = TRUE,
     verbose        = TRUE,
     time_stamp_fmt = NULL
   )
@@ -93,19 +103,21 @@ save_csv(
 ```{r cmtx-convert-matrix}
 cmtx_avgs <-
   cmtx_avgs %>%
-  rownames_to_column(var = "row_num") %>%
+  rowid_to_column() %>%
   unite(
     "sample_code",
-    row_num,
+    rowid,
     season,
     remove = FALSE
-  )
+  ) %>%
+  select(-rowid)
+
 
 # convert to matrix
 cmtx_data_matrix <-
   cmtx_avgs %>%
   select(sample_code, chloro:pras) %>%
-  column_to_rownames(var = "sample_code")
+  column_to_rownames(var = "sample_code") %T>% print()
 ```
 
 
@@ -133,10 +145,10 @@ cmtx_data_matrix <-
 # 
 # cmtx_val <-pcoa$vectors
 # 
-# pcoa.data <- data.frame(Sample = rownames(cmtx_val),
+# dat_pcoa <- data.frame(Sample = rownames(cmtx_val),
 #                        X=cmtx_val[,1],
 #                        Y=cmtx_val[,2]) %>% 
-#     separate(Sample, c("row_num", "season"))
+#     separate(Sample, c("rowid", "season"))
 # 
 # barplot(mds.var.per)
 # 
@@ -165,113 +177,269 @@ cmtx_data_matrix <-
 ## Function to Calculate and Plot PCoA
 Doesn't work too well
 ```{r func-ord-plot}
-ggPCoA2 <- function(
-        data, 
-        pc = 12, 
-        level = 0.68, 
-        dist_meth = "bray"
-        ) {
-  
+#' Plot PCoS using `ggplot2`
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param data A data.frame or tibble with 1 grouping column and any number of 
+#'             numeric columns
+#' @param .group_var A grouping variable to add color to plot
+#' @param pc The principal components to plot
+#' @param level Confidence interval for ellipsis on grouping variable
+#' @param dist_meth Distance metric Default: "bray"
+#' @param .correct Correction method given to the function `pcoa`
+#'                 Default: "none"
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+gg_pcoa2 <- function(
+  data, 
+  Y = data,
+  .group_var = "group",
+  pc        = c(1, 2),
+  level     = 0.68, 
+  dist_meth = "bray",
+  .correct = c("none", "lingoes", "caillies")
+  ) {
+ 
+  .correct <- match.arg(.correct)    
+       
+  stopifnot(length(pc) == 2)  
+  stopifnot(between(pc[1], 1, nrow(data)) & pc[1] != pc[2])
+  stopifnot(between(pc[2], 1, nrow(data)) & pc[2] != pc[1]) 
+ 
   # calc distance matrix  
-  dis  <- 
+  pcoa <- 
     vegdist(
       data[, -1], 
       method = dist_meth, 
-      na.rm  = TRUE)
+      na.rm  = TRUE) %>%
   
-  # PCoA
-  pcoa <- pcoa(dis, correction = "none", rn = NULL)
+    # run PCoA
+    pcoa( correction = .correct, rn = NULL)
   
-  # Extract eignvalues
-  eig  <- round(100 * pcoa$values[1:3, 2], 2)
-  
-  # site info?
-  site <- pcoa$vectors[, 1:3]
-  
-  if (all(rownames(site) == rownames(data))) {
-      
-    pca.data <- data.frame(group = data$group, site)
+
+  # extract eignvalues
+  eig  <- 
+    pcoa$values[, 2] %>%
+    tibble(eigen = .) %>%
+    mutate(
+      eig_pct  = scales::label_percent(0.1)(eigen),
+      col_name = glue("PCoA{row_number()}"),
+      labels   = glue("{col_name} ({eig_pct})")
+    )
+
+  # extract site values
+  dat_pcoa <- 
+    as_tibble(pcoa$vectors) %>%
+    bind_cols("group" = data[[.group_var]], .) %>%
+    rename_with(
+      .cols = contains("Axis"),
+      .fn   = \(x) str_replace(x, "Axis\\.", "PCoA")
+    )
+       
+  # extract column names for x and y axis
+  x_var <- eig[pc[1], 3][[1]]
+  y_var <- eig[pc[2], 3][[1]]
+ 
+  Y <- select(Y, -{{.group_var}})
+
+    pr.coo <- pcoa$vectors
+    # if (x$correction[2] > 1) 
+    #     pr.coo <- x$vectors.cor
+    k <- ncol(pr.coo)
+    diag.dir <- diag(c(dir.axis1 = pc[1], dir.axis2 = pc[2]))
+    plot.axes <- pc
+    pr.coo[, plot.axes] <- pr.coo[, plot.axes] %*% diag.dir
+        
+    n <- nrow(Y)
+    points.stand <- scale(pr.coo[, plot.axes])
+    S <- cov(Y, points.stand)
     
-    colnames(pca.data)[2:4] <- glue("PCoA{1:3}")
-  }
+    U <- 
+      S %*% diag((x$values$Eigenvalues[plot.axes]/(n - 1))^(-0.5))
+    
+    colnames(U) <- colnames(pr.coo[, plot.axes])
+    
+   # browser()
   
-  label <- data.frame(min = apply(pca.data[, 2:4], 2, min),
-                      max = apply(pca.data[, 2:4], 2, max))
-  
-  label$mean <- (label$min + label$max)/2
-  
-  if (pc == 12) {
-      x      <- "PCoA1"
-      y      <- "PCoA2"
-      x.posi <- label[1, 3]
-      y.posi <- label[2, 2]
-      x.lab  <- glue("{x} ({eig[1]}%)")
-      y.lab  <- glue("{y} ({eig[2]}%)")
-  } else if (pc == 13) {
-      x      <- "PCoA1"
-      y      <- "PCoA3"
-      x.posi <- label[1, 3]
-      y.posi <- label[3, 2]
-      x.lab  <- glue("{x} ({eig[1]}%)")
-      y.lab  <- glue("{y} ({eig[3]}%)")
-  } else if (pc == 23) {
-      x      <- "PCoA2"
-      y      <- "PCoA3"
-      x.posi <- label[2, 3]
-      y.posi <- label[3, 2]
-      x.lab  <- glue("{x} ({eig[2]}%)")
-      y.lab  <- glue("{y} ({eig[3]}%)")
-  }
-  
-  p <- 
+  # plot PCoA
+  plt <- 
       ggplot(
-          data = pca.data, 
+          data = dat_pcoa, 
           aes(
-              x     = x,
-              y     = y, 
+              x     = .data[[x_var]],
+              y     = .data[[y_var]], 
               color = group)
           ) +
+      geom_vline(
+        xintercept = 0, 
+        color      = "grey70", 
+        linetype   = "dashed", 
+        alpha      = 0.5
+        ) +
+      geom_hline(
+        yintercept = 0, 
+        color      = "grey70", 
+        linetype   = "dashed", 
+        alpha      = 0.5
+        ) +
       geom_point(
           aes(color = group),
           size  = 1.5, 
           alpha = 1
         ) +
       stat_ellipse(
+          aes(fill = group), 
           level       = level, 
           linetype    = 3, 
           geom        = "polygon", 
           alpha       = 0.02, 
-          aes(fill = group), 
           show.legend = FALSE
           ) + 
       labs(
-          x = x.lab,
-          y = y.lab
+        x = eig$labels[pc[1]],
+        y = eig$labels[pc[2]]
       ) + 
        
       scale_color_discrete(name = "Season") +
       
       # theme
-      theme_classic() +
+      theme_classic(base_family = "serif", base_size = 20) +
       theme(
-          text = element_text(family = "serif", size = 20),
-          legend.position = c(0.1, 0.85)
-          )
-      
-  return(p)
+          legend.position = "top"
+          ) +
+      geom_segment(data = as.data.frame(U), 
+                   aes(
+                       x = 0, xend = Axis.1,
+                       y = 0, yend = Axis.2,
+                       ),
+                   inherit.aes = FALSE)
+    
+   return(plt)
+  return(
+    list(
+      "plt"         = plt,
+      "eigenvalues" = eig,
+      "pcoa_data"   = dat_pcoa,
+      "other"       = pcoa
+      )
+    )
+  
+  # ---- end of function gg_pcoa2
 }
 ```
 
 ## Calculate and Plot 
 ```{r plt-pcoa-pca}
 # ---- PCoA on PFT groups
-cmtx_data_matrix2 <- 
-    cmtx_avgs %>%
-    mutate(group = season) %>%
-    select(group, chloro:pras)
+cmtx_data_matrix2 <-
+    env_cmtx %>%
+    drop_na(chloro:pras, pressure:sal) %>% 
+    # filter(if_any(all_of(chloro:pras, pressure:sal), ~ !is.na))
+    distinct(sample, .keep_all = TRUE)  %>%
+    mutate(group = season) 
+
+
 
 ## calc and plot PCoA
-pcoa_plt <- ggPCoA2(cmtx_data_matrix2)
+# pcoa_plt <-
+  select(cmtx_data_matrix2, group, chloro:pras) %>%
+  gg_pcoa2(
+                    pc = c(1, 2),
+            .correct = "none")
+
+env_scaled <- 
+cmtx_data_matrix2 %>%
+    drop_na(chloro:pras, temp:sal) %>%
+    select(pressure:sal) %>%
+    mutate(
+      across(everything(), ~ scale(.)  %>% as.vector())
+    ) %>%
+    vegdist(., method = "euclidean")
+
+
+pcoa_plt$other %>%
+  ape::biplot.pcoa(
+    plot.axes = c(1, 2),
+    Y = cmtx_data_matrix2 %>%
+      drop_na(chloro:pras, temp:sal) %>%
+      select(chloro:pras) #%>%
+      # mutate(across(everything(), ~ scale(.) %>% as.vector()))
+  )
+
+    Y = cmtx_data_matrix2 %>%
+      drop_na(chloro:pras, temp:sal) %>%
+      select(chloro:pras) #%>%
+x <- pcoa_plt$other
+
+    pr.coo <- x$vectors
+    # if (x$correction[2] > 1) 
+    #     pr.coo <- x$vectors.cor
+    k <- ncol(pr.coo)
+    diag.dir <- diag(c(dir.axis1 = 1, dir.axis2 = 2))
+    plot.axes <- c(1, 2)
+    pr.coo[, plot.axes] <- pr.coo[, plot.axes] %*% diag.dir
+        
+    n <- nrow(Y)
+    points.stand <- scale(pr.coo[, plot.axes])
+    S <- cov(Y, points.stand)
+    
+    U <- 
+      S %*% diag((x$values$Eigenvalues[plot.axes]/(n - 1))^(-0.5))
+    
+    colnames(U) <- colnames(pr.coo[, plot.axes])
+    
+    
+    par(mai = c(1, 0.5, 1.4, 0))
+    
+    # plot using stats::biplot
+    biplot(pr.coo[, plot.axes], U)#, xlab = labels[1], ylab = labels[2])
+    
+    
+    # title
+    if (is.null(main)) {
+        title(main = c("PCoA biplot", "Response variables projected", 
+            "as in PCA with scaling 1"), line = 4)
+    } else {
+        title(main = main, family = "serif")
+    }
+    # if (k < 2) 
+    #     stop("There is a single eigenvalue. No plot can be produced.")
+    # if (k < plot.axes[1]) 
+    #     stop("Axis", plot.axes[1], "does not exist.")
+    # if (k < plot.axes[2]) 
+    #     stop("Axis", plot.axes[2], "does not exist.")
+    # if (!is.null(rn)) 
+    #     rownames(pr.coo) <- rn
+    # labels = colnames(pr.coo[, plot.axes])
+    # if (is.null(Y)) {
+    #     limits <- apply(pr.coo[, plot.axes], 2, range)
+    #     ran.x <- limits[2, 1] - limits[1, 1]
+    #     ran.y <- limits[2, 2] - limits[1, 2]
+    #     xlim <- c((limits[1, 1] - ran.x/10), (limits[2, 1] + 
+    #         ran.x/5))
+    #     ylim <- c((limits[1, 2] - ran.y/10), (limits[2, 2] + 
+    #         ran.y/10))
+    #     par(mai = c(1, 1, 1, 0.5))
+    #     plot(pr.coo[, plot.axes], xlab = labels[1], ylab = labels[2], 
+    #         xlim = xlim, ylim = ylim, asp = 1)
+    #     text(pr.coo[, plot.axes], labels = rownames(pr.coo), 
+    #         pos = 4, cex = 1, offset = 0.5)
+    #     if (is.null(main)) {
+    #         title(main = "PCoA ordination", line = 2)
+    #     }
+    #     else {
+    #         title(main = main, family = "serif", line = 2)
+    #     }
+    # }
+    # else {
+    # }
+    # invisible()
+
+
 
 # ---- PCA on environmental CTD
 # temp, par and sal
@@ -298,104 +466,133 @@ pca_plt <-
     legend.position = "bottom"
   )
 
-    
-pcoa_plt   
+pcoa_plt$plt    
+# pcoa_plt   
 pca_plt
 ```
 
 ## Save PCA and PCoA
 ```{r save-pcoa-pca}
+save_gg(
+  plt            = pca_plt, # edit if want specific plot
+  save_location  = dir_plt_save,
+  save_name      = "pft_pca",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 9.7,
+  width          = 19,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
+
+save_gg(
+  plt            = pcoa_plt,
+  save_location  = dir_plt_save,
+  save_name      = "pft_pcoa",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 9.7,
+  width          = 19,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
 # save arguments
-sv_arg <-
-  list(
-    sv_loc    = dir_plt_save,
-    sv_nm     = c("pca", "pcoa"),
-    overwrite = FALSE
-  ) %>%
-  c(
-    .,
-    pca = dir_ls(.$sv_loc,
-                 regexp = .$sv_nm[1]) %>% is_empty(),
-    pcoa = dir_ls(.$sv_loc,
-                 regexp = .$sv_nm[2]) %>% is_empty()
-  )
+# sv_arg <-
+#   list(
+#     sv_loc    = dir_plt_save,
+#     sv_nm     = c("pca", "pcoa"),
+#     overwrite = FALSE
+#   ) %>%
+#   c(
+#     .,
+#     pca = dir_ls(.$sv_loc,
+#                  regexp = .$sv_nm[1]) %>% is_empty(),
+#     pcoa = dir_ls(.$sv_loc,
+#                  regexp = .$sv_nm[2]) %>% is_empty()
+#   )
 
-# ---- save PCA
-if (sv_arg$pca | sv_arg$overwrite) {
-  save_gg(
-    plt            = pca_plt, # edit if want specific plot
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[1],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 9.7,
-    width          = 19,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file {sv_arg$sv_nm}} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
-    )
-  )
-}
-
-rm(sv_arg)
-
-
-# ---- save PCoA
-if (sv_arg$pcoa | sv_arg$overwrite) {
-  save_gg(
-    plt            = pcoa_plt, 
-    save_location  = sv_arg$sv_loc,
-    save_name      = sv_arg$sv_nm[2],
-    verbose        = TRUE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 9.7,
-    width          = 19,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
- )
-} else {
-    cli_alert_info(
-        c(
-          "Skipping saving of ",
-          "{.file {sv_arg$sv_nm[2]}} ",
-          "because exists ",
-          "and/or overwrite = {.var FALSE}"
-        )
-    )
-}
-rm(sv_arg)
+# # ---- save PCA
+# # if (sv_arg$pca | sv_arg$overwrite) {
+#   save_gg(
+#     plt            = pca_plt, # edit if want specific plot
+#     save_location  = sv_arg$sv_loc,
+#     save_name      = sv_arg$sv_nm[1],
+#     verbose        = TRUE,
+#     time_stamp_fmt = "%Y%m%d_%H%M%S",
+#     device         = "jpeg",
+#     height         = 9.7,
+#     width          = 19,
+#     dpi            = 600,
+#     units          = "in",
+#     bg             = "white"
+#   )
+# 
+# # } else {
+#   cli::cli_alert_info(
+#     c(
+#       "Skipping saving of {.file {sv_arg$sv_nm}} ",
+#       "because exists ",
+#       "and/or overwrite is set {.var FALSE}"
+#     )
+#   )
+# # }
+# 
+# rm(sv_arg)
+# 
+# 
+# # ---- save PCoA
+# if (sv_arg$pcoa | sv_arg$overwrite) {
+#   save_gg(
+#     plt            = pcoa_plt, 
+#     save_location  = sv_arg$sv_loc,
+#     save_name      = sv_arg$sv_nm[2],
+#     verbose        = TRUE,
+#     time_stamp_fmt = "%Y%m%d_%H%M%S",
+#     device         = "jpeg",
+#     height         = 9.7,
+#     width          = 19,
+#     dpi            = 600,
+#     units          = "in",
+#     bg             = "white"
+#   )
+# 
+# } else {
+#     cli_alert_info(
+#         c(
+#           "Skipping saving of ",
+#           "{.file {sv_arg$sv_nm[2]}} ",
+#           "because exists ",
+#           "and/or overwrite = {.var FALSE}"
+#         )
+#     )
+# }
+# rm(sv_arg)
 ```
 
 # ---- Pairwise Permanova Test ----
 ```{r permanova}
-set.seed(1082002)
-all_test_env <-
-  adonis2(
-    env_data_matrix[1:3] ~ season,
-    data   = env_data_matrix,
-    method = "bray"
-  )
-
-all_test <-
-  adonis2(
-    cmtx_data_matrix ~ season,
-    data   = cmtx_avgs,
-    method = "bray"
-  )
-   
 # ---- function
 # run adonis2 on
+
+#' Pairwise Permutation MANOVA
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .data DESCRIPTION.
+#' @param pair_col DESCRIPTION.
+#' @param pairs DESCRIPTION.
+#' @param formula DESCRIPTION.
+#' @param dist_method DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
 szn_adonis2 <- function(
         .data, 
         pair_col, 
@@ -423,6 +620,25 @@ szn_adonis2 <- function(
     pairwise_p <- adon_test[["Pr(>F)"]][1]
     pairwise_p
 }
+
+
+# ---
+
+set.seed(1082002)
+all_test_env <-
+  adonis2(
+    env_data_matrix[1:3] ~ season,
+    data   = env_data_matrix,
+    method = "bray"
+  )
+
+all_test <-
+  adonis2(
+    cmtx_data_matrix ~ season,
+    data   = cmtx_avgs,
+    method = "bray"
+  )
+   
 
 # create combinations of season to pairwise test
 cross_pairs <- 
@@ -502,20 +718,22 @@ gg_ordiplot(
   scaling = 1
 )
 
-if (FALSE) {
-        save_plot(
-        filename = 
-            here("data", "plots",
-                 glue("cca",
-                      format(Sys.time(), "_%Y%m%d_%H%M%S"),
-                      ".jpeg")),
-        plot        = cca_plt,
-        base_height = 9.7,
-        base_width  = 19,
-        dpi         = 600, 
-        units       = "in", 
-        device      = "jpeg")
-}
+
+# ---- save cca plot
+save_gg(
+  plt            = cca_plt, # edit if want specific plot
+  save_location  = dir_plt_save,
+  save_name      = "pft_cca",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 9.7,
+  width          = 19,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+  )
 ```
 
 
