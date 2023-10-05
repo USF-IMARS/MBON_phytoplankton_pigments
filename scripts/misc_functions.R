@@ -196,128 +196,154 @@ file_expr <- function(loc       = here::here(),
 #' @examples
 #' # ADD_EXAMPLES_HERE
 save_csv <- function(
-        .data         = NULL,        
-        save_location = NULL,
-        save_name     = NULL,
-        overwrite     = FALSE,
-        verbose       = TRUE,
-        time_stamp_fmt = "%Y%m%d_%H%M%S",
-        utf_8          = FALSE) {
+  .data          = NULL,
+  save_location  = NULL,
+  save_name      = NULL,
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  utf_8          = FALSE) {
     
-    library(cli)
-    
-    # ---- checking input parameters
-    if (is.null(.data)) {
-        cli_abort(
-            c("Check input, {.var {col_yellow(\".data\")}} is `NULL`.", 
-              "{col_red(\"Stopping\")}"))
-    }
-    if (is.null(save_location)) {
-        cli_abort(
-            c("Check input, {.var {col_yellow(\"save_location\")}} is `NULL`.",
-              "{col_red(\"Stopping\")}"))
-    }
-    if (is.null(save_name)) {
-        cli_abort(
-            c("Check input, {.var {col_yellow(\"save_name\")}} is `NULL`.",
-              "{col_red(\"Stopping\")}"))
-    }
-    if (is.null(overwrite)) {
-        cli_abort(
-            c("Check input, {.var {col_yellow(\"overwrite\")}} is `NULL`.",
-              "{col_red(\"Stopping\")}"))
-    }
-    
-    # ---- file name
-    data_f <- 
-        file_expr(
-            save_location,
-            save_name,
-            exts = "csv",
-            time_stamp_fmt
-        )
-    
-    if (any(class(data_f) %in% c("tbl_df", "tbl", "data.frame"))) {
-        print(data_f)
-        return(data_f)
-    }
-    
-    data_f <- 
-      data_f %$% 
-      eval(file_expr)
-    
+  library(cli)
+
+  # ---- checking input parameters
+  if (is.null(.data)) {
+    cli_abort(
+      c(
+        "Check input, {.var {col_yellow(\".data\")}} is `NULL`.",
+        "{col_red(\"Stopping\")}"
+      )
+    )
+  }
+  if (is.null(save_location)) {
+    cli_abort(
+      c(
+        "Check input, {.var {col_yellow(\"save_location\")}} is `NULL`.",
+        "{col_red(\"Stopping\")}"
+      )
+    )
+  }
+  if (is.null(save_name)) {
+    cli_abort(
+      c(
+        "Check input, {.var {col_yellow(\"save_name\")}} is `NULL`.",
+        "{col_red(\"Stopping\")}"
+      )
+    )
+  }
+  if (is.null(overwrite)) {
+    cli_abort(
+      c(
+        "Check input, {.var {col_yellow(\"overwrite\")}} is `NULL`.",
+        "{col_red(\"Stopping\")}"
+      )
+    )
+  }
+
+  # ---- file name
+  data_f <-
+    file_expr(
+      save_location,
+      save_name,
+      exts = "csv",
+      time_stamp_fmt
+    )
+
+  if (any(class(data_f) %in% c("tbl_df", "tbl", "data.frame"))) {
+    print(data_f)
+    return(data_f)
+  }
+
+  data_f <-
+    data_f %$%
+    eval(file_expr)
+
+  if (verbose) {
+    cli_h1("Data Variable Name: {.var {save_name}}")
+    cli_alert_info(
+      c(
+        "File Information:\n",
+        "Rows:      {nrow(.data)}\n",
+        "Columns:   {ncol(.data)}\n",
+        "Location:  {.file {save_location}}\n",
+        "File Name: {.file {basename(data_f)}}"
+      )
+    )
+  }
+
+  # ---- check if folder exists and create otherwise
+  if (!dir_exists(save_location)) {
     if (verbose) {
-        cli_h1("Data Variable Name: {.var {save_name}}")
-        cli_alert_info(
-            c("File Information:\n",
-              "Rows:      {nrow(.data)}\n",
-              "Columns:   {ncol(.data)}\n",
-              "Location:  {.file {save_location}}\n",
-              "File Name: {.file {basename(data_f)}}")
-        )
+      cli_alert_info(
+        "{col_green(\"Creating\")} folder location!"
+      )
     }
-    
-    # ---- check if folder exists and create otherwise
-    if (!dir_exists(save_location)) {
-        
-        if (verbose) 
-            cli_alert_info(
-                "{col_green(\"Creating\")} folder location!")
-        
-        fs::dir_create(save_location)
+
+    fs::dir_create(save_location)
+  }
+
+  # ---- check if need to create file
+  # file_loc <-
+  #   fs::dir_ls(
+  #     save_location,
+  #     regexp = save_name
+  #   )
+  # 
+  # create_f <- rlang::is_empty(file_loc)
+  create_f <- 
+    fs::dir_ls(
+      save_location,
+      regexp = save_name
+    )  %>%
+    rlang::is_empty()
+
+  if (!create_f && !overwrite) {
+    # return early if no need to create
+    if (verbose) {
+      cli_alert_info(
+        "File exist and {.emph is not} being {col_green(\"overwritten\")}!\n"
+      )
     }
-    
-    # ---- check if need to create file
-    file_loc <- 
-        fs::dir_ls(
-            save_location,
-            regexp = save_name
-        ) 
-    
-    create_f <- rlang::is_empty(file_loc)
-    
-    if (!create_f && !overwrite) {
-        # return early if no need to create
-        if (verbose)
-            cli_alert_info(
-              "File exist and {.emph is not} being {col_green(\"overwritten\")}!\n"
-            )
-        return(invisible())
-    }
-    
-    if (!create_f && overwrite && verbose) {
-        cli_alert_info(
-            "File exist and {.emph is} being {col_red(\"overwritten\")}!")
-    } else if (create_f && verbose) {
-        cli_alert_info("File does not exists, {col_green(\"creating\")}!")
-    }
-    
-    
-    # ---- saving file
-    if (verbose) cli_alert_info("Saving file!")
-    
-    if (utf_8) {
-        # save with UTF-8 
-        cli_alert_info(
-            c("Note: saving to indicate to excel as {.var UTF-8}.\n", 
-              "Using: `{col_yellow(\"readr::write_excel_csv()\")}` ",
-              "instead of `{col_red(\"readr::write_csv()\")}`"))
-        readr::write_excel_csv(
-            x    = .data,
-            file = data_f,
-            na   = ""
-        )
-    } else {
-        readr::write_csv(
-            x    = .data,
-            file = data_f,
-            na   = ""
-        )
-    }
-    
-    if (verbose) cli_alert_success("Saved!\n\n")
-    
-    # ---- end of function
+    return(invisible())
+  }
+
+  if (!create_f && overwrite && verbose) {
+    cli_alert_info(
+      "File exist and {.emph is} being {col_red(\"overwritten\")}!"
+    )
+  } else if (create_f && verbose) {
+    cli_alert_info("File does not exists, {col_green(\"creating\")}!")
+  }
+
+
+  # ---- saving file
+  if (verbose) cli_alert_info("Saving file!")
+
+  if (utf_8) {
+    # save with UTF-8
+    cli_alert_info(
+      c(
+        "Note: saving to indicate to excel as {.var UTF-8}.\n",
+        "Using: `{col_yellow(\"readr::write_excel_csv()\")}` ",
+        "instead of `{col_red(\"readr::write_csv()\")}`"
+      )
+    )
+    readr::write_excel_csv(
+      x    = .data,
+      file = data_f,
+      na   = ""
+    )
+  } else {
+    readr::write_csv(
+      x    = .data,
+      file = data_f,
+      na   = ""
+    )
+  }
+
+  if (verbose) cli_alert_success("Saved!\n\n")
+
+  # ---- end of function
 }
 
 
@@ -346,7 +372,7 @@ save_gg <- function(
         plt, 
         save_location  = NULL,
         save_name      = NULL,
-        # overwrite      = FALSE,
+        overwrite      = FALSE,
         verbose        = TRUE,
         time_stamp_fmt = "%Y%m%d_%H%M%S",
         device         = c("jpeg", "svg"), 
@@ -356,6 +382,29 @@ save_gg <- function(
         ) {
     
     library(cli)
+    
+    # ---- checking input parameters
+    if (is.null(.data)) {
+        cli_abort(
+            c("Check input, {.var {col_yellow(\".data\")}} is `NULL`.", 
+              "{col_red(\"Stopping\")}"))
+    }
+    if (is.null(save_location)) {
+        cli_abort(
+            c("Check input, {.var {col_yellow(\"save_location\")}} is `NULL`.",
+              "{col_red(\"Stopping\")}"))
+    }
+    if (is.null(save_name)) {
+        cli_abort(
+            c("Check input, {.var {col_yellow(\"save_name\")}} is `NULL`.",
+              "{col_red(\"Stopping\")}"))
+    }
+    if (is.null(overwrite)) {
+        cli_abort(
+            c("Check input, {.var {col_yellow(\"overwrite\")}} is `NULL`.",
+              "{col_red(\"Stopping\")}"))
+    }
+    
     
     device <- match.arg(device)
     
@@ -382,7 +431,45 @@ save_gg <- function(
               "File Name: {.file {basename(data_f)}}")
         )
     }
-
+    
+    # ---- check if folder exists and create otherwise
+    if (!dir_exists(save_location)) {
+        
+        if (verbose) 
+            cli_alert_info(
+                "{col_green(\"Creating\")} folder location!")
+        
+        fs::dir_create(save_location)
+    }
+    
+    # ---- check if need to create file
+    create_f <- 
+        fs::dir_ls(
+            save_location,
+            regexp = save_name
+        )  %>%
+        rlang::is_empty()
+    
+    if (!create_f && !overwrite) {
+        # return early if no need to create
+        if (verbose)
+            cli_alert_info(
+                "File exist and {.emph is not} being {col_green(\"overwritten\")}!\n"
+            )
+        return(invisible())
+    }
+    
+    if (!create_f && overwrite && verbose) {
+        cli_alert_info(
+            "File exist and {.emph is} being {col_red(\"overwritten\")}!")
+    } else if (create_f && verbose) {
+        cli_alert_info("File does not exists, {col_green(\"creating\")}!")
+    }
+    
+    
+    # ---- saving file
+    if (verbose) cli_alert_info("Saving file!")
+    
     cowplot::save_plot(
         filename    = data_f,
         plot        = plt,
