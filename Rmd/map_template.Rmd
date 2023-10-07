@@ -5,46 +5,88 @@ date: '2022-06-14'
 output: html_document
 ---
 
-# USage
+# 1.0 ---- Summary of Document ----
 
-## Creates map of site locations for IMaRS MBON
-Uses topography and coastline data from NOAA.
-Creates a map of station locations with an inset map of Florida
+- Map
+  - NOA topography and coastline data
+  - Site locations for IMaRS MBON
+  - Inset map of Florida
 
 
-## Kriging Maps
-Uses pigment data and creates kriged maps using the `fields` package and some 
-modified code from Enrique Montes
+- Kriging Maps
+  - Pigment data 
+  - kriged maps using the `fields` package 
+    - modified code from Enrique Montes
+
+# 2.0 ---- Setup ----
+
+## 2.1 Load Libraries
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
 librarian::shelf(
-    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
-    forcats, lubridate, glue, fs, magrittr, here, conflicted,
-    # broom # optional
-     
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
     # additional 
-    fields, cowplot, metR, rgdal, ncdf4, sf, 
-    raster
+    cowplot, metR, sf,
+    # TODO: need to move away from raster and rgdal for terra
+    fields, rgdal, ncdf4, raster 
 )
 
-# prefer select and filter 
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+    dplyr::filter(), 
+    dplyr::select()
+    )
+knitr::opts_chunk$set(echo = TRUE)
 
-# source map download function
-source(here("scripts", "map_files_dwnlod.R"))
+
+# source functions
+source(here("scripts", "map_files_dwnlod.R")) # map download function
+source(here("scripts", "krig_fun.R"))         # Kriging
+source(here("scripts", "misc_functions.R")) 
 
 # fixes issue with reading file
 sf::sf_use_s2(FALSE)
 ```
 
 
+## 2.2 Set Map Information
+
+Set paths for download and search:
+  - land 
+  - topographic 
+    - Note: they don't have to be the same location
+    
+Set spatial extend as a bounding box
+- Florida Keys
+  - zoomed in for stations specific
+  - Min lon/lat: 
+    * -82.00 deg W
+    * 24.25 deg N
+  - Max lon/lat: 
+    * -80.00 deg W
+    * 24.25 deg N
+
+- Florida
+  - zoomed out for inset map
+  - Min lon/lat: 
+    * -90.00 deg W
+    * 20.00 deg N   
+  - Max lon/lat: 
+    * -75.00 deg W
+    * 35.00 deg N
+
 ```{r map-info, include=FALSE}
 # path for map to find/download to, they can be different depending on
 # your computer
 path_land <- here("data", "map")
 path_topo <- here("data", "map")
+# path_land <- path_topo <-  rstudioapi::selectDirectory(path = here(".."))
+path_land <- path_topo <-  here("..", "MBON_phytoplankton_pigments", "data", "map")
 
 # Region of Interest Bounding Box                   ======== edit this if needed
 # Change the spatial extent
@@ -64,23 +106,28 @@ exnt2 <-  c(-90, # West
 names(exnt2) <- names(exnt)
 ```
 
-# Load Combined Pigment Data
+
+## 2.3 Load Dataset
+
+Load data sets:
+- Combined Pigment Data created in `01_load_data.Rmd`
+ 
+TODO: *load additonal data*
+- CHEMTAX Seasonal Averages created in `04_chemtax_analysis.Rmd`
+- Surface Averaged CTD Data created in `02_ctd_download.Rmd`
+- Merge CHETMAX-CTD
+
 ```{r load-pigment-data}
+dir_plt_save <- here("data", "plots", "map")
+
 pig_dat  <- 
-  here("data", "processed", "combined_pig_dat.csv") %>%
-  read_csv(show_col_types = FALSE) %>%
-  select(
-    -c(pi, 
-       bottle, indicate_if_filters_are_replicates, volfilt,
-       filter_type:filter_storage_before_shipment_to_gfsc,
-       comments:other, collected_with_positive_pressure_or_vaccuum,
-       date_extracted_month_day_year,
-       cruise, vx_ml)
-    )
+  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% print()
 ```
 
 
-# Download and Load Bathymetry and Coastline Files
+## 2.4 Download and Load Bathymetry and Coastline Files
+
 **Note:** this will be done automatically if files **do not exists**
 
 Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
@@ -102,20 +149,26 @@ map_obj <-
     .map_file  = "etopo1.nc",
     .extent    = exnt2
     )
+
+# create base map
+base_map <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
+
 ```
 
-# Plot FL Keys stations on map
+# 3.0 ---- Plot Mapped Station ----
+
+## 3.1 Plot FL Keys stations on map
+
+Use station locations from pigment lon/lat and add to base map created in 
+section 2.4
+
 ```{r plt-fl-keys, fig.height=6, fig.width=10}
 lat_lon_dat <- 
   pig_dat %>%
-  filter(
-      name_of_water_body == "Florida Keys"  
-      & !str_detect(station, "60")) %>%
+  filter(name_of_water_body == "Florida Keys") %>%
   select(station, lat, lon) %>% 
   distinct(station, lat, lon)
 
-# ---- create base map
-base_map <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
 
 stn_map <-
   base_map +
@@ -136,14 +189,19 @@ stn_map <-
     shape = "Station",
     fill  = "Station"
   ) +
-  coord_sf(xlim = exnt[1:2], 
-           ylim = exnt[3:4]) +
+  coord_sf(
+    xlim = exnt[1:2], 
+    ylim = exnt[3:4]) +
   scale_shape_manual(values = c(24, 25, 21))
 
 stn_map
 ```
 
-# Create Inset Map (i.e. Zoomed Out Map) 
+
+## 3.2 Create Inset Florida Map
+
+Zoomed out map of Florida to be added on top of the station map
+
 ```{r plt-large, fig.width=8, fig.height=10}
 inset_map <-
   with(
@@ -162,36 +220,37 @@ inset_map <-
 inset_map
 ```
 
-# putting both of the maps together
+## 3.3 Merge Station Map and Florida Map
+
+Combine the two maps created in sectin 3.2 and 3.3
+
 May need to play with draw_plot(east.map, x, y, width and height)
+
+
 ```{r plt-lg-sm, fig.height=6, fig.width=10}
 fullmap <- 
   ggdraw() +
   draw_plot(stn_map) +
   draw_plot(inset_map, x = 0.04, y = 0.57, width = 0.19, height = 0.4)
 fullmap
-```
 
-
-```{r save-plt-map}
 # ---- save plot
 walk(
-    c("jpeg", "svg"),
-save_gg(
-  plt            = fullmap,
-  save_location  = dir_plt_save,
-  save_name      = "map_locations",
-  verbose        = TRUE,
-  overwrite      = FALSE,
-  time_stamp_fmt = "%Y%m%d_%H%M%S",
-  device         = .x,
-  height         = 6,
-  width          = 10,
-  dpi            = 600,
-  units          = "in",
-  bg             = "white"
+  c("jpeg", "svg"),
+  save_gg(
+    plt            = fullmap,
+    save_location  = dir_plt_save,
+    save_name      = "map_station_locations",
+    verbose        = TRUE,
+    overwrite      = FALSE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = .x,
+    height         = 6,
+    width          = 10,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
   )
-    
 )
 
 # if (FALSE) {
@@ -230,162 +289,172 @@ save_gg(
 #   rm(map_save_name)
 #   }
 # }
+```
 
+
+# 4.0 ---- Kriging for All Pigments ----
+
+```{r clean workspace}
 # clean up workspace
 suppressWarnings(rm(stn_map, inset_map, lat_lon_dat, exnt, exnt2))
 ```
 
-# ---- Kriging for All Pigments ----
-Test to see if it works
-```{r map-pigments}
-source(here("scripts", "krig_fun.R"))
+## 4.1 Prepare Data for Spatial Krig
 
-# filter for pigment and season
+Steps:
+1. Select necesary columns
+2. Filter data to the `loc` variable
+  - Florida Keys
+  - Southwest Florida Shelf
+  - West Florid Shelf
+3. Pivot long pigment concentrations 
+4. Calculate the pigment concentartion:chlor-a ratio
+5. Calculate an average per season and pigment
+6. Add columns for map titles and file names
+
+```{r prep-data}
+# select subregion
 loc <- "Florida Keys"
 
+# filter for pigment and season
 pigm_dat <-
   pig_dat %>%
-  pivot_longer(
-    tot_chl_b:dp,
-    names_to  = "conc_name",
-    values_to = "conc"
-  ) %>%
-  filter(str_detect(name_of_water_body, loc)
-         & !str_detect(station, "60")
-         ) %>%
   select(
     hplc_gsfc_id, sample,                                     # <-- id
     station, lat, lon, name_of_water_body,                    # <-- spatial
     year, date_time_utc, season,                              # <-- temporal
-    tot_chl_a, conc_name, conc                                # <-- measurements
+    tot_chl_a, tot_chl_b:dp                                   # <-- measurements
   ) %>% 
-  nest(.by = c(season, conc_name)) %>%
+    
+  # select region
+  filter(str_detect(name_of_water_body, loc)) %>%
+  mutate(
+    .before    = tot_chl_a,
+    tot_chl_a2 = tot_chl_a) %>%
+  pivot_longer(
+    tot_chl_a:gyro,
+    names_to  = "conc_name",
+    values_to = "conc"
+  ) %>%
   
   # calc ratio of each pigment to total chlor-a
-  mutate(
-    data = pmap(
-      list(season, conc_name, data),
-      function(x, y, z) {
-        z %>%
-          mutate(ratio = conc / tot_chl_a) %>%
-          # group_by(station) %>%
-          summarise(
-              .by = station,
-            across(
-              c(ratio, conc, tot_chl_a),
-              # .fns = list(avg = (\(x) mean(x, na.rm = TRUE))),
-              .fns   = (\(x) mean(x, na.rm = TRUE)),
-              .names = "{.col}_avg"
-            ),
-            across(c(lat, lon), .fn = mean)
-          ) %>%
-          # ungroup() %>%
-          mutate(
-            season    = x,
-            conc_name = y,
-            .before   = 1
-          )
-       # ---- end of function
-       }
-    ),
-    szn_name = case_when(
-      str_detect(season, "(?i)sp") ~ "Spring",
-      str_detect(season, "(?i)su") ~ "Summer",
-      str_detect(season, "^(?i)f") ~ "Autumn",
-      str_detect(season, "^(?i)w") ~ "Winter",
-      .default = season
-    ),
-    title   = glue("{szn_name}: {conc_name}:TChla"),
-    title2  = glue("{szn_name}: Average {conc_name}"),
-    sv_name = glue("MBON_pigm_{conc_name}_{str_to_lower(szn_name)}")
-  )
-```
-
-2 Samples will cause and error:
-W	tot_chl_b
-F	dv_chl_b
-
-Not sure why these don't work, but is ignored when running. 
-
-Here are offending samples: 
-```{r}
-pigm_dat %>%
-    slice(c(67, 115)) %>%
-    unnest(
-        data, 
-        names_sep = "_") 
-```
-
-```{r map-pigments, fig.width=30, fig.height=15}
-pigm_dat1 <-
-  pigm_dat %>%
-    
-  # remove two samples that cause issues, don't need anymore
-  # slice(-c(67, 115)) %>%
- slice_sample(n = 10) %>%
- mutate(
-    krig = pmap(
-      list(data, conc_name, szn_name, title),
-      .progress = TRUE,
-      (\(x, y, z, title) map_data(
-        .data     = x,
-        conc_name = y,
-        col_name  = "ratio_avg",
-        # col_name  = "conc_avg",
-        grp_name  = z,
-        .title    = title,
-        base_map  = base_map,
-      ))
-    )
+  mutate(ratio_pig_chlora = conc / tot_chl_a2) %>%
+      
+  # calc averages per season and station
+  summarise(
+    .by       = c(season, station, conc_name),
+    conc_avg  = mean(conc, na.rm = TRUE),
+    ratio_avg = mean(ratio_pig_chlora, na.rm = TRUE),
+    lat       = median(lat, na.rm = TRUE),
+    lon       = median(lon, na.rm = TRUE),
   ) %>%
+      
+  # nest by season and pigment
+  nest(.by = c(season, conc_name)) %>%
+  
+  # add title and file names     
+  mutate(
+    title_conc    = glue("{season}: Average {conc_name}"),
+    title_ratio   = glue("{season}: {conc_name}:TChla"),
+    sv_name_conc  = glue("mbon_pigm_{conc_name}_conc_{str_to_lower(season)}"),
+    sv_name_ratio = glue("mbon_pigm_{conc_name}_ratio_{str_to_lower(season)}")
+  )
+  
+```
+
+## 4.2 Calculate: Spatial Krig for Each Pigment
+
+Uses pigment concentrations or pigment ratios to calculate an estimated spatial kirged map using either pigment concentrations  or pigment:chlor-a ratio
+
+
+Some samples may not produce maps due to how the math works and will be 
+ignored. This usually happens when there's no variation in data or something 
+else. These samples will be shown if it needs to be looked into.
+
+
+```{r cal-krig, fig.width=30, fig.height=15}
+# select ratio or concentrations to krig
+pick_rat_con <-
+  tribble(
+      ~col_name_dat, ~save_name,        ~folder,
+      "conc_avg",  "sv_name_conc", "concentration",
+      "ratio_avg", "sv_name_ratio", "ratio"
+  ) %>%
+  filter(str_detect(col_name_dat, "(?i)conc")) %T>% print()
+  # filter(str_detect(col_name_dat, "(?i)ratio")) %T>% print()
+
+cli_alert_info(
+  "{.var {col_red(pick_rat_con$folder)}} was selected to perform Kriging.")
+
+# perfrom Krig
+krig_pigments <-
+  pigm_dat %>%
+  nest(.by = conc_name) %>%
+      
+  # select proportion of pigment cocentrations as decimal 0.0 - 1.0
+  slice_sample(prop = 1.0) %>%
+  unnest(data) %>%
+  
+  mutate(
+    krig = pmap(
+      list(data, conc_name, season, title_ratio, row_number()),
+      .progress = TRUE,
+      possibly(
+        \(x, y, z, title, row) {
+          cli::cli_alert_info("Map {row} of {nrow(pigm_dat)}")
+          map_data(
+            .data     = x,
+            conc_name = y,
+            col_name  = pick_rat_con$col_name_dat,
+            grp_name  = z,
+            .title    = title,
+            base_map  = base_map,
+          )
+        },
+        otherwise = NULL
+      )
+    )
+  ) 
+
+# show season pigment pair with errors
+filter(krig_pigments, map_lgl(krig, is.null))
+
+# remove rows with errors to plot and save
+krig_pigments <- 
+  krig_pigments %>%
+  # filter out `NULL`
+  filter(!map_lgl(krig, is.null)) %>%
   hoist(krig, "dat", "map")
 
-pigm_dat1 %>%
-    slice_sample(n = 5) %$% map
+# sample 5 pigments season combos to view data and map 
+krig_pigments %>%
+  slice_sample(n = 5) %$%
+  walk2(data, map, (\(x, y) { print(x); print(y)} ))
 
-pigm_dat1 %>%
-    slice_sample(n = 5) %$% dat
-
-if (FALSE) {
-   # save krig maps
-    # pigm_dat1 %$%
-    # pwalk(list(map, sv_name),
-    #       save_maps,
-    #       sv = TRUE) 
-    
-    # save pigm_dat1
-    pigm_dat1 %$%
-      walk2(
-        .x = sv_name,
-        .y = map,
-        \(.x, .y) {
-          .x %>%
-            str_to_lower() %>%
-            str_replace_all("\\s", "_") %>%
-            # glue(., "common suffix", .sep = "_") %>% # remove if none needed
-            save_gg(
-              .y,
-              save_location  = dir_plt_save,
-              save_name      = .,
-              verbose        = TRUE,
-              time_stamp_fmt = "%Y%m%d_%H%M%S",
-              device         = "jpeg",
-              height         = 9.7,
-              width          = 19,
-              dpi            = 600,
-              units          = "in",
-              bg             = "white"
-            )
-        }
-      )
-    
-}
+# save krig_pigments
+save_map(
+  n_files         = 0,  # edit to include more files
+  prop_files      = NULL,
+  .data           = krig_pigments,
+  folder_location = here(dir_plt_save, pick_rat_con$folder),
+  save_column     = pick_rat_con$save_name,
+  time_stamp_fmt  = "%Y%m%d_%H%M%S",
+  verbose         = TRUE,
+  overwrite       = FALSE,
+  device          = "jpeg",
+  height          = 9.7,
+  width           = 19,
+  dpi             = 600,
+  units           = "in",
+  bg              = "white"
+)
 
 ```
 
 
 
 # ---- ERROR: tot_chl_a doesn't exist in chemtax_with_metadata ----
+
 ```{r}
 #Longer chemtax dataframe with combined functional types 
 cmtx_longer3 <-

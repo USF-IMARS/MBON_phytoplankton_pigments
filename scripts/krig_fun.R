@@ -63,10 +63,10 @@ map_data <- function(
     grp_name,
     .title,
     resolution = 0.01,
-    adj = 0.1,
-    base_map = NULL,
-    colr = "data",
-    verbose = FALSE) {
+    adj        = 0.1,
+    base_map   = NULL,
+    colr       = "data",
+    verbose    = FALSE) {
     
     
   # TODO: fix ggplot
@@ -266,9 +266,10 @@ map_data <- function(
     ))
     return(dat_sp)
   }
-
+  
   # ---- plot  ----
-  plt <- base_map +
+  plt <- 
+    base_map +
     geom_contour_fill(
       data = dat_sp,
       aes(
@@ -293,13 +294,30 @@ map_data <- function(
 
     labs(
       color = NULL,
+      fill  = NULL,
       title = .title
     ) +
 
     scale_fill_gradientn(
       breaks = breaks,
-      colors = cols_fuco
+      colors = chl_col
     ) +
+      
+    # --- test to mask land and depth <= 2m
+      geom_tile(
+          data = filter(map_obj$bathy, Altitude >= -2),
+          aes(
+              x = x,
+              y = y
+          ), 
+          color = "white",
+          fill = "white",
+          inherit.aes = FALSE) +
+      geom_sf(data = map_obj$coast_topo,
+              inherit.aes = FALSE) +
+    
+    # ---
+    # ---
 
     coord_sf(
       xlim = xlims,
@@ -321,17 +339,133 @@ map_data <- function(
   #     )
 
   # return list of data
-  result <- list(
-    dat = dat_sp,
-    map = plt
-  )
+  result <- 
+    list(
+      dat = dat_sp,
+      map = plt
+      )
 
-
-  Sys.sleep(1)
   return(result)
-  # ---- End of Function ----
+  
+  # ---- end of function map_data
 }
 
+
+##%######################################################%##
+#                                                          #
+####                     Save Maps                      ####
+#                                                          #
+##%######################################################%##
+#' Save Maps
+#'
+#' This will allow you to save maps and select how many you want to save. The
+#' exact maps saved are sampled from the number of rows of the `.data` object.
+#'
+#' @param .data A tibble or data.frame conttaining a column named `map` as 
+#'              ggplot objects
+#' @param folder_location Passed to save_gg as the path to save the map files
+#' @param save_column The column in `.data` that contains the base names to save
+#' @param prop_files Optional: the fraction of map files to save
+#' @param n_files Optional: the exact number of map files to save. This will be
+#'                limited to the number of rows in `.data`
+#' @param ... Other parameters passed to `save_gg`
+#'
+#' @author Sebastian Di Geronimo (October 07, 2023)
+#'
+#' @return RETURN_DESCRIPTION
+#' 
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#'
+save_map <- function(
+  .data,
+  save_column,
+  folder_location,
+  prop_files = NULL,
+  n_files    = NULL,
+  ...
+  ) {
+
+  library(cli)    
+  library(dplyr)    
+  library(stringr)    
+    
+  if (not(is.null(prop_files))) {
+    data_save <- slice_sample(.data, prop = as.numeric(prop_files))
+  } else if (not(is.null(n_files))) {
+    data_save <- slice_sample(.data, n = as.numeric(n_files))
+  } else {
+    cli_alert_warning(
+      c(
+        "You are about to save {nrow(.data)} map files!\n",
+        "Decide how many you want to save."
+      )
+    )
+
+    save_opt <-
+      menu(
+        title = "How many maps do you want to save?",
+        c(
+          "Yes, save all maps",
+          "None, I'll save later",
+          "Sample x percent of maps!",
+          "Sample x number of maps!"
+        )
+      )
+
+    if (save_opt == 2) {
+      cli_alert_warning("No maps are being saved!")
+      return(invisible())
+    }
+
+    if (save_opt == 3) {
+      cli_alert_info("What percent do you want to save (0.0 - 1.0)?")
+      prop_files <- readline("Enter here: ")
+      
+      data_save <- slice_sample(.data, prop = as.numeric(prop_files))
+      
+    } else if (save_opt == 4) {
+      cli_alert_info("How many maps do you want to save? 0 - {nrow(.data)}")
+      n_files <- readline("Enter here: ")
+      n_files <- as.integer(n_files)
+      
+
+      data_save <- slice_sample(.data, n = n_files)
+    } else {
+      cli_alert_info("Saving all maps ({nrow(.data)})!")
+      data_save <- .data
+    }
+  }
+    
+  cli_alert_info("Saving {nrow(data_save)} files!")
+  data_save %>%
+    select("sv_nm" = !!sym(save_column), map) %$%
+    walk2(
+     .x = sv_nm,
+     .y = map,
+     \(.x, .y) {
+      .x %>%
+        str_to_lower() %>%
+        str_replace_all("\\s", "_") %>%
+        save_gg(
+            .y,
+            save_location  = folder_location,
+            save_name      = .,
+            ...
+        )
+     }
+    )
+      
+  # ---- end of function save_map
+}
+
+
+# ============================================================================ #
+# ---- Now Defunct Function ----
+# ============================================================================ #    
+
+
+# `save_map` was used, but the function `save_gg` made it less useful
 
 ##%######################################################%##
 #                                                          #
@@ -339,86 +473,72 @@ map_data <- function(
 #                                                          #
 ##%######################################################%##
 #' Save Kriged Map
-#'
+#' 
 #' FUNCTION_DESCRIPTION
-#'
+#' 
 #' @param maps <S3: gg> object to save
-#' @param sv Optional: set to TRUE if want to save 
+#' @param sv Optional: set to TRUE if want to save
 #'           (default: FALSE)
 #' @param sv_name Optional: add part of name to file,
 #'                (default: NULL; file - MBON_pigm_<title>_<yyymmdd_hhmmss>.png,
 #'                 optional: file - MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png)
-#' @param sav_loc Optional: set location to save plots as `.jpeg`, a default is set 
+#' @param sav_loc Optional: set location to save plots as `.jpeg`, a default is set
 #'                (default: here("data", "plots", Sys.Date(), "map")
 #'                               "~/data/plots/map/<current date>/")
-#'
+#' 
 #' @return RETURN_DESCRIPTION
 #' 
 #' @details
 #' #' External:
-#' If `sav == TRUE`, will save figures to location set in sav_loc with a file 
+#' If `sav == TRUE`, will save figures to location set in sav_loc with a file
 #' name of "MBON_pigm_<sv_name>_<title>_<yyymmdd_hhmmss>.png"
 #' 
 #' @examples
 #' # ADD_EXAMPLES_HERE
 #' 
-save_maps <- function(
-  maps, 
-  sv        = FALSE, 
-  sv_name   = NULL,
-  sav_loc   = here("data", "plots", Sys.Date(), "map"),
-  overwrite = FALSE,
-  .device    = c("jpeg", "svg"),
-  time_stamp_fmt = "%Y%m%d_%H%M%S",
-  .height    = 6,
-  .width     = 10
-  ) {
-    
-    library("cli")
-    
-    .device <-  match.arg(device)
-    
-    if (is.null(sv_name)) {
-        sv_name <- "map_plot"
-    }
-    
-    if (is.null(maps)) {
-        cli_alert_warning(c("Skipping: {.file {sv_name}} ",  
-                            "is {.var {col_red(\"NULL\")}}"))
-        return(invisible(NULL))
-    }
-    
-    # save location and name
-    if (sv) {
-        
-        # filename <- here(sav_loc,
-        #                  glue("{sv_name}_",
-        #                       format(Sys.time(), "%y%m%d_%H%M%S") ,
-        #                       ".jpeg"))
-
-        # cli_alert_info("Map file location: {.file {dirname(filename)}}")
-        # cli_alert_info("Map file name: {.file {basename(filename)}}")
-        
-        # ---- save plot
-        save_gg(
-          plt            = maps,
-          save_location  = sav_loc,
-          save_name      = sv_name,
-          verbose        = TRUE,
-          overwrite      = FALSE,
-          time_stamp_fmt = time_stamp_fmt,
-          device         = .device,
-          height         = .height,
-          width          = .width,
-          dpi            = 600,
-          units          = "in",
-          bg             = "white"
-          )
-        
-        # ggsave(filename,
-        #        plot   = maps,
-        #        width  = 10,
-        #        height = 6,
-        #        device = device)
-    }
-}
+# save_maps <- function(
+#   maps, 
+#   sv        = FALSE, 
+#   sv_name   = NULL,
+#   sav_loc   = here("data", "plots", Sys.Date(), "map"),
+#   overwrite = FALSE,
+#   .device    = c("jpeg", "svg"),
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   .height    = 6,
+#   .width     = 10
+#   ) {
+#     
+#     library("cli")
+#     
+#     .device <-  match.arg(device)
+#     
+#     if (is.null(sv_name)) {
+#         sv_name <- "map_plot"
+#     }
+#     
+#     if (is.null(maps)) {
+#         cli_alert_warning(c("Skipping: {.file {sv_name}} ",  
+#                             "is {.var {col_red(\"NULL\")}}"))
+#         return(invisible(NULL))
+#     }
+#     
+#     # save location and name
+#     if (sv) {
+#         # ---- save plot
+#         save_gg(
+#           plt            = maps,
+#           save_location  = sav_loc,
+#           save_name      = sv_name,
+#           verbose        = TRUE,
+#           overwrite      = FALSE,
+#           time_stamp_fmt = time_stamp_fmt,
+#           device         = .device,
+#           height         = .height,
+#           width          = .width,
+#           dpi            = 600,
+#           units          = "in",
+#           bg             = "white"
+#           )
+#         
+#     }
+# }
