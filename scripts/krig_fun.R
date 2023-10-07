@@ -394,7 +394,7 @@ save_map <- function(
     data_save <- slice_sample(.data, prop = as.numeric(prop_files))
   } else if (not(is.null(n_files))) {
     data_save <- slice_sample(.data, n = as.numeric(n_files))
-  } else {
+  } else if (interactive()) {
     cli_alert_warning(
       c(
         "You are about to save {nrow(.data)} map files!\n",
@@ -414,7 +414,7 @@ save_map <- function(
       )
 
     if (save_opt == 2) {
-      cli_alert_warning("No maps are being saved!")
+      cli_alert_danger("No maps are being saved!")
       return(invisible())
     }
 
@@ -435,6 +435,13 @@ save_map <- function(
       cli_alert_info("Saving all maps ({nrow(.data)})!")
       data_save <- .data
     }
+  } else {
+    cli_alert_danger(
+      c("{.var n_files} and {.var prop_files} were not supplied and\n",
+        "{.fun save_map} was not run interactively\n",
+        "No maps are being saved!")
+    )
+    return(invisible())
   }
     
   cli_alert_info("Saving {nrow(data_save)} files!")
