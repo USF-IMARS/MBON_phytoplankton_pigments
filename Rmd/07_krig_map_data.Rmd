@@ -85,8 +85,6 @@ Set spatial extend as a bounding box
 # your computer
 path_land <- here("data", "map")
 path_topo <- here("data", "map")
-# path_land <- path_topo <-  rstudioapi::selectDirectory(path = here(".."))
-path_land <- path_topo <-  here("..", "MBON_phytoplankton_pigments", "data", "map")
 
 # Region of Interest Bounding Box                   ======== edit this if needed
 # Change the spatial extent
