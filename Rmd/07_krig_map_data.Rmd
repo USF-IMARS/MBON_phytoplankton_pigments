@@ -85,6 +85,8 @@ Set spatial extend as a bounding box
 # your computer
 path_land <- here("data", "map")
 path_topo <- here("data", "map")
+# path_land <- path_topo <-  rstudioapi::selectDirectory(path = here(".."))
+path_land <- path_topo <-  here("..", "MBON_phytoplankton_pigments", "data", "map")
 
 # Region of Interest Bounding Box                   ======== edit this if needed
 # Change the spatial extent
@@ -241,7 +243,7 @@ walk(
     save_name      = "map_station_locations",
     verbose        = TRUE,
     overwrite      = FALSE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    time_stamp_fmt = NULL,
     device         = .x,
     height         = 6,
     width          = 10,
@@ -251,42 +253,6 @@ walk(
   )
 )
 
-# if (FALSE) {
-#   {    
-#   map_save_name <-
-#     here(
-#       "data", "plots",
-#       glue::glue(
-#         "map",
-#         format(Sys.time(), "_%Y%m%d_%H%M%S"),
-#         ".{c('jpeg', 'svg')}"
-#       )
-#     )
-# 
-# 
-#   save_plot(
-#     filename    = map_save_name[1],
-#     plot        = fullmap,
-#     base_height = 6,
-#     base_width  = 10,
-#     dpi         = 600,
-#     units       = "in",
-#     device      = "jpeg"
-#   )
-# 
-#   save_plot(
-#     filename    = map_save_name[2],
-#     plot        = fullmap,
-#     base_height = 6,
-#     base_width  = 10,
-#     dpi         = 600,
-#     units       = "in",
-#     device      = "svg"
-#   )
-#   
-#   rm(map_save_name)
-#   }
-# }
 ```
 
 
@@ -431,8 +397,8 @@ krig_pigments %>%
 
 # save krig_pigments
 save_map(
-  n_files         = 0,  # edit to include more files
-  prop_files      = NULL,
+  n_files         = 0,    # edit to include more files 0 - nrow(krig_pigments)
+  prop_files      = NULL, # edit to include more files 0 - 1%
   .data           = krig_pigments,
   folder_location = here(dir_plt_save, pick_rat_con$folder),
   save_column     = pick_rat_con$save_name,
@@ -450,35 +416,6 @@ save_map(
 ```
 
 
-
-# ---- ERROR: tot_chl_a doesn't exist in chemtax_with_metadata ----
-
-```{r}
-#Longer chemtax dataframe with combined functional types 
-cmtx_longer3 <-
-    fs::dir_ls(here(), 
-               regexp  = "chemtax_with_metadata", 
-               recurse = TRUE) %>% 
-    read.csv() %>%
-    
-    mutate(diat  = diat1 + diat2,
-           cyano = cyano2 + cyano4,
-           hapt  = hapt6 + hapt8,
-           .keep = "unused"
-              ) #%>% 
-    cmtx_longer3 
-    pivot_longer(cols = chloro:hapt, 
-                 names_to = "conc_name", 
-                 values_to = "conc") %>%
-    
-    filter(station != 60) #%>%
-  
-  
-      select(
-       hplc_gsfc_id, sample, station, lat, lon, season, year, date_time_utc,
-                  conc_name, conc, tot_chl_a 
-    )
-```
 
 # Don't Use: Old plotting method
 ```{r base-plot-fuco}
