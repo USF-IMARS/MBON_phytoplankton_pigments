@@ -69,6 +69,7 @@ librarian::shelf(
     # additional
     scales, ggthemes, ggtext, huxtable, gt, cowplot, ggthemes, vegan, rstatix,
     patchwork, 
+    elipousson/cliExtras,
     quiet = TRUE
 )
 

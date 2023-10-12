@@ -382,6 +382,9 @@ save_gg <- function(
         ) {
     
     library(cli)
+    library(cliExtras)
+    
+    cli_quiet(!verbose)
     
     # ---- checking input parameters
     if (is.null(.data)) {
@@ -423,21 +426,16 @@ save_gg <- function(
       data_f  %$% 
       eval(file_expr)
     
-    if (verbose) {
-        cli_h1("ggplot Object Data Name: {.var {save_name}}")
-        cli_alert_info(
-            c(
-              "Location:  {.file {save_location}}\n",
-              "File Name: {.file {basename(data_f)}}")
-        )
-    }
+    cli_h1("ggplot Object Data Name: {.var {save_name}}")
+    cli_alert_info(
+      c(
+        "Location:  {.file {save_location}}\n",
+        "File Name: {.file {basename(data_f)}}")
+      )
     
     # ---- check if folder exists and create otherwise
     if (!dir_exists(save_location)) {
-        
-        if (verbose) 
-            cli_alert_info(
-                "{col_green(\"Creating\")} folder location!")
+        cli_alert_info("{col_green(\"Creating\")} folder location!")
         
         fs::dir_create(save_location)
     }
@@ -452,23 +450,22 @@ save_gg <- function(
     
     if (!create_f && !overwrite) {
         # return early if no need to create
-        if (verbose)
-            cli_alert_info(
-                "File exist and {.emph is not} being {col_green(\"overwritten\")}!\n"
-            )
+        cli_alert_info(
+          "File exist and {.emph is not} being {col_green(\"overwritten\")}!\n"
+          )
         return(invisible())
     }
     
-    if (!create_f && overwrite && verbose) {
+    if (!create_f && overwrite ) { 
         cli_alert_info(
             "File exist and {.emph is} being {col_red(\"overwritten\")}!")
-    } else if (create_f && verbose) {
+    } else if (create_f ) { 
         cli_alert_info("File does not exists, {col_green(\"creating\")}!")
     }
     
     
     # ---- saving file
-    if (verbose) cli_alert_info("Saving file!")
+    cli_alert_info("Saving file!")
     
     cowplot::save_plot(
         filename    = data_f,
@@ -481,3 +478,5 @@ save_gg <- function(
     
     # ---- end of function save_gg
 }
+
+
