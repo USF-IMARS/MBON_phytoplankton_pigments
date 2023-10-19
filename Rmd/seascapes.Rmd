@@ -13,7 +13,9 @@ librarian::shelf(
     # broom # optional
     
     # additional
-    raster, sp, rgdal, maptools, rgeos, vegan, ggord, 
+    # raster, sp, rgdal, maptools, rgeos, 
+    sf, terra, 
+    vegan, ggord,
     gavinsimpson/ggvegan
 )
 
@@ -25,8 +27,11 @@ conflict_prefer("select", "dplyr")
 # ---- set path variables
 seasc_path <- here("data", "raw", "seascape")
 
+seasc_path <- rstudioapi::selectDirectory()
+
 # ---- source extract function
 source(here("scripts", "seascapes_extract.R"))
+source(here("scripts", "misc_functions.R"))
 ```
 
 # Load CHEMTAX and CTD data
@@ -35,18 +40,19 @@ env_cmtx created in Rmd/02_ctd_download.Rmd
 # cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
 
 # ---- CHEMTAX with CTD
-env_cmtx <- 
-    here("data", "processed") %>%
-    dir_ls(regexp = "cmtx_env_data")  %>%
-    sort(decreasing = TRUE) %>%
-    first() %>%
-    read_csv(show_col_types  = FALSE) %>% 
-    mutate(
-        season = fct_relevel(season, "Winter", "Spring", "Summer", "Autumn"),
-        yr_mth = format(date_time_utc, "%Y.%m")
-        ) %>%
-    relocate(yr_mth, .after = 2) %>%
-    rename("lon" = lon.x, "lat" = lat.x)
+env_cmtx <-
+  here("data", "processed", "ordination") %>%
+  dir_ls(regexp = "cmtx_env_data") %>%
+  last_mod() %>%
+  # sort(decreasing = TRUE) %>%
+  # first() %>%
+  read_csv(show_col_types = FALSE) %>%
+  mutate(
+    season = fct(season, c("Winter", "Spring", "Summer", "Autumn")),
+    yr_mth = format(date_time_utc, "%Y.%m")
+  ) %>%
+  relocate(yr_mth, .after = 2) %>%
+  rename("lon" = lon.x, "lat" = lat.x) %T>% print()
 ```
 
 # Download Seascape Data using `seascapeR`
@@ -72,11 +78,11 @@ You will need to restart R and run: pacman::p_install_gh("marinebon/seascapeR")
 ## Download Seascape Raster
 ```{r scp-dwnld}
 # ---- set location and temporal scale for each image
-arg_ls <- 
-    list(
-        map_loc = "fknms", # FL Keys
-        dataset = "global_monthly"  # or global_8day
-        )
+arg_ls <-
+  list(
+    map_loc = "fknms",         # FL Keys
+    dataset = "global_monthly" # or global_8day
+  )
 
 # ---- download if needed, will return files list as tibble
 seascapes_match <- 
@@ -125,7 +131,7 @@ Steps:
 5. Join seascape classes with original CTD/CHEMTAX data
 ```{r sc-extract}
 cmtx_sea <-
-    env_cmtx %>%
+    env_cmtx %>% 
     nest(.by = yr_mth) %>%
     left_join(seascapes_match, 
               by = "yr_mth") %>%
@@ -137,7 +143,7 @@ cmtx_sea <-
             .progress = TRUE)) %>%
     unnest(sc) %>%
     select(-data) %>% 
-    drop_na(seascape, temp, par:sal) 
+    drop_na(seascape, temp, par:sal) %T>% print()
 
 ```
 
