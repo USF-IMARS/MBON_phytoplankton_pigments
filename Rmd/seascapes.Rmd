@@ -8,26 +8,23 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
-    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
-    # broom # optional
+
     
     # additional
-    # raster, sp, rgdal, maptools, rgeos, 
     sf, terra, 
     vegan, ggord,
     gavinsimpson/ggvegan
 )
 
-library("conflicted")
-
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+  dplyr::filter,
+  dplyr::select
+    )
 
 # ---- set path variables
 seasc_path <- here("data", "raw", "seascape")
-
-seasc_path <- rstudioapi::selectDirectory()
 
 # ---- source extract function
 source(here("scripts", "seascapes_extract.R"))
@@ -37,6 +34,10 @@ source(here("scripts", "misc_functions.R"))
 # Load CHEMTAX and CTD data
 env_cmtx created in Rmd/02_ctd_download.Rmd
 ```{r load-chm-ctd}
+dir_plt_save <- here("data", "plots", "seascapes")
+
+seasons <- c("Winter", "Spring", "Summer", "Autumn")
+
 # cmtx_avgs <- read.csv(paste0(path_out, "chemtax_with_metadata.csv"))
 
 # ---- CHEMTAX with CTD
@@ -44,11 +45,9 @@ env_cmtx <-
   here("data", "processed", "ordination") %>%
   dir_ls(regexp = "cmtx_env_data") %>%
   last_mod() %>%
-  # sort(decreasing = TRUE) %>%
-  # first() %>%
   read_csv(show_col_types = FALSE) %>%
   mutate(
-    season = fct(season, c("Winter", "Spring", "Summer", "Autumn")),
+    season = fct(season, seasons),
     yr_mth = format(date_time_utc, "%Y.%m")
   ) %>%
   relocate(yr_mth, .after = 2) %>%
@@ -149,13 +148,14 @@ cmtx_sea <-
 
 # CAP with Bray-Curtis?
 ```{r sc-cap}
-seascspec <-
-    cmtx_sea %>% 
-    select(chloro:pras)
+seascspec <- select(cmtx_sea, chloro:pras)
 
-seasc_cap <- capscale(seascspec ~ seascape, 
-                      cmtx_sea, 
-                      dist = "bray")
+seasc_cap <- 
+  capscale(
+    seascspec ~ seascape, 
+    cmtx_sea, 
+    dist = "bray"
+    )
 
 plot(seasc_cap)
 
@@ -165,32 +165,40 @@ autoplot(seasc_cap,
 
 # CCA
 ```{r sc-cca, fig.width=15, fig.height=10}
-sea_cca <- cca(seascspec ~ temp + sal + par, 
-               data      = cmtx_sea, 
-               na.action = na.omit)
+sea_cca <- 
+  cca(
+    seascspec ~ temp + sal + par, 
+    data      = cmtx_sea, 
+    na.action = na.omit
+    )
 
-new_lab <- list(temp = "Temp", 
-                sal  = "Sal", 
-                par  = "PAR")
+new_lab <- 
+  list(
+    temp = "Temp", 
+    sal  = "Sal", 
+    par  = "PAR"
+    )
 
-plt_ord <- 
-    ggord(
-        sea_cca,
-        size      = 4,
-        grp_in    = as.character(cmtx_sea$seascape),
-        ellipse   = FALSE,
-        ptslab    = TRUE,
-        addsize   = 6,
-        ylim      = c(-6.25, 6.25),
-        xlim      = c(-4, 5),
-        repel     = TRUE,
-        txt       = 6,
-        vec_lab   = new_lab,
-        grp_title = "Seascape Class"
-        ) +
-    theme_classic() +
-    theme(text = element_text(family = "serif", size = 20),
-          legend.position = c(0.15, 0.9))
+plt_ord <-
+  ggord(
+    sea_cca,
+    size      = 4,
+    grp_in    = as.character(cmtx_sea$seascape),
+    ellipse   = FALSE,
+    ptslab    = TRUE,
+    addsize   = 6,
+    ylim      = c(-6.25, 6.25),
+    xlim      = c(-4, 5),
+    repel     = TRUE,
+    txt       = 6,
+    vec_lab   = new_lab,
+    grp_title = "Seascape Class"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(family = "serif", size = 20),
+    legend.position = c(0.15, 0.9)
+  )
 
 plt_ord
 
@@ -210,102 +218,69 @@ save_gg(
   bg             = "white"
   )
 
-
-# if (FALSE) { 
-#     cowplot::save_plot(
-#         filename = 
-#             here("data", "plots",
-#                  glue("seascape_cca",
-#                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
-#                       "jpeg")
-#                  ),
-#         plot        = plt_ord,
-#         base_height = 10,
-#         base_width  = 8,
-#         dpi         = 600, 
-#         units       = "in", 
-#         device      = "jpeg")
-# }
-
 ```
 
 # Seasonal CCA
 ```{r sc-season-cca, fig.width=15, fig.height=10}
-seasons <- c("Winter", "Spring", "Summer", "Autumn")
-
 for (szn in seasons) {
-     
-     # filter for season
-     temp_sea_df <-  
-        filter(cmtx_sea, str_detect(season, szn))
-     
-     # filtered df and select PFTs
-     temp_sea_mat <- 
-        select(temp_sea_df, chloro:pras)
-    
-     # run CCA
-     temp_cca <-
-        cca(temp_sea_mat ~ temp + sal + par,
-            data      = temp_sea_df,
-            na.action = na.omit)
-    
-    cca_szn <- 
-        ggord(
-        temp_cca,
-        size      = 4,
-        grp_in    = as.character(temp_sea_df$seascape),
-        ellipse   = FALSE,
-        ptslab    = TRUE,
-        addsize   = 6,
-        ylim      = c(-6.25, 6.25),
-        xlim      = c(-4, 5),
-        repel     = TRUE,
-        txt       = 6,
-        vec_lab   = new_lab,
-        grp_title = "Seascape Class"
-        ) +
-        labs(title = szn) +
-        theme_classic() +
-        theme(text = element_text(family = "serif", 
-                                  size   = 20),
-              legend.position = c(0.15, 0.9))
-    
-    print(cca_szn)
-    
-    
-    # ---- save plot
-    if (FALSE) 
-      save_gg(
-        plt            = cca_szn, 
-        save_location  = dir_plt_save,
-        save_name      = glue("seascape_cca_{str_to_lower(szn)}"),
-        verbose        = TRUE,
-        overwrite      = FALSE,
-        time_stamp_fmt = "%Y%m%d_%H%M%S",
-        device         = "jpeg",
-        height         = 10,
-        width          = 8,
-        dpi            = 600,
-        units          = "in",
-        bg             = "white"
-      )
-    
-    # if (FALSE) {
-    #     cowplot::save_plot(
-    #         filename = 
-    #             here("data", "plots",
-    #                  glue("seascape_cca_{str_to_lower(szn)}",
-    #                       format(Sys.time(), '_%Y%m%d_%H%M%S'),
-    #                       ".jpeg")
-    #                       ),
-    #         plot        = cca_szn,
-    #         base_height = 10,
-    #         base_width  = 8,
-    #         dpi         = 600, 
-    #         units       = "in", 
-    #         device      = "jpeg")
-    #     
-    # }
+  # filter for season
+  temp_sea_df <-
+    filter(cmtx_sea, str_detect(season, szn))
+
+  # filtered df and select PFTs
+  temp_sea_mat <-
+    select(temp_sea_df, chloro:pras)
+
+  # run CCA
+  temp_cca <-
+    cca(temp_sea_mat ~ temp + sal + par,
+      data      = temp_sea_df,
+      na.action = na.omit
+    )
+
+  cca_szn <-
+    ggord(
+      temp_cca,
+      size      = 4,
+      grp_in    = as.character(temp_sea_df$seascape),
+      ellipse   = FALSE,
+      ptslab    = TRUE,
+      addsize   = 6,
+      ylim      = c(-6.25, 6.25),
+      xlim      = c(-4, 5),
+      repel     = TRUE,
+      txt       = 6,
+      vec_lab   = new_lab,
+      grp_title = "Seascape Class"
+    ) +
+    labs(title = szn) +
+    theme_classic() +
+    theme(
+      text = element_text(
+        family = "serif",
+        size   = 20
+      ),
+      legend.position = c(0.15, 0.9)
+    )
+
+  print(cca_szn)
+
+
+  # ---- save plot
+  save_gg(
+    plt            = cca_szn,
+    save_location  = dir_plt_save,
+    save_name      = glue("seascape_cca_{str_to_lower(szn)}"),
+    verbose        = TRUE,
+    overwrite      = FALSE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = "jpeg",
+    height         = 10,
+    width          = 8,
+    dpi            = 600,
+    units          = "in",
+    bg             = "white"
+  )
 }
 
 ```
@@ -316,42 +291,44 @@ information on the seascapes classes: https://shiny.marinebon.app/seascapes/clas
 ## Calculate Fractions of PFT to Total Chlor-a
 ```{r}
 # sum each seascape class
-# sc_cnt <- 
-    cmtx_sea %>% 
-    summarize(count = n(), .by = seascape)
+# sc_cnt <-
+cmtx_sea %>%
+  summarize(count = n(), .by = seascape)
 
 # sum each season and seascape class
 # sc_szn_cnt <-
-    cmtx_sea %>% 
-    summarize(count = n(), .by = c(seascape, season))
+cmtx_sea %>%
+  summarize(
+    count = n(), 
+    .by = c(seascape, season))
 
 # calc fraction of PFT for each samples
 sea_fract <-
-    cmtx_sea %>%
-    mutate(
-        # combine certain PFTs
-        diat  = diat1  + diat2,
-        cyano = cyano2 + cyano4,
-        hapt  = hapt6  + hapt8,
-        total = chloro + crypto + diat + dino + hapt + pras + cyano,
-        
-        # calc fraction of PFT
-        across(
-            .cols  = c(chloro, crypto, cyano, diat, dino, hapt, pras),
-            .fns   = (\(x) x / total),
-            .names = "frac_{.col}"
-            )
-        ) %>%
-    
-    select(hplc_gsfc_id:season, seascape, frac_chloro:frac_pras) %T>% 
-    View(title = "Fractions") 
+  cmtx_sea %>%
+  mutate(
+    # combine certain PFTs
+    diat  = diat1 + diat2,
+    cyano = cyano2 + cyano4,
+    hapt  = hapt6 + hapt8,
+    total = chloro + crypto + diat + dino + hapt + pras + cyano,
+
+    # calc fraction of PFT
+    across(
+      .cols  = c(chloro, crypto, cyano, diat, dino, hapt, pras),
+      .fns   = (\(x) x / total),
+      .names = "frac_{.col}"
+    )
+  ) %>%
+  select(hplc_gsfc_id:season, seascape, frac_chloro:frac_pras) %T>%
+  View(title = "Fractions")
 
 ```
 ## nMDS
 ```{r nmds}
 set.seed(1355453)
-nmds <- metaMDS(seascspec, distance = "bray") %>%
-    print()
+nmds <- 
+  metaMDS(seascspec, distance = "bray") %T>%
+  print()
 # Call:
 # metaMDS(comm = as.matrix(seascspec), distance = "bray")
 # 
@@ -371,142 +348,148 @@ nmds <- metaMDS(seascspec, distance = "bray") %>%
 
 # extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
 data_scores <-
-    as_tibble(scores(nmds)$sites) %>%
-    
-    # add columns to data frame
-    bind_cols(select(cmtx_sea, sample, season, seascape)) %T>% 
-    print(slice_head(n = 10))
+  scores(nmds)$sites %>%
+  as_tibble() %>%
+
+  # add columns to data frame
+  bind_cols(select(cmtx_sea, sample, season, seascape)) %T>%
+  print()
 ```
 
 ## nMDS Plot
 ```{r nmds-plt, fig.width=25, fig.height=15}
-tol_muted <- c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
-               '#CC6677', '#882255', '#AA4499', '#BBBBBB', '#FFAABB')
+tol_muted <- c(
+  "#88CCEE", "#44AA99", "#117733", "#332288", "#DDCC77", "#999933",
+  "#CC6677", "#882255", "#AA4499", "#BBBBBB", "#FFAABB"
+)
 
-xx <-
-    ggplot(data_scores, aes(x = NMDS1, y = NMDS2)) +
-    geom_point(size = 4, aes(shape = season, color = factor(seascape)),
-               alpha = 0.75) +
-    # geom_point(size = 4, aes(color = factor(seascape)))+
-    #
-    labs(
-        x     = names(data_scores)[1],
-        color = "Seascape Class",
-        y     = names(data_scores)[2],
-        shape = "Season"
-        )  +
-    # scale_shape_manual(values = c(0, 1, 2, 5, 3)) +
-    # labs(x = "NMDS1", colour = "Seascape Class", y = "NMDS2") +
-    scale_colour_manual(values = tol_muted) +
-    ggthemes::theme_tufte() +
-    theme(
-        axis.text.y = element_text(
-            colour = "black",
-            size   = 12,
-            face   = "bold"
-        ),
-        axis.text.x = element_text(
-            colour = "black",
-            face   = "bold",
-            size   = 12
-        ),
-        legend.text = element_text(
-            size   = 12,
-            face   = "bold",
-            colour = "black"
-        ),
-        # legend.position = c(0.87, 0.3),
-        legend.position = "right",
-        axis.title.y = element_text(face = "bold", size = 14),
-        axis.title.x = element_text(
-            face   = "bold",
-            size   = 14,
-            colour = "black"
-        ),
-        legend.title = element_text(
-            size   = 14,
-            colour = "black",
-            face   = "bold"
-        ),
-        panel.background = element_blank(),
-        panel.border     = element_rect(
-            colour = "black",
-            fill   = NA,
-            linewidth = 1.2
-        ),
-        legend.key = element_blank()
-    ) 
- 
-xx
+plt_nmds <-
+  ggplot(data_scores, aes(x = NMDS1, y = NMDS2)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+  geom_point(
+    size = 4, aes(shape = season, color = factor(seascape)),
+    alpha = 0.75
+  ) +
 
-if (FALSE) {
-    # ---- save plot
-    save_gg(
-      plt            = xx, 
-      save_location  = dir_plt_save,
-      save_name      = "seascape_nmds",
-      verbose        = TRUE,
-      overwrite      = FALSE,
-      time_stamp_fmt = "%Y%m%d_%H%M%S",
-      device         = "jpeg",
-      height         = 8,
-      width          = 14,
-      dpi            = 600,
-      units          = "in",
-      bg             = "white"
-      )
-    
-    # cowplot::save_plot(
-    #     filename    = here("data", "plots",
-    #                        glue("seascape_nmds",
-    #                         format(Sys.time(), '_%Y%m%d_%H%M%S'),
-    #                         ".jpeg")),
-    #     plot        = xx,
-    #     base_height = 8,
-    #     base_width  = 14,
-    #     dpi         = 600,
-    #     units       = "in",
-    #     device      = "jpeg"
-    #     )
-}
+  # labels
+  labs(
+    x     = names(data_scores)[1],
+    color = "Seascape Class",
+    y     = names(data_scores)[2],
+    shape = "Season"
+  ) +
+
+  scale_colour_manual(values = tol_muted) +
+
+  # theme
+  ggthemes::theme_tufte() +
+  theme(
+    axis.text.y = element_text(
+      colour = "black",
+      size   = 12,
+      face   = "bold"
+    ),
+    axis.text.x = element_text(
+      colour = "black",
+      face   = "bold",
+      size   = 12
+    ),
+    legend.text = element_text(
+      size   = 12,
+      face   = "bold",
+      colour = "black"
+    ),
+    legend.position  = "right",
+    axis.title.y     = element_text(face = "bold", size = 14),
+    axis.title.x     = element_text(
+      face   = "bold",
+      size   = 14,
+      colour = "black"
+    ),
+    legend.title     = element_text(
+      size   = 14,
+      colour = "black",
+      face   = "bold"
+    ),
+    panel.background = element_blank(),
+    panel.border     = element_rect(
+      colour = "black",
+      fill = NA,
+      linewidth = 1.2
+    ),
+    legend.key = element_blank()
+  )
+
+plt_nmds
+
+# ---- save plot
+save_gg(
+  plt            = plt_nmds,
+  save_location  = dir_plt_save,
+  save_name      = "seascape_nmds",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 8,
+  width          = 14,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
+
 ```
 ## ANONISM
+
+Test significant difference between two or more groups of sampling units
+
 ```{r anonism}
+# similarity on seascape
 ano1 <-
   anosim(
-    as.matrix(seascspec), 
-    factor(cmtx_sea$seascape), 
-    distance = "bray", 
-    permutations = 100
-    )
+    seascspec,
+    cmtx_sea$seascape,
+    distance     = "bray",
+    permutations = 999
+  )
 
-ano2 <- 
+# similarity on season
+ano2 <-
   anosim(
-    as.matrix(seascspec),
-    factor(cmtx_sea$season), 
-    distance = "bray", 
-    permutations = 100
-    )
+    seascspec,
+    cmtx_sea$season,
+    distance     = "bray",
+    permutations = 999
+  )
 
 ano1
 ano2
 ```
-Seascape
+Seascape ---
+
 ANOSIM statistic R: 0.2343 
       Significance: 0.009901 
 
 Permutation: free
 Number of permutations: 100
 
-Season
+---
+Season ---
+
 ANOSIM statistic R: 0.1379 
       Significance: 0.009901 
 
 Permutation: free
 Number of permutations: 100
 
-```{r}
-# which functional types dominated each seascape class by season?
+
+
+# Determine PFT Dominance by Season and Seascape
+
+Which PFT dominates each seascape class by season?
+
+```{r pft-dominance}
 # sea_type_avgs <-
     cmtx_sea %>% 
     summarise(
