@@ -442,8 +442,68 @@ save_gg(
 - PFTs vs season
   - pairwise seasons
 
+Notes about PERMANOVA (use `betadisper`):
+- homogeniety of dispersion:
+  - needs to be check under the assumption of PERMANOVA
+  - dispersion per grouping factor (i.e. variance within groups) is not 
+    significantly different
+  - however, this may be able to be ignored if when plotted, there is clear 
+    group separation
+  - if there is a significant difference, then you can use the "strata" argument
+    in the `adonis2` function to account for this
+  - this test is to check if the differences we see between groups is due to 
+    differences in dispersion and not due to differences in the mean 
+    (i.e. centroid, or "location")     
+    - we want it to be non-significant so we can check differences between 
+      groups
+    
+- R-squared:
+  - this shows an effect size, and this will tell you the proportion of total 
+    variance explained by the grouping factor
+    
+- the p-value
+  - the probability of observing the effect size by chance
+  
+- pairwise comparison:
+  - performed if the p-value is significant to determine which groups are 
+    significantly different from each other
+
+### 4.1.1 Check Homogeneity of Dispersion
+
+
+```{r dispersion}
+set.seed(1082002)
+# PFT vs season
+vegdist(
+  select(env_cmtx_filt, chloro:pras),
+  method = "bray"
+  ) %>%
+  betadisper(
+    group = env_cmtx_filt$season  
+  ) %T>% print() %>%
+  anova()
+
+# CTD vs season
+ctd_perm_test <- 
+  select(env_cmtx_filt, season, temp, sal, par) %>%
+  mutate(across(where(is.numeric), scale)) 
+
+ctd_perm_test %>%
+  select(-season) %>%
+  dist(
+    method = "euclidean"
+  ) %>%
+  betadisper(
+    group = env_cmtx_filt$season  
+  ) %T>% print() %>%
+  anova()
+
+
+```
+
+### 4.1.2 Perform Permanova
+
 ```{r permanova}
-# ---- function
 #' Pairwise Permutation MANOVA
 #'
 #' FUNCTION_DESCRIPTION
@@ -482,30 +542,31 @@ szn_adonis2 <- function(
     
     return(
       list(
+        "r_squared"  = permanova_results[["R2"]][1],
         "pairwise_p" = permanova_results[["Pr(>F)"]][1],
         "results"    = permanova_results
         )
     )
+    
+  # ---- end of szn_adonis2 function    
 }
 
 set.seed(1082002)
 # CTD vs season
 adonis2(
-  select(env_cmtx_filt, temp, sal, par, sal) ~ season,
-  data   = select(env_cmtx_filt, season, temp, sal, par, sal),
-  method = "bray"
+  select(ctd_perm_test, -season) ~ season,
+  data   = ctd_perm_test,
+  method = "euclidean"
 )
 
 # PFT vs season
 adonis2(
   select(env_cmtx_filt, chloro:pras) ~ season,
-  data   = select(env_cmtx_filt, season, chloro:pras),
+  data   = select(env_cmtx_filt, season),
   method = "bray"
 )
 
-
-
-# create combinations of season to pairwise test
+# pairwise test
 permanova_r <-
   combn(szn, 2) %>%
   t() %>%
@@ -528,6 +589,7 @@ permanova_r <-
       ),
   ) %>%
   unnest_wider(pairwise_p) %>%
+    
   # ---- correct p-values
   mutate(
     p_adjust = p.adjust(pairwise_p, method = "bonferroni"),
@@ -535,7 +597,10 @@ permanova_r <-
   ) %T>% print()
 
 permanova_r$results
+
 ```
+
+
 
 # 5.0 ---- CCA Analysis ----
 
