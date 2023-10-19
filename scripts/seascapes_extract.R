@@ -48,17 +48,17 @@ dwnld_seascp <- function(
     }
     
     # ---- catch if package needs updating
-    if (!str_detect(getNamespaceVersion("raster")[[1]], "3.6-21")) {
-        stop(glue(
-            "\n\n------------\n",
-            "You need to download the development version of `raster` ",
-            "before continuing!\n\n",
-            "Current: {getNamespaceVersion(\"raster\")[[1]]}\n",
-            "Needed:  3.6-21\n\n",
-            "Restart R and run pacman::p_install_gh(\"rspatial/raster\")\n",
-            "Top ribbon: Session > Restart R",
-            "\n------------\n"))
-        }
+    # if (!str_detect(getNamespaceVersion("raster")[[1]], "3.6-21")) {
+    #     stop(glue(
+    #         "\n\n------------\n",
+    #         "You need to download the development version of `raster` ",
+    #         "before continuing!\n\n",
+    #         "Current: {getNamespaceVersion(\"raster\")[[1]]}\n",
+    #         "Needed:  3.6-21\n\n",
+    #         "Restart R and run pacman::p_install_gh(\"rspatial/raster\")\n",
+    #         "Top ribbon: Session > Restart R",
+    #         "\n------------\n"))
+    #     }
         
     if (!str_detect(getNamespaceVersion("seascapeR")[[1]], "0.4.1")) {
         stop(glue(
@@ -180,140 +180,137 @@ dwnld_seascp <- function(
 #'
 #' @examples
 #' # ADD_EXAMPLES_HERE
-extract_seascapes <- function(filename, 
-                              df, 
-                              cell_w  = list(dist = 4, unit = "km"), 
-                              grd_num = 6,
-                              verb    = TRUE) {
-   
+extract_seascapes <- function(
+    filename,
+    df,
+    cell_w = list(dist = 4, unit = "km"),
+    grd_num = 6,
+    verb = TRUE) {
     
-    # ---- load libraries
-    librarian::shelf(
-        librarian, tibble, tidyr, readr, purrr, dplyr, stringr,
-        forcats, lubridate, glue, fs, magrittr, here,
-        # broom # optional
-        
-        # additional
-        tabularaster, 
-        
-        # raster, sp, 
-        terra, sf,
-        
-        geosphere,
-        measurements
+    
+  # ---- load libraries
+  librarian::shelf(
+    librarian, conflicted, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+
+    # additional
+    # tabularaster,
+    terra, sf, geosphere, measurements
+  )
+
+
+  conflicts_prefer(
+    dplyr::filter(),
+    dplyr::select(),
+    .quiet = TRUE
+  )
+
+
+  # check if unit is in length
+  units_possible <- conv_unit_options$length
+  
+  if (!str_to_lower(cell_w$unit) %in% units_possible) {
+    message(c(
+      sprintf("The units in `cell_w` is not a length!\n"),
+      sprintf("You gave: %s\n", cell_w$unit),
+      sprintf(
+        "Avaiable options:\n---\n%s\n",
+        paste(units_possible,
+          collapse = ", "
+        )
+      ),
+      "---\nPlease change `cell_w$unit` to one of the available ",
+      "options and try again!"
+    ))
+    return(invisible(NULL))
+  }
+
+  if (verb) {
+    cat("\n\n------\nFile Name\n------\n", basename(filename))
+    cat("\n\n------\nCruise ID:\n------\n", unique(df$cruise_id), "\n")
+  }
+
+  
+  # ---- calc radius to filter around each point
+  rad <- conv_unit(cell_w$dist, cell_w$unit, "m") * grd_num / 2
+
+  # ---- read raster file and filter for non-NA values
+  sea <-
+    rast(filename) %>%
+    as.data.frame(xy = TRUE, cells = TRUE) %>%
+    rename(
+      "cellvalue" = last_col(),
+      "cellindex" = cell
     )
-    
-    library("conflicted")
-    
-    conflict_prefer("filter", "dplyr", quiet = TRUE)
-    conflict_prefer("select", "dplyr", quiet = TRUE)
-    
-    # check if unit is in length
-    units_possible <- conv_unit_options$length
-    if (!str_to_lower(cell_w$unit) %in% units_possible) {
-        message(c(
-            sprintf("The units in `cell_w` is not a length!\n"),
-            sprintf("You gave: %s\n", cell_w$unit),
-            sprintf("Avaiable options:\n---\n%s\n",
-                    paste(units_possible,
-                          collapse = ", ")),
-            "---\nPlease change `cell_w$unit` to one of the available ",
-            "options and try again!")
-            )
-        return(invisible(NULL))
-    }
-    
-    if (verb) {
-        cat("\n\n------\nFile Name\n------\n", basename(filename))
-        cat("\n\n------\nCruise ID:\n------\n", unique(df$cruise_id), "\n")
-    }
-    
-    # ---- calc radius to filter around each point
-    rad <- conv_unit(cell_w$dist, cell_w$unit, "m") * grd_num / 2
-    
-    # ---- read raster file and filter for non-NA values
-    sea <- 
-        raster(filename) %>%
-        tabularaster::as_tibble(xy = TRUE) %>%
-        drop_na(cellvalue)
 
-    # ---- extract lat and lon from df
-    coord_df <- 
-        df %>%
-        distinct(station, .keep_all = TRUE) %>%
-        select(station, lon, lat)
-    
-    # ---- convert coordinates to SpatialPointsDataFrame
-    coord <- 
-        coord_df %>%
-        SpatialPointsDataFrame(
-            coords      = cbind(coord_df$lon,
-                                coord_df$lat),
-            proj4string = CRS(SRS_string = "EPSG:4326"))
-    
-    # make a list of all the seascapes classes for each station in the cruise
-    seascape_list <- c()
-    
-    if (verb) {
-        cat("\n------\nCalculate Distance\n------\n", 
-            "Number of stations: ", nrow(coord), "\n",
-            "Station ID:\tClass Number:\n")
-    }
-    
-    for (i in seq(coord)) {
-        if (verb) cat(sprintf("%11s", coord$station[[i]]))
+  # ---- extract lat and lon from df
+  coord_df <-
+    df %>%
+    distinct(station, .keep_all = TRUE) %>%
+    select(station, lon, lat)
 
-        # temporary dataframe with distances, seascapes, coordinates
-        prop_max <- 
-            sea %>%
-            
-            # ---- calc the distance around each point
-            rowwise() %>% 
-            mutate(
-                dist = geosphere::distGeo(
-                    p1 = c(x, y),
-                    p2 = coord[i,])
-                ) %>%
-            ungroup() %>%
-            
-            # ---- filter distances less than the radius around each point
-            filter(dist < rad)
+  # make a list of all the seascapes classes for each station in the cruise
+  # seascape_list <- c()
+  seascape_list <- vector(length = nrow(coord_df))
+
+  if (verb) {
+    cat(
+      "\n------\nCalculate Distance\n------\n",
+      "Number of stations: ", nrow(coord_df), "\n",
+      "Station ID:\tClass Number:\n"
+    )
+  }
+
+  for (i in seq(nrow(coord_df))) {
+    if (verb) cat(sprintf("%11s", coord_df$station[[i]]))
+
+    # temporary dataframe with distances, seascapes, coordinates
+    prop_max <-
+      sea %>%
+      # ---- calc the distance around each point
+      rowwise() %>%
+      mutate(
+        dist = geosphere::distGeo(
+          p1 = c(x, y),
+          p2 = coord_df[i, 2:3]
+        )
+      ) %>%
+      ungroup() %>%
+      # ---- filter distances less than the radius around each point
+      filter(dist < rad)
+
+
+    if (nrow(prop_max) == 0) {
+      # no pixels at all within a n-pixel radius, add NA to list
+      seascape_list[i] <- NA
+    } else {
+      prop_max <-
+        prop_max %>%
         
-        if (nrow(prop_max) == 0) {
-            # no pixels at all within a 3-pixel radius, add NA to list
-            seascape_list <- c(seascape_list, NA)
-            
-        } else {
-            prop_max <-
-                prop_max %>%
-            
-                # calculate average inverse distance for each seascape class
-                # this give more weight to closer cells
-                summarise(sum = sum(1/dist)/n(), .by = cellvalue) %>%
-                
-                # ---- calc proportion of seascape classes within the radius
-                mutate(prop = sum / sum(sum)) %>%
-                
-                # --- select class with highest proportion
-                filter(prop == max(prop))
-            
-            # add the seascape of greatest proportion
-            seascape_list <- c(seascape_list, prop_max$cellvalue)
-           
-            
-        }
-        if (verb) cat(sprintf("%18s\n", seascape_list[i]))
+        # calculate average inverse distance for each seascape class
+        # this give more weight to closer cells
+        summarise(sum = sum(1 / dist) / n(), .by = cellvalue) %>%
+          
+        # ---- calc proportion of seascape classes within the radius
+        mutate(prop = sum / sum(sum)) %>%
+        # --- select class with highest proportion
+        filter(prop == max(prop))
+
+      # add the seascape of greatest proportion
+      seascape_list[i] <- prop_max$cellvalue
     }
+    if (verb) cat(sprintf("%18s\n", seascape_list[i]))
+  }
 
-    # combine coordinates and seascapes togehter in a dataframe
-    df <- 
-        bind_cols(coord_df, seascape = seascape_list)  %>%
-        full_join(df, ., by = join_by(station)) %>%
-        relocate(seascape, .after = 1)
-    
-    
-    return(df)
+  # combine coordinates and seascapes togehter in a dataframe
+  df <-
+    bind_cols(coord_df, seascape = seascape_list) %>%
+    full_join(df, ., by = join_by(station)) %>%
+    relocate(seascape, .after = 1)
 
-    # ---- Function End ----
+
+  return(df)
+
+
+  # ---- end of function extract_seascapes
 }
-
