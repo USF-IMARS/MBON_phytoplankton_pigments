@@ -506,6 +506,496 @@ plt_smooth <-
 ```
 
 
+```{r, fig.width=40, fig.asp=0.5}
+cmtx_l %>%
+  mutate(
+    conc_ratio = conc / total_chl_a,
+    names2 = names
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc_ratio)
+  ) %>%
+  nest(.by = names2) %>%
+  # slice(1) %>%
+
+  mutate(
+    plt =
+      map2(
+        data,
+        names2,
+        ~ ggplot(
+          .x,
+          aes(
+            x     = date_time_utc,
+            y     = conc,
+          )
+          ) +
+          geom_hline(yintercept = 0, color = "red", alpha = 0.2) +
+          geom_smooth(
+            color       = "grey70",
+            alpha       = 0.5,
+            formula     = y ~ s(x, bs = "tp", k = 10),
+            method      = "gam",
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          geom_smooth(
+            color       = "grey70",
+            alpha       = 0.5,
+            linetype    = "dashed",
+            formula     = y ~ x,
+            method      = "loess",
+            span        = 0.3,
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          geom_smooth(
+           aes(y = total_chl_a),
+            color       = "red",
+            alpha       = 0.8,
+            linetype    = "dashed",
+            formula     = y ~ x,
+            method      = "loess",
+            span        = 0.3,
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          geom_point(
+            aes(y = total_chl_a),
+            fill = "red",
+            size = 3,
+            shape = 24,
+            na.rm = TRUE
+          ) +
+          geom_point(
+            aes(fill = season),
+            shape = 23,
+            size  = 4,
+            na.rm = TRUE
+          ) +
+          labs(title = .y) +
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+            minor_breaks = "3 months"
+          ) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, NA),
+            breaks = seq(0.0, 1, 0.1),
+            minor_breaks = seq(0.05, 1, 0.15)
+          ) +
+          facet_wrap(
+            station ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          coord_cartesian(ylim = c(0, 1)) +
+          theme(
+            panel.grid.major.x = element_line(color = "grey", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey", linewidth = 0.2,
+                                              linetype = "dashed")
+            )
+      )
+  ) %>%
+  pull(plt)
+```
+What trends are visible?
+
+Choloro
+- range 0 - 15% of total chl-a, average ~5 - 7%
+- cyclic pattern
+- station WS and LK have peaks in Spring and Winter
+  - lowest in Autumn
+  
+Crypto
+- most stations 0 - 10% of total chl-a
+- station 16 has largest range from 0 - 45% of total chl-a
+  - nearer shore, near channel to West Florida Shelf
+- no clear seasonal trend  
+
+
+Cyano2
+- range 0 - 50% of total chl-a
+- always above 10% of total chl-a
+- no clear trend
+- potential bloom in station 16 in winter 2019 with chloro and diat2
+
+Cyano 4 (prochlorococcus)
+- station 16, 7, and 10 were lowest, with 0 - 5% of total chl-a
+  - station 16 especially low for most of it with one spike in winter 2019
+  - station 7 had more variabiliy with peaks ~8% in autumn and spring
+- all other stations had 5 - 30% of total chl-a
+- WS and LK seem to share similar trend
+- MR
+
+Diat 1 
+- potential bloom in station 16 in winter 2018 autumn
+
+```{r, fig.width=40, fig.asp=0.5}
+cmtx_l %>%
+  mutate(
+    conc_ratio = conc / total_chl_a,
+    names2 = names
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc_ratio)
+  ) %>%
+  nest(.by = station) %>%
+  # slice(1) %>%
+
+  mutate(
+    plt =
+      map2(
+        data,
+        station,
+        \(.x, .y) {    
+            
+        sec <- ggh4x::help_secondary(
+            .x,
+            primary   = c(0, 1), 
+            secondary = total_chl_a,
+            method = "range",
+            name = "Total Chlor a"
+            )
+            
+            
+        ggplot(
+          .x,
+          aes(
+            x = date_time_utc,
+            y = conc_ratio
+          )
+          ) +
+          geom_hline(yintercept = c(0, 0.5), color = "red", alpha = 0.2) +
+          # geom_hline(
+          #     aes(yintercept = ave(conc_ratio, names, FUN = range),
+          #                        
+          #         color = names), 
+          #     alpha = 0.8,
+          #     linetype = "dashed",
+          #     show.legend = FALSE
+          #     ) +
+          geom_point(
+            # aes(y = total_chl_a),
+            aes(y = sec$proj(total_chl_a)),
+            fill = "grey50",
+            alpha = 0.5,
+            size = 3,
+            shape = 24,
+            na.rm = TRUE
+          ) +
+          geom_line(
+            # aes(y = total_chl_a),
+            aes(y = sec$proj(total_chl_a)),
+            # fill = "grey50",
+            color = "grey40",
+            alpha = 0.5,
+            linetype = "twodash",
+            # size = 3,
+            # shape = 24,
+            na.rm = TRUE
+          ) +
+          # geom_smooth(
+          #  # aes(y = total_chl_a),
+          #   aes(y = sec$proj(total_chl_a)),
+          #   color       = "grey50",
+          #   alpha       = 0.5,
+          #   linetype    = "dashed",
+          #   formula     = y ~ x,
+          #   method      = "loess",
+          #   span        = 0.3,
+          #   se          = FALSE,
+          #   show.legend = FALSE,
+          #   na.rm       = TRUE
+          # ) +
+          geom_smooth(
+            color       = "grey70",
+            alpha       = 0.5,
+            formula     = y ~ s(x, bs = "tp", k = 10),
+            method      = "gam",
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          # geom_smooth(
+          #   color       = "grey70",
+          #   alpha       = 0.5,
+          #   # linetype    = "dashed",
+          #   formula     = y ~ x,
+          #   method      = "loess",
+          #   span        = 0.3,
+          #   se          = FALSE,
+          #   show.legend = FALSE,
+          #   na.rm       = TRUE
+          # ) +
+          geom_point(
+            aes(fill = season),
+            shape = 23,
+            size  = 4,
+            na.rm = TRUE
+          ) +
+          geom_line(
+            na.rm = TRUE
+          ) +
+          labs(title = .y) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, NA),
+            breaks = seq(0.0, 1, 0.1),
+            minor_breaks = seq(0.05, 1, 0.1),
+            sec.axis = sec
+          ) +  
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+            # minor_breaks = "6 months"
+          ) +
+          facet_wrap(
+            names ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          # coord_cartesian(ylim = c(0, 1)) +
+          theme(
+            panel.grid.major.x = element_line(color = "grey80", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey80", linewidth = 0.4,
+                                              # linetype = ""
+                                            )
+            )
+        }
+      )
+  ) %>%
+    # slice(1:3) %>%
+  pull(plt)
+
+
+```
+What trends are visible?
+
+MR
+- cyano2 has largest variability from 10 - 60% of total chl-a
+  - early autumn tends to be higher then later autumn (Sep - Nov)
+  - maximal usually in Summer (Jun - Aug)
+  - depths are pretty close except spring and summer 2019 
+- cyano4 is close second with 10 - 30% of total chl-a
+  - tends to peak in Autumn 
+- Hapto6 consistently 5 - 20% of total chl-a with peaks in Autumn
+  - mostly around 10% of total chl-a for most seasons
+- hapt8 is uslaly 7 - 15% of total chl-a
+  - highest in winter 2018 - 2019 and 2020 - 2021 >17% of total chl-a
+- chloro  tend to between 0 - 10% of total chl-a
+  - peaks in winter then decresases towards 0% for the rest of the year
+  - seems like boom and bust cycles
+- crypto never exceed 10% of total chl-a with similar peaks in winter
+  - spring and summer tend to be below 5% of total chl-a
+- pras tends to be between 0 - 15%
+  - some peaks in autumn, but seems to be fairly similar each season around 5%
+- diat1, diat2 and dino all tend to have <5% of total chl-a
+  - diat1 only peak during bloom in winter 2019 at ~7%
+  - diat2 has 3 peaks >=10%  during summer 2018, winter and summer 2019  
+    - seems to be during overall chl-a peaks
+
+7 
+- cyano2 
+  - similar to MR, largest contribution of 20 - 45% of total chl-a
+  - peak in autumn 2017 with high chl-a (0.85) 
+- cyano4 
+  - much lower than MR, with 0 - 10% of total chl-a
+  - typically lower than 5% of total chl-a
+- chloro and crypto
+  - have similar pattern and percents of 5 - 15%
+- hapt8 and pras 
+  - lower than 10% of total chl-a
+- diat1 and diat2
+  - usually max ~20% but not at the same time
+  - diat1 lowest summer 1019 to summer 2020 while diat2 is consistent 5 - 20%
+- dino 
+  - tend to be low 5 - 10% of total chl-a
+  - summer has small peaks
+- hapt6
+  - similar to dino with 5 - 20% of total chl-a
+  - peaks tend to be in spring with lowest in summer
+
+12
+- offshore station
+- cyano2 
+  - typically highest overall with 20 - 55% of total chl-a
+  - lowest in winters with peaks in spring - summer
+  - high chlo-a looks to be inverted
+- cyano4
+  - ranges 5 - 40% of total chl-a
+  - has peaks in autumn with lows during summer
+- diat1, diat2 and dino
+  - practically non existent with <5% of total chl-a
+- hapt6 and hapt8
+  - have similar contributions 0f 5 - 20% of total chl-a
+  - follow similar patterns but hapt6 lags behind hapt8 in terms of peaks
+- pras
+  - mostly 0 - 10% of total chl-a
+  - no consistent pattern
+- chloro 
+  - seems to have lowest in autumn and highest in winter - spring
+
+10
+- nearshore station
+- cyano2 
+  - still highest contributor with 15 - 45% of total chl-a
+  - a bloom seems possible in winter 2019 with ~80% of total chl-a
+  - seems like early season is lower with later season is higher?
+- cyano2
+  - very low compared to the other stations <5% for the most part
+- chloro
+  - between 5 - 10% of total chl-a
+  - two low points between summer and autumn of 2019
+- 
+
+16
+- nearshore station
+
+18
+- offshore station
+
+LK
+
+
+
+WS
+
+```{r, fig.width=40, fig.asp=0.5}
+cmtx_l %>%
+  mutate(
+    conc_ratio = conc / total_chl_a,
+    names2 = names,
+    names = fct_reorder(
+      names,
+      conc_ratio,
+      .fun  = median,
+      .desc = TRUE
+    )
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc_ratio)
+  ) %>%
+  nest(.by = station) %>%
+  # slice(1) %>%
+
+  mutate(
+    plt =
+      map2(
+        data,
+        station,
+        \(.x, .y) {    
+            
+        sec <- ggh4x::help_secondary(
+            .x,
+            primary   = c(0, 1), 
+            secondary = total_chl_a,
+            method = "range",
+            name = "Total Chlor a"
+            )
+        
+        .x %>%
+        # mutate(
+        #   names = fct_reorder(
+        #       names, 
+        #       conc_ratio, 
+        #       .fun = median, 
+        #       .desc = TRUE)
+        #   ) %>%
+        
+        ggplot(
+         .,
+         aes(
+           x = date_time_utc,
+           y = conc_ratio, fill = names
+         )
+       ) +
+        geom_area(alpha = 0.6, size = 1, colour = "black")   +
+        ggnewscale::new_scale_fill() +
+          # geom_vline(aes(xintercept = date_time_utc)) +
+          geom_line(
+            aes(y = sec$proj(total_chl_a)),
+            color = "firebrick1",
+            alpha = 0.5,
+            # linetype = "twodash",
+            na.rm = TRUE
+          ) +
+          geom_point(
+            aes(y = sec$proj(total_chl_a), fill = season),
+            # fill = "grey50",
+            alpha = 0.5,
+            size = 5,
+            shape = 24,
+            na.rm = TRUE
+          ) +
+          # geom_smooth(
+          #   color       = "grey70",
+          #   alpha       = 0.5,
+          #   formula     = y ~ s(x, bs = "tp", k = 10),
+          #   method      = "gam",
+          #   se          = FALSE,
+          #   show.legend = FALSE,
+          #   na.rm       = TRUE
+          # ) +
+          # geom_point(
+          #   aes(fill = names),
+          #   shape = 23,
+          #   size  = 4,
+          #   na.rm = TRUE
+          # ) +
+          # geom_line(
+          #     aes(color = names),
+          #   na.rm = TRUE
+          # ) +
+          # geom_area(
+          #   aes(fill = names),
+          #   alpha = 0.6, linetype = 1, colour = "black")
+          labs(title = .y) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, NA),
+            breaks = seq(0.0, 1, 0.1),
+            minor_breaks = seq(0.05, 1, 0.1),
+            sec.axis = sec
+          ) +
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+          ) +
+             facet_wrap(
+            names ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          theme(
+            panel.grid.major.x = element_line(color = "grey80", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey80", linewidth = 0.4,
+                                              # linetype = ""
+                                            )
+            )
+        }
+      )
+  ) %>%
+    # slice(1:3) %>%
+  pull(plt)
+```
+- cyano4 and hapt8 are low nearshore
+- crypto only explode at station 16
+- diat2 lowest off shore
+  - highest near shore (16, 10, 7)
+- dino and diat1
+  - sames as diat2
+
 # 5.0 *WIP* MANOVA
 
 
@@ -608,4 +1098,23 @@ max_fract <-
 
 
 
+
+```{r}
+c = 5
+tibble(
+  r = seq(0.01, 1, 0.01)) %>%
+  mutate(
+      transmittance = 1 - r * c,
+      # transmittance = (r / c)
+  ) %T>% print() %>%
+    ggplot(aes(x = r, y = transmittance)) +
+    geom_point() +
+    geom_point(
+        data = tibble(r = c(0.1, 0.2),
+                      transmittance = c(0.5, 0.25)),
+        color = "red"
+    )
+
+
+```
 
