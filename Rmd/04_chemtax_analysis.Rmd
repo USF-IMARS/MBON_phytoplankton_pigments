@@ -224,7 +224,8 @@ line_plt <- function(.dat, .var, .title) {
 #' @return RETURN_DESCRIPTION
 #' @examples
 #' # ADD_EXAMPLES_HERE
-box_plt <- function(.dat, .var, .title) {
+# box_plt <- function(.dat, .var, .color, .shape, .title) {
+box_plt <- function(.dat, .var, .title, ...) {
     
     # limits for plot
     ylims <-  c(0, quantile(.dat[[.var]], 0.99))
@@ -243,7 +244,9 @@ box_plt <- function(.dat, .var, .title) {
         aes(
           x = season, 
           y = .data[[.var]], 
-          color = year
+          ...
+          # color = .data[[.color]],
+          # shape = .data[[.shape]]
           ),
         width = 0.4,
         size = 0.5
@@ -253,12 +256,15 @@ box_plt <- function(.dat, .var, .title) {
     labs(
       title = glue("Concentration of {.title} per Season "),
       x     = "Season",
-      y     = "Concentration (mg m<sup>-3</sup>)",
-      color = "Year") +
+      y     = "Concentration (mg m<sup>-3</sup>)"
+      # color = "Year"
+      ) +
 
     # scale settings
-    scale_color_binned(type = "viridis") +
+    scale_color_discrete(type = "viridis") +
     
+    scale_shape_discrete() +
+        
     scale_y_continuous(
       breaks = brake,
       expand = expansion(mult = 0),
@@ -267,7 +273,7 @@ box_plt <- function(.dat, .var, .title) {
       ) +
     
     # theme settings
-    theme_bw(base_family = "serif") +
+    theme_bw(base_family = "serif", base_size = 12) +
     theme(
       panel.grid        = element_blank(),
       plot.title        = element_text(size = 15),
@@ -400,7 +406,7 @@ cmtx_l <-
 
 ## 4.2 Box Plot: Individuals for Each PFT per Season
 
-```{r boxplots, fig.height=15, fig.width=20}
+```{r boxplots, fig.width=10, fig.asp=0.8}
 # ---- avg season line plots
 cmtx_avgs_plt <-
   cmtx_l %>%
@@ -409,16 +415,19 @@ cmtx_avgs_plt <-
     plt = map2(
       data,
       names,
-      ~ box_plt(
-        .dat   = .x,
+      ~ .x %>%
+        mutate(Year = factor(year)) %>%
+        box_plt(
+        .dat   = .,
         .var   = "conc",
+        color = Year,
+        shape = Year,
         .title = .y
       )
     )
   )
 
-cmtx_avgs_plt$plt
-
+cmtx_avgs_plt$plt[[1]]
 ```
 
 ## 4.3 Box Plot: Larger Dynamic Range PFTs
