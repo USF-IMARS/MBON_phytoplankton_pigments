@@ -40,6 +40,7 @@ conflicts_prefer(
 ### 2.2.1 CHEMTAX Data
 
 ```{r load-data}
+# set location to save data and plots
 dir_data_save <- here("data", "processed", "chemtax_nutrient")
 dir_plt_save  <- here("data", "plots", "chemtax_nutrient")
 
@@ -254,7 +255,7 @@ cmtx_nutr %>%
 ```{r, fig.width=20, fig.asp=0.8}
 cmtx_nutr %>%
   select(
-    season, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
+    station, season, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
     -nutrients_tube_number
   ) %>%
   rowwise() %>%
@@ -274,6 +275,7 @@ cmtx_nutr %>%
       | crypto > 0.2
       | diat1 > 0.6
       | diat2 > 0.3)
+    & !str_detect(station, "24|21.5|3|9.5|9B")
   ) %>%
   pivot_longer(
     data      = .,
@@ -282,6 +284,7 @@ cmtx_nutr %>%
     values_to = "conc",
   ) %>%
   nest(.by = c(pft)) %>%
+    # slice(1) %>%
   # nest(.by = c(season, pft)) %>%
   mutate(
     plt = map2(
@@ -302,8 +305,9 @@ cmtx_nutr %>%
          scale_y_continuous(breaks = scales::pretty_breaks(),
                             labels = scales::label_percent(0.01)) +
          labs(title = .x) +
-         theme_classic() +
          facet_wrap(~env_param, ncol = 4, scales = "free") +
+         # facet_wrap(env_param ~ station, ncol = 8, scales = "free") +
+         theme_bw() +
          theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
 
       })
