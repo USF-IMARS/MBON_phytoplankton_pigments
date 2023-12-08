@@ -188,6 +188,80 @@ cmtx_nutr <-
 naniar::vis_miss(cmtx_nutr)
 ```
 
+## 2.4 Cruise Table
+
+```{r cruise-table} 
+# using cmtx_nutr, create a summary table of the cruises 
+cruise_table <-
+  cmtx_nutr %>% 
+  summarise(
+    .by = cruise_id,
+    sample_count = n(),
+    start_date = min(date_gmt, na.rm = TRUE),
+    end_date = max(date_gmt, na.rm = TRUE),
+  ) %>%
+  arrange(start_date) %>%
+  mutate(
+    .keep = "unused",
+    .before = sample_count,
+    cruise_dates = (
+      paste(
+        format(start_date, "%B %d"), 
+        format(end_date, "%B %d %Y"), 
+        sep = " - "
+      )
+    )
+  ) %T>% 
+  print()
+
+shelf(gt)
+test_table <-
+  gt::gt(cruise_table) %>%
+  
+  # rename columns using gt
+  gt::cols_label(
+    cruise_id = "Cruise ID",
+    sample_count = "Sample Count",
+    cruise_dates = "Cruise Dates"
+  ) %>%
+    
+  # center justify columns
+  gt::tab_style(
+    style = gt::cell_text(
+      font = "serif",
+      align = "center"
+    ),
+    locations = gt::cells_body(
+      columns = c(cruise_id, sample_count, cruise_dates)
+    )
+  ) %T>%
+  print()
+
+  # save gt table 
+  # gt::gtsave(
+  #   test_table,
+  #   "cruise_table.docx",
+  #   here("data", "plots"),
+  #   # width = 6,
+  #   # height = 4,
+  #   # units = "in",
+  #   # dpi = 300
+  # )
+    
+cmtx_nutr %>%
+  count(station, name = "station_count") %>%
+  # removed stations with only one sample
+  filter(station_count > 1) %$% sum(station_count)
+    %>% 
+  gt::gt() %>%
+  gt::cols_label(
+    station = "Station",
+    station_count = "Station Count"
+  )
+``` 
+
+
+
 # 3.0 ---- Data Analysis ----
 
 
