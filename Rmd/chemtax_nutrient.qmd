@@ -12,6 +12,9 @@ format: html
 # 2.0 ---- Setup ----
 
 ## 2.1 Load Libraries
+
+Load standard set of libraries and set global options.
+
 ```{r setup, include=FALSE}
 if (!nzchar(system.file(package = "librarian"))) 
     install.packages("librarian")
@@ -20,10 +23,8 @@ librarian::shelf(
     quiet = TRUE,
     librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
-    # broom # optional
     
     # additional
-    
 )
 
 conflicts_prefer(
@@ -39,30 +40,38 @@ conflicts_prefer(
 
 ### 2.2.1 CHEMTAX Data
 
+Load CHEMTAX data and metadata. Filter data to only include samples collected at
+the surface. 
+
 ```{r load-data}
 # set location to save data and plots
 dir_data_save <- here("data", "processed", "chemtax_nutrient")
 dir_plt_save  <- here("data", "plots", "chemtax_nutrient")
 
+basename(rstudioapi::getActiveDocumentContext()$path) %>% 
+  str_remove("\\.qmd|\\.Rmd") #%>% 
+  # dir_create(recursive = TRUE)
+
 # set season names and order
 szn <- c("Winter", "Spring", "Summer", "Autumn")
 
-
 # ---- CHEMTAX files
-cmtx_dat <- 
+cmtx_dat <-
   here("data", "processed", "chemtax_analysis", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
   mutate(season = fct_relevel(season, szn)) %T>% print() %>%
   mutate(
-    .by = c(cruise_id, station),
+    .by      = c(cruise_id, station),
     stn_samp = n(),
-    .before = station) %>%
-    filter(
-      .by = c(cruise_id, station),
-      min(depth) == depth 
-      & depth < 20
-    ) %>%
-      arrange(-depth) %T>% print()
+    .before  = station
+  ) %>%
+  filter(
+    .by = c(cruise_id, station),
+    min(depth) == depth 
+    & depth < 20
+  ) %>%
+  arrange(-depth) %T>% 
+    print()
 ```
 
 
@@ -105,7 +114,7 @@ noaa_bad <- c(
 )
 ```
 
-#### 2.2.2.2 NOAA `NA` Strings
+#### 2.2.2.2 Load NOAA 
 
 ```{r load-noaa-data}
 noaa_data <-
@@ -603,4 +612,5 @@ env_cmtx_filt %>%
 
 count(env_cmtx_filt, year(date_time_utc))
 ```
+
 
