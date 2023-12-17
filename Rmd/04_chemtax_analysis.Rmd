@@ -8,7 +8,6 @@ output: html_document
 # 1.0 ---- Summary of Document ----
 
 
-
 # 2.0 ---- Setup ----
 
 ## 2.1 Load libraries
@@ -152,8 +151,91 @@ phyto_name <-
   )
 ```
 
+## 2.3 Merge CHEMTAX Results with Metadata
 
-## 2.3 Line and Box Plot Plotting Functions 
+
+```{r merge-meta-data}
+# ---- join metadata and chemtax data
+cmtx_all_w <-
+  full_join(
+    meta_data,
+    cmtx_raw,
+    by = join_by(
+        "sample" == "sample_id",
+        "hplc_gsfc_id" == "sample"
+        ),
+  ) %T>% print()
+
+# view duplicates
+# 2 reason:
+# - 1. duplicate sample taken in field
+#   - this is signified with the same location and is usually +1 of sample ID
+# - 2. internal consistency at NASA where they use subset of sample 
+#   - this is signified with a ###.5
+janitor::get_dupes(cmtx_all_w, cruise_id, date_time_utc, station, depth) 
+
+# removing duplicates by averaging
+cmtx_w <-
+  cmtx_all_w %>%
+  reframe(
+    .by = c(cruise_id, date_time_utc, station, depth),
+    pick(1:cluster_code),
+    across(
+      chloro:pras,
+      \(x) mean(x, na.rm = TRUE)
+    )
+  ) %>%
+  distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE) %T>% print()
+
+# ---- save chemtax data with metadata
+if (
+  !file_exists(here(dir_data_save, "chemtax_w_meta_all_wide.csv")) |
+    !file_exists(here(dir_data_save, "chemtax_w_meta_wide.csv"))
+) {
+  # wide format of CHEMTAX and metadata with duplicates
+  save_csv(
+    .data          = cmtx_all_w,
+    save_location  = dir_data_save,
+    save_name      = "chemtax_w_meta_all_wide",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+
+  # wide format of CHEMTAX and metadata without duplicates
+  save_csv(
+    .data          = cmtx_w,
+    save_location  = dir_data_save,
+    save_name      = "chemtax_w_meta_wide",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+} else {
+  cli::cli_alert_info(
+    c(
+      "Skipping saving of {.file chemtax_w_meta} ",
+      "because exists ",
+      "and/or overwrite is set {.var FALSE}"
+    )
+  )
+}
+
+# ---- convert to long format
+# i.e. one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt"))
+
+# rm(file_chem, meta_data, cmtx_raw, cmtx_all_w)
+```
+
+## 2.4 Line and Box Plot Plotting Functions 
 
 Default Line Plot and Box Plots
 
@@ -324,84 +406,84 @@ rm(cmtx_all)
 ## 4.1 Merge CHEMTAX Results with Metadata
 
 ```{r merge-meta-data}
-# ---- join metadata and chemtax data
-cmtx_all_w <-
-  full_join(
-    meta_data,
-    cmtx_raw,
-    by = join_by(
-        "sample" == "sample_id",
-        "hplc_gsfc_id" == "sample"
-        ),
-  ) %T>% print()
-
-# view duplicates
-# 2 reason:
-# - 1. duplicate sample taken in field
-#   - this is signified with the same location and is usually +1 of sample ID
-# - 2. internal consistency at NASA where they use subset of sample 
-#   - this is signified with a ###.5
-janitor::get_dupes(cmtx_all_w, cruise_id, date_time_utc, station, depth) 
-
-# removing duplicates by averaging
-cmtx_w <-
-  cmtx_all_w %>%
-  reframe(
-    .by = c(cruise_id, date_time_utc, station, depth),
-    pick(1:cluster_code),
-    across(
-      chloro:pras,
-      \(x) mean(x, na.rm = TRUE)
-    )
-  ) %>%
-  distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE) %T>% print()
-
-# ---- save chemtax data with metadata
-if (
-  !file_exists(here(dir_data_save, "chemtax_w_meta_all_wide.csv")) |
-    !file_exists(here(dir_data_save, "chemtax_w_meta_wide.csv"))
-) {
-  # wide format of CHEMTAX and metadata with duplicates
-  save_csv(
-    .data          = cmtx_all_w,
-    save_location  = dir_data_save,
-    save_name      = "chemtax_w_meta_all_wide",
-    overwrite      = FALSE,
-    verbose        = TRUE,
-    time_stamp_fmt = NULL
-  )
-
-  # wide format of CHEMTAX and metadata without duplicates
-  save_csv(
-    .data          = cmtx_w,
-    save_location  = dir_data_save,
-    save_name      = "chemtax_w_meta_wide",
-    overwrite      = FALSE,
-    verbose        = TRUE,
-    time_stamp_fmt = NULL
-  )
-} else {
-  cli::cli_alert_info(
-    c(
-      "Skipping saving of {.file chemtax_w_meta} ",
-      "because exists ",
-      "and/or overwrite is set {.var FALSE}"
-    )
-  )
-}
-
-# ---- convert to long format
-# i.e. one column for all PFT and one for concentrations
-cmtx_l <-
-  cmtx_w %>%
-  pivot_longer(
-    cols      = chloro:pras,
-    names_to  = "phyto",
-    values_to = "conc"
-  ) %>%
-  left_join(phyto_name, by = c("phyto" = "shrt"))
-
-# rm(file_chem, meta_data, cmtx_raw, cmtx_all_w)
+# # ---- join metadata and chemtax data
+# cmtx_all_w <-
+#   full_join(
+#     meta_data,
+#     cmtx_raw,
+#     by = join_by(
+#         "sample" == "sample_id",
+#         "hplc_gsfc_id" == "sample"
+#         ),
+#   ) %T>% print()
+# 
+# # view duplicates
+# # 2 reason:
+# # - 1. duplicate sample taken in field
+# #   - this is signified with the same location and is usually +1 of sample ID
+# # - 2. internal consistency at NASA where they use subset of sample 
+# #   - this is signified with a ###.5
+# janitor::get_dupes(cmtx_all_w, cruise_id, date_time_utc, station, depth) 
+# 
+# # removing duplicates by averaging
+# cmtx_w <-
+#   cmtx_all_w %>%
+#   reframe(
+#     .by = c(cruise_id, date_time_utc, station, depth),
+#     pick(1:cluster_code),
+#     across(
+#       chloro:pras,
+#       \(x) mean(x, na.rm = TRUE)
+#     )
+#   ) %>%
+#   distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE) %T>% print()
+# 
+# # ---- save chemtax data with metadata
+# if (
+#   !file_exists(here(dir_data_save, "chemtax_w_meta_all_wide.csv")) |
+#     !file_exists(here(dir_data_save, "chemtax_w_meta_wide.csv"))
+# ) {
+#   # wide format of CHEMTAX and metadata with duplicates
+#   save_csv(
+#     .data          = cmtx_all_w,
+#     save_location  = dir_data_save,
+#     save_name      = "chemtax_w_meta_all_wide",
+#     overwrite      = FALSE,
+#     verbose        = TRUE,
+#     time_stamp_fmt = NULL
+#   )
+# 
+#   # wide format of CHEMTAX and metadata without duplicates
+#   save_csv(
+#     .data          = cmtx_w,
+#     save_location  = dir_data_save,
+#     save_name      = "chemtax_w_meta_wide",
+#     overwrite      = FALSE,
+#     verbose        = TRUE,
+#     time_stamp_fmt = NULL
+#   )
+# } else {
+#   cli::cli_alert_info(
+#     c(
+#       "Skipping saving of {.file chemtax_w_meta} ",
+#       "because exists ",
+#       "and/or overwrite is set {.var FALSE}"
+#     )
+#   )
+# }
+# 
+# # ---- convert to long format
+# # i.e. one column for all PFT and one for concentrations
+# cmtx_l <-
+#   cmtx_w %>%
+#   pivot_longer(
+#     cols      = chloro:pras,
+#     names_to  = "phyto",
+#     values_to = "conc"
+#   ) %>%
+#   left_join(phyto_name, by = c("phyto" = "shrt"))
+# 
+# # rm(file_chem, meta_data, cmtx_raw, cmtx_all_w)
 ```
 
 ## 4.2 Box Plot: Individuals for Each PFT per Season
@@ -430,115 +512,190 @@ cmtx_avgs_plt <-
 cmtx_avgs_plt$plt[[1]]
 ```
 
-## 4.3 Box Plot: Larger Dynamic Range PFTs
+## 4.3 Box Plot: Base for Larger/Small Dynamic Range PFTs
 
 
-```{r box-lg-dynm, fig.height=15, fig.width=20}
-box_lg <-
-  cmtx_l %>%
-  filter(!phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
-  ggplot(
+### TODO: add station specific box plots
+```{r}
+cmtx_l %>%
+  filter(.by = c(station, names), n() > 3) %>%
+  count(station, names) %>%
+  distinct(station, n)
+cmtx_l %>%
+  filter(.by = c(station, names), n() > 3) %>%
+  mutate(.by = c(station, names), stn_label = glue("{station} (N = {n()})"), .after = station) %>%
+  distinct(stn_label)
+```
+
+
+
+```{r box-base, fig.height=15, fig.width=20}
+box_filter <- 
+  . %>%
+  filter(.by = c(station, names), n() > 3) %>%
+   mutate(
+    .by       = c(station, names),
+    .after    = station,
+    stn_label = glue("{station} (N = {n()})")
+   ) %>%
+  mutate(
+    stn_label = fct_reorder(stn_label, lon)
+  )
+
+box_plt_base <-
+  list(
     aes(
       x    = season,
       y    = conc,
       fill = season
+    ),
+    geom_boxplot(outlier.shape = 1),
+    # geom_boxplot(),
+    scale_y_continuous(
+      expand = c(0, 0),
+      breaks = scales::breaks_width(0.1),
+      minor_breaks = NULL,
+      oob    = scales::squish,
+      # labels = scales::label_percent(accuracy = 1)
+      labels = scales::label_number(accuracy = 0.01)
+    ),
+    labs(
+      x = "Season",
+      y = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)"
+    ),
+    # theme_classic(),
+    theme_bw(),
+    theme(
+      text             = element_text(family = "serif", size = 18),
+      axis.text        = element_markdown(size = 10),
+      axis.title.y     = element_markdown(size = 10),
+      legend.position  = "none",
+      strip.background = element_rect(fill = "white", colour = "grey20"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(color = "grey20", linewidth = 0.25),
     )
-  ) +
-  geom_boxplot(outlier.shape = NA) +
-  
-  scale_y_continuous(
-    expand = c(0, 0),
-    limits = c(0, 0.2),
-    oob    = scales::squish
-  ) +
-  labs(
-    x = "Season",
-    y = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)"
-  ) +
-  facet_wrap(facet = ~names, ncol = 2) +
-  theme_classic() +
-  theme(
-    text            = element_text(family = "serif", size = 18),
-    axis.text       = element_markdown(size = 10),
-    axis.title.y    = element_markdown(size = 10),
-    legend.position = "none"
   )
-
-box_lg
 ```
 
-## 4.4 Box Plot: Smaller Dynamic Ranged PFTs
+## 4.4 Box Plot: Larger Dynamic Range PFTs
+
+```{r box-lg-dynm, fig.height=15, fig.width=20}
+# box plot by station
+box_lg <-
+  cmtx_l %>%
+  filter(phyto %in% c("cyano2", "cyano4", "chloro", "hapt6")) %>%
+  mutate(
+    .by = c(station, names),
+    stn_label = glue("{station} (N = {n()})"),
+    .after = station
+  ) %>%
+  ggplot() +
+  box_plt_base +
+  facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 6) +
+  coord_cartesian(ylim = c(0, 0.45))
+
+# box plot by season and station
+box_lg_stn <-
+  cmtx_l %>%
+  filter(phyto %in% c("cyano2", "cyano4", "chloro", "hapt6")) %>%
+  box_filter %>%
+  ggplot() +
+  box_plt_base +
+  # facet_wrap(facet = ~ names + stn_label, ncol = 8) +
+  facet_grid(facet = stn_label ~ names) +
+  coord_cartesian(ylim = c(0, 0.4))
+
+# stack box plots  
+box_lg_stcked <- 
+  patchwork::wrap_plots(
+    box_lg, 
+    box_lg_stn, 
+    ncol = 1, 
+    heights = c(0.2, 0.8)
+  )
+
+# display plots
+box_lg
+box_lg_stn
+box_lg_stcked
+```
+
+## 4.5 Box Plot: Smaller Dynamic Ranged PFTs
 
 
 ```{r box-sm-dynm, fig.height=15, fig.width=20}
+# box plot by season
 box_sm <-
   cmtx_l %>%
-  filter(!phyto %in% c("cyano2", "chloro", "hapt6")) %>%
-  ggplot(
-    aes(
-      x    = season,
-      y    = conc,
-      fill = season
-      )
-  ) +
-  geom_boxplot(outlier.shape = NA) +
-  scale_y_continuous(
-    expand = c(0, 0),
-    limits = c(0, 0.1),
-    oob    = scales::squish
-  ) +
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  ggplot() + 
+  box_plt_base +
+  facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 4) +
+  coord_cartesian(ylim = c(0, 0.2))
+ 
+  
+# box plot by season and station
+box_sm_stn <-
+  cmtx_l %>%
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  box_filter %>%
+  ggplot() +
+  box_plt_base +
+  # facet_wrap(facet = ~ names + stn_label, ncol = 8) +
+  facet_grid(facet = stn_label ~ names) +
+  coord_cartesian(ylim = c(0, 0.2))
 
-  # labels
-  labs(
-    x = "Season",
-    y = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)"
-  ) +
-  facet_wrap(facet = ~names, ncol = 3) +
-
-  # theme
-  theme_classic() +
-  theme(
-    text            = element_text(family = "serif", size = 18),
-    axis.text       = element_text(size = 12),
-    axis.title.y    = element_markdown(size = 10),
-    legend.position = "none"
+# stack box plots
+box_sm_stcked <-
+  patchwork::wrap_plots(
+    box_sm,
+    box_sm_stn,
+    ncol = 1,
+    heights = c(0.25, 0.75)
   )
 
+# display plots
 box_sm
+box_sm_stn
+box_sm_stcked
 ```
 
-## 4.5 Save: Large and Small Range Boxplots
+## 4.6 Save: Large and Small Range Boxplots
 
 ```{r save-plt}
-save_gg(
-  plt            = box_lg, 
-  save_location  = dir_plt_save,
-  save_name      = "cmtx_boxplot_lg",
-  verbose        = TRUE,
-  overwrite      = FALSE,  
-  time_stamp_fmt = "%Y%m%d_%H%M%S",
-  device         = "jpeg",
-  height         = 6,
-  width          = 10,
-  dpi            = 600,
-  units          = "in",
-  bg             = "white"
-  )
-
-save_gg(
-  plt            = box_sm, 
-  save_location  = dir_plt_save,
-  save_name      = "cmtx_boxplot_sm",
-  verbose        = TRUE,
-  overwrite      = FALSE,  
-  time_stamp_fmt = "%Y%m%d_%H%M%S",
-  device         = "jpeg",
-  height         = 6,
-  width          = 10,
-  dpi            = 600,
-  units          = "in",
-  bg             = "white"
-  )
+# save box_plots
+walk2(
+  verbose   = TRUE,  # set to FALSE to suppress output
+  overwrite = FALSE, # set to TRUE to overwrite existing files
+  .x = list(
+    "cmtx_boxplot_lg",
+    "cmtx_boxplot_sm",
+    "cmtx_boxplot_lg_stn",
+    "cmtx_boxplot_sm_stn",
+    "cmtx_boxplot_lg_stcked",
+    "cmtx_boxplot_sm_stcked"
+  ),
+  .y = list(box_lg, box_sm, box_lg_stn, box_sm_stn, box_lg_stcked, box_sm_stcked),
+  \(.x, .y, ...) {
+    .x %>%
+      str_to_lower() %>%
+      str_replace_all("\\s", "_") %>%
+      # glue(., "common suffix", .sep = "_") %>% # remove if none needed
+      save_gg(
+        .y,
+        save_location  = dir_plt_save,
+        save_name      = .,
+        time_stamp_fmt = "%Y%m%d_%H%M%S",
+        device         = "jpeg",
+        height         = 9.7,
+        width          = 19,
+        dpi            = 600,
+        units          = "in",
+        bg             = "white",
+        ...
+      )
+  }
+)
 
 ```
 
