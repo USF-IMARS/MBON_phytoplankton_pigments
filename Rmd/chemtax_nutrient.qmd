@@ -48,10 +48,6 @@ the surface.
 dir_data_save <- here("data", "processed", "chemtax_nutrient")
 dir_plt_save  <- here("data", "plots", "chemtax_nutrient")
 
-basename(rstudioapi::getActiveDocumentContext()$path) %>% 
-  str_remove("\\.qmd|\\.Rmd") #%>% 
-  # dir_create(recursive = TRUE)
-
 # set season names and order
 szn <- c("Winter", "Spring", "Summer", "Autumn")
 
@@ -613,4 +609,145 @@ env_cmtx_filt %>%
 count(env_cmtx_filt, year(date_time_utc))
 ```
 
+```{r}
+cmtx_dat %>%
+    select(chloro:last_col())
+```
 
+## nMDS
+```{r nmds}
+shelf(vegan)
+set.seed(1355453)
+nmds <- 
+  cmtx_dat %>%
+  select(chloro:last_col()) %>%
+  # metaMDS(., distance = "bray") %T>%
+  metaMDS(., distance = "jaccard") %T>%
+  print()
+# Call:
+# metaMDS(comm = ., distance = "bray") 
+# 
+# global Multidimensional Scaling using monoMDS
+# 
+# Data:     . 
+# Distance: bray 
+# 
+# Dimensions: 2 
+# Stress:     0.130862 
+# Stress type 1, weak ties
+# Best solution was repeated 17 times in 20 tries
+# The best solution was from try 4 (random start)
+# Scaling: centring, PC rotation, halfchange scaling 
+# Species: expanded scores based on ‘.’ 
+
+# extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
+data_scores <-
+  cmtx_dat %>%
+  bind_cols(scores(nmds)$sites) %T>%
+  print()
+
+
+# filter for near-off pairs
+set.seed(1355453)
+nmds_filt <- 
+  cmtx_dat %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  select(chloro:last_col()) %>%
+  metaMDS(., distance = "jaccard") %T>%
+  print()
+
+
+# extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
+data_scores_filt <-
+  cmtx_dat %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  bind_cols(scores(nmds_filt)$sites) %T>%
+  print()
+```
+
+## nMDS Plot
+```{r nmds-plt, fig.width=25, fig.height=15}
+tol_muted <- c(
+  "#88CCEE", "#44AA99", "#117733", "#332288", "#DDCC77", "#999933",
+  "#CC6677", "#882255", "#AA4499", "#BBBBBB", "#FFAABB"
+)
+
+plt_nmds <-
+  # data_scores %>%
+  data_scores_filt %>%
+  ggplot(aes(x = NMDS1, y = NMDS2)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+  geom_point(
+    size = 4, aes(shape = season, color = station),
+    alpha = 0.75
+  ) +
+
+  # labels
+  labs(
+    # x     = names(data_scores)[1],
+    # color = "Seascape Class",
+    # y     = names(data_scores)[2],
+    # shape = "Season"
+  ) +
+
+  # scale_colour_manual(values = tol_muted) +
+
+  # theme
+  ggthemes::theme_tufte() +
+  theme(
+    axis.text.y = element_text(
+      colour = "black",
+      size   = 12,
+      face   = "bold"
+    ),
+    axis.text.x = element_text(
+      colour = "black",
+      face   = "bold",
+      size   = 12
+    ),
+    legend.text = element_text(
+      size   = 12,
+      face   = "bold",
+      colour = "black"
+    ),
+    legend.position  = "right",
+    axis.title.y     = element_text(face = "bold", size = 14),
+    axis.title.x     = element_text(
+      face   = "bold",
+      size   = 14,
+      colour = "black"
+    ),
+    legend.title     = element_text(
+      size   = 14,
+      colour = "black",
+      face   = "bold"
+    ),
+    panel.background = element_blank(),
+    panel.border     = element_rect(
+      colour = "black",
+      fill = NA,
+      linewidth = 1.2
+    ),
+    legend.key = element_blank()
+  )
+
+plt_nmds
+
+# ---- save plot
+save_gg(
+  plt            = plt_nmds,
+  save_location  = dir_plt_save,
+  save_name      = "station_season_nmds",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 8,
+  width          = 14,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
+
+```
