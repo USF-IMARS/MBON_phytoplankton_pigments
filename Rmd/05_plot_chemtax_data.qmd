@@ -666,7 +666,7 @@ cmtx_l %>%
             name = "Total Chlor a"
             )
             
-            
+        plts <-     
         ggplot(
           .x,
           aes(
@@ -770,6 +770,8 @@ cmtx_l %>%
                                               # linetype = ""
                                             )
             )
+        
+        # plotly::ggplotly(plts)
         }
       )
   ) %>%
@@ -920,7 +922,7 @@ cmtx_l %>%
            y = conc_ratio, fill = names
          )
        ) +
-        geom_area(alpha = 0.6, size = 1, colour = "black")   +
+        geom_area(alpha = 0.6, linewidth = 1, colour = "black")   +
         ggnewscale::new_scale_fill() +
           # geom_vline(aes(xintercept = date_time_utc)) +
           geom_line(
@@ -986,8 +988,18 @@ cmtx_l %>%
         }
       )
   ) %>%
-    # slice(1:3) %>%
-  pull(plt)
+    # slice(1) %>%
+  pull(plt) #-> test
+    # save_gg(
+    #     plt = last_plot(), 
+    #     save_location  = here(),
+    #     save_name      = "test",
+    #     overwrite      = T,
+    #     verbose        = TRUE,
+    #     time_stamp_fmt = NULL,
+    #     device         = "jpeg",
+    #     width = 18.27, height = 11.51, dpi = 300
+    # )
 ```
 - cyano4 and hapt8 are low nearshore
 - crypto only explode at station 16
