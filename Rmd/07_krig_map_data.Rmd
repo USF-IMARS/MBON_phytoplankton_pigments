@@ -135,7 +135,8 @@ Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG)
 world_download(
     path_land = path_land,
     path_topo = path_topo,
-    extent    = exnt
+    extent    = exnt,
+    .timeout = 1000
 )
 
 # Load coastline and topography data
@@ -163,7 +164,9 @@ section 2.4
 ```{r plt-fl-keys, fig.height=6, fig.width=10}
 lat_lon_dat <- 
   pig_dat %>%
-  filter(name_of_water_body == "Florida Keys") %>%
+  filter(
+      name_of_water_body == "Florida Keys"
+      & !str_detect(station, "21.5|9B|24")) %>%
   select(station, lat, lon) %>% 
   distinct(station, lat, lon)
 
@@ -183,6 +186,28 @@ stn_map <-
     show.legend = FALSE
   ) +
 
+  ggrepel::geom_label_repel(
+    aes(x = lon, 
+        y = lat, 
+        label = station),
+    data   = lat_lon_dat,
+    size   = 2.5,
+    hjust  = 0,
+    family = "serif"
+  ) +    
+
+  annotate(
+    geom        = "text",
+    x           = c(-80.75, -80.5),
+    y           = c(25, 24.4),
+    label       = c("Florida Bay", "Atlantic Ocean"),
+    size        = 5,
+    # fontface    = "bold",
+    fill        = NA,
+    label.color = NA,
+    family      = "serif"
+  ) +
+    
   labs(
     shape = "Station",
     fill  = "Station"
@@ -235,12 +260,13 @@ fullmap
 # ---- save plot
 walk(
   c("jpeg", "svg"),
-  save_gg(
+  ~ save_gg(
     plt            = fullmap,
     save_location  = dir_plt_save,
     save_name      = "map_station_locations",
     verbose        = TRUE,
     overwrite      = FALSE,
+    # overwrite      = TRUE,
     time_stamp_fmt = NULL,
     device         = .x,
     height         = 6,
