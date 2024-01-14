@@ -21,13 +21,13 @@
 #' Global Self-consistent, Hierarchical, High-resolution Geography Database
 #' (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
 #'
-#' @param path_land File directory to be used for coastline files. This may need to be
-#'                  created or already exists. This is where the land map will be
-#'                  downloaded to if it doesn't exists.
-#' @param path_topo File directory to be used for topgraphy file. This may need to be
-#'                  created or already exists. This is where the topo map will be
-#'                  downloaded to if it doesn't exists. This will require a spatial
-#'                  extent to subset the data
+#' @param path_land File directory to be used for coastline files. This may need 
+#'                  to be created or already exists. This is where the land map 
+#'                  will be downloaded to if it doesn't exists.
+#' @param path_topo File directory to be used for topgraphy file. This may need 
+#'                  to be created or already exists. This is where the topo map 
+#'                  will be downloaded to if it doesn't exists. This will 
+#'                  require a spatial extent to subset the data.
 #' @param extent Spatial extent for the topography data.
 #'               Format: exnt <- c(xmin = -82,    # West
 #'                                 xmax = -80,    # East
@@ -57,7 +57,7 @@ world_download <- function(
     library("cli")
     library("rlang")
     library("magrittr")
-
+    
     pre_timeout <- getOption('timeout')
     on.exit(options(timeout = pre_timeout))
     options(timeout = 300)
@@ -211,7 +211,7 @@ world_download <- function(
             unzip(exdir = path_land, temp)
             # delete temp folder and files
             unlink(temp)
-        }  
+        }
     } 
     
     return(invisible(NULL))
@@ -241,130 +241,137 @@ world_download <- function(
 #' # ADD_EXAMPLES_HERE
 #' 
 load_map_obj <- function(
-    .map_coast,
-    .map_state = .map_coast,
-    .map_bath = .map_coast,
-    .map_file = "etopo1.nc",
-    .extent) {
-
-  # ---- libraries
-  library("sf")
-  library("raster")
-  library("fs")
-  library("cli")
-
-  # fixes issue with reading raster file using decimal degrees
-  sf::sf_use_s2(FALSE) 
+        .map_coast, 
+        .map_state = .map_coast,
+        .map_bath = .map_coast, 
+        .map_file = "etopo1.nc",
+        .extent) {
     
-  coast_file_name <- "GSHHS_h_L1.shp"
-  state_file_name <- "WDBII_border_h_L2.shp"
-
-  # ---- coastline
-  cli::cli_h1("Coastline")
-  cli::cli_alert_info("Searching: {.file {(.map_coast)}}")
-  coast_topo <-
-    dir_ls(
-      path    = .map_coast,
-      recurse = TRUE,
-      regexp  = coast_file_name
-    )
-
-  if (rlang::is_empty(coast_topo)) {
-    cli::cli_alert_warning(
-      c(
-        "Skipping: Couldn't find ",
-        "{.var {col_red(coast_file_name)}}"
-      )
-    )
-    coast_topo <- NULL
-  } else {
-    cli::cli_alert_info("Loading: {.file {coast_file_name}}")
+    # ---- libraries
+    library("sf")
+    # library("raster")
+    library("terra")
+    library("fs")
+    library("cli")
+    
+    
+    # fixes issue with reading raster file using decimal degrees
+    sf::sf_use_s2(FALSE)
+    
+    coast_file_name <- "GSHHS_h_L1.shp"
+    state_file_name <- "WDBII_border_h_L2.shp"
+    
+    # ---- coastline
+    cli::cli_h1("Coastline")
+    cli::cli_alert_info("Searching: {.file {(.map_coast)}}")
     coast_topo <-
-      coast_topo %>%
-      st_read(.) %>%
-      st_crop(
-        .,
-        st_bbox(
-          .extent
+        dir_ls(
+            path    = .map_coast,
+            recurse = TRUE,
+            regexp  = coast_file_name
+        ) 
+    
+    if (rlang::is_empty(coast_topo)) {
+        cli::cli_alert_warning(
+            c(
+                "Skipping: Couldn't find ",
+                "{.var {col_red(coast_file_name)}}"
+            )
         )
-      ) %>%
-      suppressMessages() %>%
-      suppressWarnings()
-  }
-  # ---- state lines
-  cli::cli_h1("State Lines")
-  if (rlang::is_empty(.map_state)) {
-    cli::cli_alert_warning(
-      c(
-        "Skipping State Lines:\n",
-        "{.var {col_red(\".map_state\")}} = {.var NULL}"
-      )
-    )
-    state <- NULL
-  } else {
-    cli::cli_alert_info("Searching: {.file {(.map_state)}}")
-    state <-
-      dir_ls(
-        path    = .map_state,
-        recurse = TRUE,
-        regexp  = state_file_name
-      )
-
-    if (rlang::is_empty(state)) {
-      cli::cli_alert_warning(
-        c(
-          "Skipping: Couldn't find ",
-          "{.var {col_red(state_file_name)}}"
-        )
-      )
-      state <- NULL
+        coast_topo <- NULL
     } else {
-      cli::cli_alert_info("Loading: {.file {state_file_name}}")
-      state <-
-        state %>%
-        st_read(.) %>%
-        st_crop(
-          .,
-          st_bbox(
-            .extent
-          )
-        ) %>%
-        suppressMessages() %>%
-        suppressWarnings()
+        cli::cli_alert_info("Loading: {.file {coast_file_name}}")
+        
+        coast_topo <-
+            coast_topo %>%
+            st_read(.) %>%
+            st_crop(
+                .,
+                st_bbox(
+                    .extent
+                )
+            ) %>%
+            suppressMessages() %>%
+            suppressWarnings()
     }
-  }
-  # ---- bathymetry
-  cli::cli_h1("Bathymetry")
-  cli::cli_alert_info("Searching: {.file {(.map_bath)}}")
-  bathy <-
-    here(.map_bath) %>%
-    dir_ls(regexp = .map_file)
-
-  if (rlang::is_empty(bathy)) {
-    cli::cli_alert_warning(
-      c(
-        "Skipping: Couldn't find ",
-        "{.var {col_red(.map_file)}}"
-      )
-    )
-    bathy <- NULL
-  } else {
-    cli::cli_alert_info("Loading: {.file {(.map_file)}}")
+    # ---- state lines
+    cli::cli_h1("State Lines")
+    if (rlang::is_empty(.map_state)) {
+        cli::cli_alert_warning(
+            c(
+                "Skipping State Lines:\n", 
+                "{.var {col_red(\".map_state\")}} = {.var NULL}"
+            )
+        )
+        state <- NULL
+    } else {
+        cli::cli_alert_info("Searching: {.file {(.map_state)}}")
+        state <-
+            dir_ls(
+                path    = .map_state,
+                recurse = TRUE,
+                regexp  = state_file_name
+            )
+        
+        if (rlang::is_empty(state)) {
+            cli::cli_alert_warning(
+                c(
+                    "Skipping: Couldn't find ", 
+                    "{.var {col_red(state_file_name)}}"
+                )
+            )
+            state <- NULL
+            
+        } else {
+            cli::cli_alert_info("Loading: {.file {state_file_name}}")
+            state <-
+                state %>%
+                st_read(.) %>%
+                st_crop(
+                    .,
+                    st_bbox(
+                        .extent
+                    )
+                ) %>%
+                suppressMessages() %>%
+                suppressWarnings()
+        }
+    }
+    # ---- bathymetry
+    cli::cli_h1("Bathymetry")
+    cli::cli_alert_info("Searching: {.file {(.map_bath)}}")
     bathy <-
-      bathy %>%
-      raster::raster() %>%
-      as.data.frame(xy = TRUE)
-  }
-
-  return(
-    list(
-      coast_topo = coast_topo,
-      state      = state,
-      bathy      = bathy
+        here(.map_bath) %>%
+        dir_ls(regexp = .map_file)
+    
+    if (rlang::is_empty(bathy)) {
+        cli::cli_alert_warning(
+            c(
+                "Skipping: Couldn't find ",
+                "{.var {col_red(.map_file)}}")
+        )
+        bathy <- NULL
+    } else {
+        cli::cli_alert_info("Loading: {.file {(.map_file)}}")
+        bathy <- 
+            bathy %>%
+            
+            # raster::raster() %>%
+            terra::rast() %>%
+            as.data.frame(xy = TRUE)
+        
+    }
+    
+    return(
+        list(
+            coast_topo = coast_topo,
+            state      = state,
+            bathy      = bathy
+        )
     )
-  )
-  # ---- End of `load_map_obj` Function ----
+    # ---- End of `load_map_obj` Function ----
 }
+
 
 ##%######################################################%##
 #                                                          #
@@ -395,6 +402,7 @@ base_map_plot <- function(
     # ---- libraries
     library("ggplot2")
     library("metR")
+    library("directlabels")
     
     # ---- plot 
     plt <- 
@@ -409,7 +417,7 @@ base_map_plot <- function(
         )  +
         theme_bw() +
         theme(
-            text = element_text(family = "serif", size = 20),
+            text = element_text(family = "serif", size = 10),
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank()
         )
@@ -422,7 +430,7 @@ base_map_plot <- function(
             aes(
                 x = x,
                 y = y,
-                z = -Altitude
+                z = -altitude
             ),
             col = "grey70",
             breaks = c(100, 50, 25, 10, 0)
@@ -436,7 +444,7 @@ base_map_plot <- function(
             aes(
                 x = x, 
                 y = y, 
-                z = -Altitude,
+                z = -altitude,
                 # label = ..level..
                 label = after_stat(level)
             ), 
@@ -580,15 +588,115 @@ map_plot <- function(
     
     if (!is.null(.inset)) {
         plt <- 
-            ggdraw() +
-            draw_plot(plt) +
-            draw_plot(.inset, 
-                      x = 0.85, 
-                      y = 0.755, 
-                      width  = 0.1, 
-                      height = 0.4)
+            cowplot::ggdraw() +
+            cowplot::draw_plot(plt) +
+            cowplot::draw_plot(.inset, 
+                               x = 0.85, 
+                               y = 0.755, 
+                               width  = 0.1, 
+                               height = 0.4)
     }
     
     return(plt) 
     # ---- End of `map_plot` Function ----
+}
+
+
+##%######################################################%##
+#                                                          #
+####    Create Date Start - Date End Label for Maps     ####
+#                                                          #
+##%######################################################%##
+#' Create Date Start - Date End Label for Maps
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param start_date Character string of start date
+#' @param end_date Character string of end date
+#'
+#' @return Formatted start/end date label
+#'
+#' @author Sebastian Di Geronimo (May 01, 2023)
+#'
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+date_label <- function(start_date, end_date) {
+    
+    # ---- load libraries
+    library("anytime")
+    library("scales")
+    library("lubridate")
+    library("stringr")
+    library("glue")
+    library("rlang")
+    
+    # ---- start date
+    start_conv  <- anytime::anydate(start_date) # date convert
+    start_year  <- lubridate::year(start_conv)  # year
+    start_month <- lubridate::month(start_conv, 
+                                    label = TRUE,
+                                    abbr  = FALSE) # month
+    start_day   <- lubridate::day(start_conv)      # day
+    st_ord      <- scales::ordinal(start_day)      # ordinal day
+    st_ord      <- stringr::str_remove_all(st_ord, "\\d")
+    st_ord      <- glue::glue("<sup>{st_ord}</sup>") # markdown format
+    
+    # ---- end date
+    end_conv  <- anytime::anydate(end_date) # convert date
+    end_year  <- lubridate::year(end_conv)  # year
+    end_month <- lubridate::month(end_conv, 
+                                  label = TRUE,
+                                  abbr  = FALSE) # month
+    end_day   <- lubridate::day(end_conv)        # day
+    end_ord   <- scales::ordinal(end_day)        # ordinal day
+    end_ord   <- stringr::str_remove_all(end_ord, "\\d") 
+    end_ord   <- glue::glue("<sup>{end_ord}</sup>") # markdown format
+    
+    # ---- check start is before end
+    if (start_conv > end_conv) {
+        rlang::warn(
+            glue("Check your dates. Error with start day after end date:",
+                 sprintf("\n%-10s: \n\tOriginal:  %s\n\tConverted: %s", 
+                         "Start Date", start_date, start_conv),
+                 sprintf("\n%-10s: \n\tOriginal:  %s\n\tConverted: %s",
+                         "End Date", end_date, end_conv)
+            ))
+    }
+    
+    # ---- format date
+    # - same year, same month
+    # - same year, different month
+    # - different year
+    if (start_year == end_year & start_month != end_month) {
+        # same year, different month
+        start_form <- glue("{start_month} {start_day}ord")
+        end_form   <- glue("{end_month} {end_day}ord, {end_year}")
+        
+    } else if (start_year == end_year & start_month == end_month) {
+        # same year, same month
+        start_form <- glue::glue("{start_month} {start_day}ord")
+        end_form   <- glue::glue("{end_day}ord, {end_year}")
+        
+    } else {
+        # different year
+        start_form <- glue::glue("{start_month} {start_day}ord, {start_year}")
+        end_form   <- glue::glue("{end_month} {end_day}ord, {end_year}")
+    }
+    
+    # ---- combine format
+    start_form <-
+        stringr::str_replace(
+            start_form, "ord",
+            st_ord
+        )
+    
+    end_form <-
+        stringr::str_replace(
+            end_form, "ord",
+            end_ord
+        )
+    
+    stringr::str_c(start_form, end_form, sep = " - ")
+    # ---- End of `date_label` Function ----
 }
