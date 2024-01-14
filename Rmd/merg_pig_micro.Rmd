@@ -4,9 +4,14 @@ author: "Sebastian DiGeronimo"
 date: '2022-06-30'
 output: html_document
 ---
-# ---- Setup ----
 
-## Load Libraries
+# 1.0 ---- Summary of Document ----
+
+A work in progress, they may need to be examined further
+
+# 2.0 ---- Setup ----
+
+## 2.1 Load Libraries
 ```{r setup, include=FALSE}
 librarian::shelf(
     librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -21,7 +26,7 @@ library("conflicted")
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
-## Read HPLC Data
+## 2.2 Read HPLC Data
 ```{r pigments}
 df_pig <-
   here("data", "processed", "combined_pig_dat.csv") %>%
@@ -41,7 +46,7 @@ df_pig <-
   )
 ```
 
-## Read FWRI Microscopy
+## 2.3 Read FWRI Microscopy
 ```{r microscopy}
 df_micro <-
   # path to FWRI microscopy
@@ -87,7 +92,9 @@ df_micro <-
 ```
 
 
-# ---- Create Index to Merge HPLC with Microscopy ----
+# 3.0 ---- Index to Merge HPLC with Microscopy ----
+
+Based on station, date and depth ID (i.e. surface or bottom sample)
 
 ```{r create-index-merge}
 # create columns for surface and depth
@@ -147,7 +154,9 @@ df_pig_filt <-
 rm(df_micro, df_pig, sm_pig, sm_mic)
 ```
 
-# Group HPLC Pigment and Microscopy
+
+# 4.0 ---- Group HPLC Pigment and Microscopy ----
+
 ```{r match-taxa-obis}
 # ---- load taxa list
 taxa_df <-
@@ -214,10 +223,17 @@ taxa_info <-
 
 taxa_info
 ```
-# ---- Categorize Taxa into fFunctional Types ----
+
+
+# 5.0 ---- Categorize Taxa into Functional Types ----
+
 1. Make a list of genera/taxa for each PFT
 2. Make new columns in `df_micro_filt` for each PFT by columns sum contributing 
    to the PFT
+
+
+## 5.1 List of Genera and Taxa Names
+
 ```{r pft-cat}
 # PFT relating to scientific name, either by class level or genus level
 # class
@@ -255,6 +271,8 @@ cat_gen <- tribble(
     "cyano",  "Picoplankton"
 )
 ```
+
+## 5.2 Merge Categories
 
 ```{r merge-cat}
 # group scientific names to PFT
@@ -296,6 +314,8 @@ micro_longer <-
 
 ```
 
+
+## 5.3
 
 ```{r merge-micro-pigm}
 cmtx_avgs_raw <- 
@@ -354,7 +374,10 @@ df_pig_filt2 <-
 df_pig_filt2
 ```
 
-# ---- Start Bland-Altman ----
+# 6.0 ---- Bland-Altman ----
+
+
+
 ```{r sub-sample}
 set.seed(122237)
 cf_avgs <-
