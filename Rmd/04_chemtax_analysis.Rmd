@@ -1038,7 +1038,7 @@ gt_pft <-
     locations = cells_row_groups()
   ) %>%
   tab_spanner(
-    label   = "Avgerage Percent \u00B1 S.D.", 
+    label   = "Average % \u00B1 S.D.", 
     columns = everything()) %>%
   opt_table_font("serif")
 
