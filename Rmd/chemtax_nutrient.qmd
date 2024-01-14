@@ -679,7 +679,7 @@ plt_nmds <-
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
   geom_point(
-    size = 4, aes(shape = season, color = station),
+    size = 4, aes(color = season, shape = station),
     alpha = 0.75
   ) +
 
