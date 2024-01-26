@@ -70,7 +70,8 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional
-    rlang, ggridges, scales, ggtext, ggthemes
+    rlang, ggridges, scales, ggtext, ggthemes,
+    rstatix
 )
 
 conflicts_prefer(
@@ -104,9 +105,10 @@ szn <- c("Winter", "Spring", "Summer", "Autumn")
 cmtx_w <-
   here("data", "processed", "chemtax_analysis", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
-  filter(!str_detect(station, "60")) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
   mutate(
     season = fct(season, levels = szn),
+    station = str_replace(station, "9B", "9.5"),
     station = fct_reorder(station, lon)
   ) %>% 
   select(-c(hplc_gsfc_id, cruise:bottle, cluster_code)) %>%
@@ -117,7 +119,12 @@ cmtx_w <-
     total_chl_a = sum(c_across(chloro:pras)),
     .before = chloro
   ) %>%
-  ungroup() %T>% print()
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% print()
 
 # convert to long format
 cmtx_l <-
@@ -154,6 +161,8 @@ cmtx_l <-
   )
 
 ```
+
+
 
 ## 2.3 Add: Labels for Season and Year
 
@@ -267,18 +276,27 @@ plt_cmtx_den_hist$hist
 # CHEMTAX stacked bar graph
 cmtx_l %>%
   filter(!is.na(conc)) %>%
+  summarise(
+  .by = c(station, season, func_type, names),
+  conc = mean(conc)
+  ) %>%
+  mutate(
+    names = fct_reorder(names, conc, .desc = TRUE)
+  ) %>%
   ggplot(
     aes(
       x     = station,
       y     = conc,
       fill  = names,
-      color = names
+      # color = names
     )
   ) +
   geom_bar(
+    color = "black",
     position = "fill",
     stat = "identity",
-    na.rm = TRUE
+    na.rm = TRUE,
+    linewidth = 0.5
   ) +
   labs(
     x     = "Station",
@@ -290,6 +308,7 @@ cmtx_l %>%
     labels = label_percent(),
     expand = c(0, 0)
   ) +
+  scale_fill_manual(values = tol_muted) +
   facet_wrap(~season)
 
 # ---- save plot
@@ -299,6 +318,7 @@ save_gg(
   save_name      = "pft_bar_percent_season",
   verbose        = TRUE,
   overwrite      = FALSE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 9.7,
@@ -307,8 +327,6 @@ save_gg(
   units          = "in",
   bg             = "white"
   )
-
-
 ```
 
 
@@ -489,6 +507,7 @@ plt_smooth <-
 
 
 # combine the three versions
+shelf(patchwork)
 (plt_smooth +
   aes(x = date_time_utc) +
         labs(x = "Date")
@@ -791,10 +810,10 @@ MR
   - tends to peak in Autumn 
 - Hapto6 consistently 5 - 20% of total chl-a with peaks in Autumn
   - mostly around 10% of total chl-a for most seasons
-- hapt8 is uslaly 7 - 15% of total chl-a
+- hapt8 is usually 7 - 15% of total chl-a
   - highest in winter 2018 - 2019 and 2020 - 2021 >17% of total chl-a
 - chloro  tend to between 0 - 10% of total chl-a
-  - peaks in winter then decresases towards 0% for the rest of the year
+  - peaks in winter then decreases towards 0% for the rest of the year
   - seems like boom and bust cycles
 - crypto never exceed 10% of total chl-a with similar peaks in winter
   - spring and summer tend to be below 5% of total chl-a
@@ -924,6 +943,7 @@ cmtx_l %>%
        ) +
         geom_area(alpha = 0.6, linewidth = 1, colour = "black")   +
         ggnewscale::new_scale_fill() +
+        ggnewscale::new_scale_color() +
           # geom_vline(aes(xintercept = date_time_utc)) +
           geom_line(
             aes(y = sec$proj(total_chl_a)),
@@ -933,11 +953,16 @@ cmtx_l %>%
             na.rm = TRUE
           ) +
           geom_point(
-            aes(y = sec$proj(total_chl_a), fill = season),
+            aes(
+              y = sec$proj(total_chl_a), 
+              color = season, 
+              fill  = season, 
+              shape = season
+              ),
             # fill = "grey50",
             alpha = 0.5,
             size = 5,
-            shape = 24,
+            # shape = 24,
             na.rm = TRUE
           ) +
           # geom_smooth(
@@ -962,6 +987,7 @@ cmtx_l %>%
           # geom_area(
           #   aes(fill = names),
           #   alpha = 0.6, linetype = 1, colour = "black")
+          
           labs(title = .y) +
           scale_y_continuous(
             expand = c(0, 0),
@@ -1109,24 +1135,4 @@ max_fract <-
 ```
 
 
-
-
-```{r}
-c = 5
-tibble(
-  r = seq(0.01, 1, 0.01)) %>%
-  mutate(
-      transmittance = 1 - r * c,
-      # transmittance = (r / c)
-  ) %T>% print() %>%
-    ggplot(aes(x = r, y = transmittance)) +
-    geom_point() +
-    geom_point(
-        data = tibble(r = c(0.1, 0.2),
-                      transmittance = c(0.5, 0.25)),
-        color = "red"
-    )
-
-
-```
 
