@@ -117,16 +117,17 @@ pig_dat <-
 
 All pigments plotted as a time series separated by region
 
-```{r concentration-vs-time, fig.height=15, fig.width=30}
-ggplot(
-  pig_dat,
-  aes(
-    x = date_time_utc,
-    y = allo,
-    color = season,
-    shape = name_of_water_body
-  )
-) +
+```{r concentration-vs-time, fig.height=15, fig.asp=0.5}
+# ---- over all water bodies ---- # 
+pig_dat %>%
+  ggplot(
+    aes(
+      x = date_time_utc,
+      y = tot_chl_a,
+      color = season,
+      shape = name_of_water_body
+    )
+  ) +
   geom_point(size = 2) +
   labs(
     x = "Year",
@@ -144,6 +145,86 @@ ggplot(
     scales = "free_y"
   ) +
   theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+
+# ---- Florida Keys ---- #
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    # str_detect(name_of_water_body, "Keys")
+    
+    ) %>%
+  ggplot(
+    aes(
+      x = date_time_utc,
+      y = tot_chl_a,
+      color = season,
+      shape = station
+    )
+  ) +
+  geom_point(size = 2) +
+  labs(
+    x = "Year",
+    y = "Concentration (mg m<sup>-3</sup>)",
+    color = "Season"
+  ) +
+  scale_y_continuous(expand = c(0, 0), na.value = 0) +
+  scale_x_datetime(
+    date_breaks = "1 year",
+    date_labels = "%Y"
+  ) +
+  facet_wrap(~name_of_water_body,
+    nrow = 3,
+    scales = "free_y"
+  ) +
+  theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+
+# ---- Florida Keys Stations ---- # 
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  ggplot(
+    aes(
+      x = date_time_utc,
+      y = tot_chl_a,
+      color = season
+    )
+  ) +
+  geom_point(size = 2) +
+  labs(
+    x = "Year",
+    y = "Concentration (mg m<sup>-3</sup>)",
+    color = "Season"
+  ) +
+  scale_y_continuous(
+      expand = c(0, 0), 
+      na.value = 0, 
+      breaks = c(seq(0, 1, 0.1), 1:4)
+      ) +
+  scale_x_datetime(
+    date_breaks = "1 year",
+    date_labels = "%Y"
+  ) +
+  facet_wrap(station ~ .,
+    nrow = 3,
+    scales = "free_y"
+  ) +
+  theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15))) +
+  ylim(c(0, NA))
+
+# ---- Florida Keys Box/Violin ---- #
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  ggplot(
+    aes(
+      x = season,
+      y = tot_chl_a,
+      fill = season
+      
+    )
+  ) +
+  geom_boxplot(outliers = FALSE) +
+  geom_violin(fill = NA) +
+  geom_jitter(shape = 21, width = 0.2) +
+  scale_y_continuous(breaks = c(seq(0, 1, 0.1), 1:4))
 ```
 
 ## 3.2 Scatter Plot of Pigment Concentration vs Total Chlorophyll-a 
@@ -390,6 +471,7 @@ chl_a_box <-
             y = tot_chl_a
           )) +
           geom_boxplot(outlier.shape = NA, na.rm = TRUE) +
+          # geom_boxplot(na.rm = TRUE) +
           stat_summary(
             fun   = mean,
             geom  = "point",
@@ -924,6 +1006,7 @@ save_gg(
   save_location  = dir_plt_save,
   save_name      = "pi_ppc_chl_all_water_body",
   verbose        = TRUE,
+  overwrite      = FALSE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 6,
@@ -939,6 +1022,7 @@ save_gg(
   save_location  = dir_plt_save,
   save_name      = "pi_box_ppc_chl_all_water_body",
   verbose        = TRUE,
+  overwrite      = FALSE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 6,
@@ -1111,11 +1195,82 @@ pigm_pi %>%
     })
   )
 
+```
+## 5.4.2 ANOVA: Chlorophyll-a 
 
 
+```{r plt-anova}
+shelf(ggstatsplot)
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  ggbetweenstats(
+    data  = .,
+    x     = season,
+    y     = tot_chl_a,
+    title = "Season",
+    xlab  = "Season",
+    ylab  = "Concentration",
+    type  = "parametric"
+    ) %>%
+  print()
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  ggbetweenstats(
+    data  = .,
+    x     = station,
+    y     = tot_chl_a,
+    title = "Season",
+    xlab  = "Season",
+    ylab  = "Concentration",
+    type  = "parametric"
+    ) %>%
+  print()
+
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  ggbetweenstats(
+    data  = .,
+    x     = year,
+    y     = tot_chl_a,
+    title = "Year",
+    xlab  = "Year",
+    ylab  = "Concentration",
+    type  = "parametric"
+    ) %>%
+  print()
 
 
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  aov(
+    data = .,
+    tot_chl_a ~ season
+  ) %>%
+  summary()
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  aov(
+    data = .,
+    tot_chl_a ~ year
+  ) %>%
+  summary()
 
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+aov(
+  data = .,
+  tot_chl_a ~ season*year
+) %>%
+  summary()
+
+
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  aov(
+    data = .,
+    tot_chl_a ~ station
+  ) %>%
+  summary()
 ```
 
 # 6.0 ---- PPC:PSC Ratio ----
@@ -1131,10 +1286,13 @@ Linear regression for year factor and overall regression for region and season
 plt_ppc_psc <- 
   pigm_pi %>%
   filter(
-      !(str_detect(season, "Winter")
-      & str_detect(name_of_water_body, "Keys")
-      & ppc > 2)
-               ) %>%
+    # !(str_detect(season, "Winter")
+    # & str_detect(name_of_water_body, "Keys")
+    # & ppc > 2)
+      
+    str_detect(name_of_water_body, "Keys") &
+    ppc < 2
+    ) %>%
   ggplot(
   aes(
     x = psc,
@@ -1185,6 +1343,7 @@ save_gg(
   save_location  = dir_plt_save,
   save_name      = "psc_vs_ppc",
   verbose        = TRUE,
+  overwrite      = FALSE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 20,
