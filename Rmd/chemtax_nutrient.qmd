@@ -31,6 +31,8 @@ conflicts_prefer(
     dplyr::filter(), 
     dplyr::select()
     )
+
+source(here("scripts", "misc_functions.R"))
 ```
 
 
@@ -55,12 +57,14 @@ szn <- c("Winter", "Spring", "Summer", "Autumn")
 cmtx_dat <-
   here("data", "processed", "chemtax_analysis", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
-  mutate(season = fct_relevel(season, szn)) %T>% print() %>%
+  mutate(season = fct_relevel(season, szn)) %T>% 
+  print() %>%
   mutate(
     .by      = c(cruise_id, station),
     stn_samp = n(),
     .before  = station
   ) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
   filter(
     .by = c(cruise_id, station),
     min(depth) == depth 
@@ -272,10 +276,10 @@ cmtx_nutr %>%
 
 ## 3.1 Plot: PFT vs Environmental Variables
 
-```{r plt-pft-env, fig.width=20, fig.asp=0.8}
+```{r plt-pft-env, fig.width=25, fig.asp=0.5}
 cmtx_nutr %>%
   select(
-    season, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
+    season, station, lon = lon.x, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
     -nutrients_tube_number
   ) %>%
   filter(
@@ -284,7 +288,8 @@ cmtx_nutr %>%
       | chloro > 0.4
       | crypto > 0.2
       | diat1 > 0.6
-      | diat2 > 0.3)
+      | diat2 > 0.3
+      )
   ) %>%
   pivot_longer(
     data      = .,
@@ -306,8 +311,9 @@ cmtx_nutr %>%
             names_to  = "env_param",
             values_to = "value", 
             ) %>%
+          mutate(station = fct_reorder(station, lon)) %>%
          # ggplot(aes(x = conc, y = value, color = season)) +
-         ggplot(aes(y = conc, x = value, color = season)) +
+         ggplot(aes(x = conc, y = value, color = season)) +
          # geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
          # geom_vline(xintercept = 0, color = "grey50", linetype = "dashed") +
          geom_point(na.rm = TRUE) +
@@ -319,10 +325,12 @@ cmtx_nutr %>%
          #     color = "grey50", linetype = "dashed"
          #     ) +
          # geom_smooth(method = "lm", se = FALSE, na.rm = TRUE, formula = "y ~ x") +
+         
          scale_x_continuous(breaks = scales::pretty_breaks()) +
          labs(title = .x) +
-         theme_classic() +
-         facet_wrap(~env_param, ncol = 4, scales = "free") +
+         theme_bw() +
+         # facet_wrap(~env_param, ncol = 5, scales = "free") +
+         facet_grid(env_param ~ station, scales = "free") +
          theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
 
       })
@@ -354,7 +362,7 @@ cmtx_nutr %>%
       | crypto > 0.2
       | diat1 > 0.6
       | diat2 > 0.3)
-    & !str_detect(station, "24|21.5|3|9.5|9B")
+    # & !str_detect(station, "24|21.5|3|9.5|9B")
   ) %>%
   pivot_longer(
     data      = .,
@@ -400,7 +408,7 @@ cmtx_nutr %>%
 
 Add LOESS smoother
 
-```{r plt-env-time, fig.width=20, fig.asp=0.8}
+```{r plt-env-time, fig.width=20, fig.asp=0.5}
 plt_nut_time <- 
   cmtx_nutr %>%
   select(
@@ -609,10 +617,7 @@ env_cmtx_filt %>%
 count(env_cmtx_filt, year(date_time_utc))
 ```
 
-```{r}
-cmtx_dat %>%
-    select(chloro:last_col())
-```
+
 
 ## nMDS
 ```{r nmds}
@@ -661,8 +666,15 @@ nmds_filt <-
 data_scores_filt <-
   cmtx_dat %>%
   filter(str_detect(station, "10|12|16|18")) %>%
-  bind_cols(scores(nmds_filt)$sites) %T>%
+  bind_cols(scores(nmds_filt)$sites)  %>%
+  mutate(labels = case_when(
+      str_detect(station, "10|16") ~ "Nearshore",
+      str_detect(station, "12|18") ~ "Offshore"
+  )) %T>%
   print()
+```
+```{r}
+
 ```
 
 ## nMDS Plot
@@ -679,7 +691,7 @@ plt_nmds <-
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
   geom_point(
-    size = 4, aes(color = season, shape = station),
+    size = 4, aes(color = season, shape = labels),
     alpha = 0.75
   ) +
 
@@ -691,8 +703,17 @@ plt_nmds <-
     # shape = "Season"
   ) +
 
-  # scale_colour_manual(values = tol_muted) +
+  scale_shape_manual(
+    values = c(15, 17)
+    ) +
 
+  labs(
+    shape = "Station",
+    color = "Season",
+    subtitle = paste0("Stress: ", round(nmds$stress, 2))
+    
+  ) +
+    
   # theme
   ggthemes::theme_tufte() +
   theme(
@@ -740,7 +761,8 @@ save_gg(
   save_location  = dir_plt_save,
   save_name      = "station_season_nmds",
   verbose        = TRUE,
-  overwrite      = FALSE,
+  # overwrite      = FALSE,
+  overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 8,
@@ -751,3 +773,44 @@ save_gg(
 )
 
 ```
+
+
+
+
+```{r, fig.height=15}
+cmtx_l %>%
+  mutate(pft_pct = conc/total_chl_a) %>%
+  summarise(
+    .by = c(cruise_id, func_type, names),
+    avg = mean(pft_pct),
+    sd  = sd(pft_pct),
+    dates = mean(date_time_utc)
+  ) %>%
+  ggplot(aes(x = dates, y = avg)) +
+    geom_vline(
+      data = 
+        tibble(
+          x_yr = as_datetime(glue("{c(2016, 2017, 2018, 2019, 2020, 2021)}-01-01")) 
+          ),
+      aes(xintercept = x_yr)
+      ) +
+    geom_line(aes(color = names)) +
+    geom_point(aes(color = names)) +
+    geom_errorbar(aes(ymax = avg + sd, ymin = avg - sd, color = names)) +
+    geom_point(
+      data = mutate(cmtx_l, pft_pct = conc/total_chl_a), 
+      aes(x = date_time_utc, y = pft_pct), 
+      color = "grey70"
+      ) +
+    facet_grid(names ~ .) +
+    scale_x_datetime(date_breaks = "1 year") +
+    ylim(0, 1)
+    
+
+
+```
+
+
+
+
+
