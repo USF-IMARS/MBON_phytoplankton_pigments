@@ -39,7 +39,6 @@ source(here("scripts", "misc_functions.R"))
 ## 2.2 Load Dataset
 
 ```{r load-data}
-# run snippet after saving file
 # set location to save data and plots
 dir_data_save <- here("data", "processed", "04_4_bar_plots")
 dir_plt_save  <- here("data", "plots", "04_4_bar_plots")
@@ -57,11 +56,9 @@ phyto_name <-
 cmtx_w <-
   here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
-  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
   filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
   mutate(
-    season = fct(season, levels = szn),
-    # station = str_replace(station, "9B", "9.5"),
+    season  = fct(season, levels = szn),
     station = fct_reorder(station, lon)
   ) %>% 
   select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
