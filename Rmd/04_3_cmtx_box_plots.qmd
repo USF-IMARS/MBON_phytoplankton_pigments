@@ -1,0 +1,1252 @@
+---
+title: "Seasonal CHEMTAX Box Plots"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+  # additional
+  rlang, cli,
+  rstatix, readxl, ggtext, cowplot
+  )
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+    )
+
+source(here("scripts", "misc_functions.R"))
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# ---- set location to save data and plots ---- #
+dir_data_save <- here("data", "processed", "04_3_cmtx_box_plots")
+dir_plt_save  <- here("data", "plots", "04_3_cmtx_box_plots")
+
+dir_create(here(dir_plt_save))
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    # station = str_replace(station, "9B", "9.5"),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% 
+  print()
+
+```
+
+
+## 2.3 Convert to Long Format with Percent
+
+
+```{r convert-long-format}
+# ---- convert to long format ---- #
+# i.e. one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # add percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# ---- convert to percent ---- #
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+```
+
+
+## 2.4 Line and Box Plot Plotting Functions 
+
+Default Line Plot and Box Plots
+
+```{r functions-line-box}
+#' Box Plot
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .dat DESCRIPTION.
+#' @param .var DESCRIPTION.
+#' @param .title DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+# box_plt <- function(.dat, .var, .color, .shape, .title) {
+box_plt <- function(.dat, .var, .title, ...) {
+    
+    # limits for plot
+    ylims <-  c(0, quantile(.dat[[.var]], 0.99))
+    brake <- pretty(ylims, 6)
+
+    # plotting
+    .dat %>%
+    ggplot() +
+    geom_boxplot(
+      aes(
+        x = season, 
+        y = .data[[.var]]
+        ),
+      outlier.shape = NA) +
+    geom_jitter(
+        aes(
+          x = season, 
+          y = .data[[.var]], 
+          ...
+          # color = .data[[.color]],
+          # shape = .data[[.shape]]
+          ),
+        width = 0.4,
+        size = 0.5
+        ) +
+    
+    # labels
+    labs(
+      title = glue("Concentration of {.title} per Season "),
+      x     = "Season",
+      y     = "Concentration (mg m<sup>-3</sup>)"
+      # color = "Year"
+      ) +
+
+    # scale settings
+    scale_color_discrete(type = "viridis") +
+    
+    scale_shape_discrete() +
+        
+    scale_y_continuous(
+      breaks = brake,
+      expand = expansion(mult = 0),
+      limits = ylims,
+      oob    = scales::squish
+      ) +
+    
+    # theme settings
+    theme_bw(base_family = "serif", base_size = 12) +
+    theme(
+      panel.grid        = element_blank(),
+      plot.title        = element_text(size = 15),
+      axis.ticks.length = unit(-0.05, "in"),
+      axis.text.y       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.title.y      = element_markdown(size = 10),
+      axis.text.x       = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.ticks.x      = element_blank(),
+      legend.background = element_rect(color = "black", fill = "white")
+    )
+}
+```
+
+
+# 4.0 ---- Box Plots ----
+
+## 4.2 Box Plot: Individuals for Each PFT per Season
+
+```{r boxplots, fig.width=10, fig.asp=0.8}
+# ---- avg season line plots
+cmtx_avgs_plt <-
+  cmtx_l %>%
+  nest(.by = c(phyto, names)) %>%
+  mutate(
+    plt = map2(
+      data,
+      names,
+      ~ .x %>%
+        mutate(Year = factor(year)) %>%
+        box_plt(
+        .dat   = .,
+        .var   = "conc",
+        color = Year,
+        shape = Year,
+        .title = .y
+      )
+    )
+  )
+
+# cmtx_avgs_plt$plt[[1]]
+cmtx_avgs_plt$plt
+```
+
+## 4.3 Box Plot: Base for Larger/Small Dynamic Range PFTs
+
+```{r box-base, fig.height=15, fig.width=20}
+box_filter <- 
+  . %>%
+  filter(.by = c(station, names), n() > 3) %>%
+   mutate(
+    .by       = c(station, names),
+    .after    = station,
+    stn_label = glue("{station} (N = {n()})")
+   ) %>%
+  mutate(
+    stn_label = fct_reorder(stn_label, lon)
+  )
+
+box_plt_base <-
+  list(
+    aes(
+      x    = season,
+      y    = conc,
+      fill = season
+    ),
+    geom_boxplot(
+        linewidth = 0.15,
+        outlier.shape = 20, 
+        outlier.size = 0.15
+        ),
+    scale_y_continuous(
+      expand = c(0, 0),
+      breaks = scales::breaks_width(0.1),
+      minor_breaks = NULL,
+      oob    = scales::squish,
+      # labels = scales::label_percent(accuracy = 1)
+      labels = scales::label_number(accuracy = 0.01)
+    ),
+    labs(
+      # x = "Season",
+      x = NULL,
+      y = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)"
+    ),
+    # theme_classic(),
+    theme_bw(),
+    theme(
+      text               = element_text(family = "serif", size = 4, color = "black"),
+      line               = element_line(color = "black", linewidth = 0.2),
+      rect               = element_rect(color = "black", linewidth = 0.2),
+      axis.text          = element_markdown(size = 4),
+      axis.title.y       = element_markdown(size = 4),
+      legend.position    = "none",
+      strip.text.x       = element_text(size = 5, margin = margin(t = 2, b = 2)),
+      strip.background   = element_rect(fill = "white", colour = "grey20"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(color = "grey20", linewidth = 0.25),
+    )
+  )
+```
+
+## 4.4 Box Plot: Larger Dynamic Range PFTs
+
+```{r box-lg-dynm, fig.height=15, fig.width=20}
+# box plot by season (1 x 4)
+box_lg <-
+  cmtx_l %>%
+  filter(phyto %in% c("cyano2", "cyano4", "hapt6", "hapt8")) %>%
+  ggplot() +
+  box_plt_base +
+  facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 6) +
+  coord_cartesian(ylim = c(0, 0.45), clip = "off")
+
+# box plot by season and station
+box_lg_stn <-
+  cmtx_l %>%
+  filter(phyto %in% c("cyano2", "cyano4", "hapt6", "hapt8")) %>%
+  box_filter %>%
+  ggplot() +
+  box_plt_base +
+  # facet_wrap(facet = ~ names + stn_label, ncol = 8) +
+  facet_grid(rows = stn_label ~ names) +
+  coord_cartesian(ylim = c(0, 0.4))
+  # coord_cartesian(ylim = c(0, 1))
+
+# stack box plots  
+box_lg_stcked <- 
+  patchwork::wrap_plots(
+    box_lg, 
+    box_lg_stn, 
+    ncol = 1, 
+    heights = c(0.2, 0.8)
+  )
+
+# display plots
+box_lg
+box_lg_stn
+box_lg_stcked
+
+# box plot by season (2 x 2)
+box_lg <-
+  cmtx_l %>%
+  filter(phyto %in% c("cyano2", "cyano4", "hapt6", "hapt8")) %>%
+  ggplot() +
+  box_plt_base +
+  facet_wrap(facet = ~names) +
+  coord_cartesian(ylim = c(0, 0.45), clip = "off") +
+  scale_y_continuous(
+      limits = c(0, 0.45), 
+      expand = c(0, 0),
+      breaks = scales::breaks_width(0.1),
+      minor_breaks = NULL,
+      oob    = scales::squish,
+      # labels = scales::label_percent(accuracy = 1)
+      labels = scales::label_number(accuracy = 0.01))
+
+box_lg
+```
+
+
+## 4.5 Box Plot: Smaller Dynamic Ranged PFTs
+
+
+```{r box-sm-dynm, fig.height=15, fig.width=20}
+# box plot by season (1 x 6)
+box_sm <-
+  cmtx_l %>%
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  ggplot() + 
+  box_plt_base +
+  facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 4) +
+  coord_cartesian(ylim = c(0, 0.2))
+ 
+  
+# box plot by season and station
+box_sm_stn <-
+  cmtx_l %>%
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  box_filter %>%
+  ggplot() +
+  box_plt_base +
+  # facet_wrap(facet = ~ names + stn_label, ncol = 8) +
+  facet_grid(rows = stn_label ~ names) +
+  coord_cartesian(ylim = c(0, 0.2))
+
+# stack box plots
+box_sm_stcked <-
+  patchwork::wrap_plots(
+    box_sm,
+    box_sm_stn,
+    ncol = 1,
+    heights = c(0.25, 0.75)
+  )
+
+# display plots
+box_sm
+box_sm_stn
+box_sm_stcked
+
+# box plot by season (2 x 3)
+box_sm <-
+  cmtx_l %>%
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  ggplot() + 
+  box_plt_base +
+  facet_wrap(facet = ~names) +
+  coord_cartesian(ylim = c(0, 0.2), clip = "off") +
+  scale_y_continuous(
+    limits = c(0, 0.2),
+    expand = c(0, 0),
+    breaks = scales::breaks_width(0.05),
+    minor_breaks = NULL,
+    oob    = scales::squish,
+    # labels = scales::label_percent(accuracy = 1)
+    labels = scales::label_number(accuracy = 0.01)
+  )
+
+box_sm
+```
+
+
+
+```{r box-lg-dynm-percent, fig.height=15, fig.width=20}
+# box plot by station
+box_lg_pct <-
+  cmtx_l_pct %>%
+  filter(phyto %in% c("cyano2", "cyano4", "hapt6", "hapt8")) %>%
+  ggplot() +
+  box_plt_base +
+  facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 6) +
+  labs(y = "Relative Abundance (%)") +
+  scale_y_continuous(labels = scales::label_percent(), expand = c(0,0)) +
+  coord_cartesian(ylim = c(0, 1))
+
+# box plot by season and station
+box_lg_stn_pct <-
+  cmtx_l_pct %>%
+  filter(phyto %in% c("cyano2", "cyano4", "hapt6", "hapt8")) %>%
+  box_filter %>%
+  ggplot() +
+  box_plt_base +
+  # facet_wrap(facet = ~ names + stn_label, ncol = 8) +
+  facet_grid(rows = stn_label ~ names) +
+  scale_y_continuous(labels = scales::label_percent(), expand = c(0,0)) +
+  coord_cartesian(ylim = c(0, 1))
+
+# stack box plots  
+box_lg_stcked_pct <- 
+  patchwork::wrap_plots(
+    box_lg_pct, 
+    box_lg_stn_pct, 
+    ncol = 1, 
+    heights = c(0.2, 0.8)
+  )
+
+# display plots
+box_lg_pct
+box_lg_stn_pct
+box_lg_stcked_pct
+
+
+# box plot by season (2 x 2)
+box_lg_pct <-
+  cmtx_l_pct %>%
+  filter(phyto %in% c("cyano2", "cyano4", "hapt6", "hapt8")) %>%
+  ggplot() +
+  box_plt_base +
+  # facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 6) +
+  facet_wrap(facet = ~names) +
+  labs(y = "Relative Abundance (%)") +
+  scale_y_continuous(labels = scales::label_percent(), expand = c(0,0)) +
+  coord_cartesian(ylim = c(0, 1), clip = "off")
+
+box_lg_pct
+```
+
+
+```{r box-sm-dynm-pct, fig.height=15, fig.width=20}
+# box plot by season (1 x 6)
+box_sm_pct <-
+  cmtx_l_pct %>%
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  ggplot() + 
+  box_plt_base +
+  facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 4) +
+  labs(y = "Relative Abundance (%)") +
+  scale_y_continuous(labels = scales::label_percent(), expand = c(0,0)) +
+  coord_cartesian(ylim = c(0, 1))
+ 
+  
+# box plot by season and station
+box_sm_stn_pct <-
+  cmtx_l_pct %>%
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  box_filter %>%
+  ggplot() +
+  box_plt_base +
+  # facet_wrap(facet = ~ names + stn_label, ncol = 8) +
+  facet_grid(rows = stn_label ~ names) +
+  labs(y = "Relative Abundance (%)") +
+  scale_y_continuous(labels = scales::label_percent(), expand = c(0,0)) +
+  coord_cartesian(ylim = c(0, 1))
+
+# stack box plots
+box_sm_stcked_pct <-
+  patchwork::wrap_plots(
+    box_sm_pct,
+    box_sm_stn_pct,
+    ncol = 1,
+    heights = c(0.25, 0.75)
+  )
+
+# display plots
+box_sm_pct
+box_sm_stn_pct
+box_sm_stcked_pct
+
+# box plot by season (2 x 3)
+box_sm_pct <-
+  cmtx_l_pct %>%
+  filter(phyto %in% c("chloro", "crypto", "diat1", "diat2", "dino", "pras")) %>%
+  ggplot() + 
+  box_plt_base +
+  # facet_wrap(facet = ~names, ncol = length(unique(cmtx_l$phyto)) - 4) +
+  facet_wrap(facet = ~names) +
+  labs(y = "Relative Abundance (%)") +
+  scale_y_continuous(labels = scales::label_percent(), expand = c(0,0)) +
+  coord_cartesian(ylim = c(0, 1), clip = "off")
+
+box_sm_pct
+```
+
+## 4.6 Save: Large and Small Range Boxplots
+
+```{r save-plt}
+# save box_plots
+walk2(
+  verbose   = TRUE,  # set to FALSE to suppress output
+  # overwrite = FALSE, # set to TRUE to overwrite existing files
+  overwrite = TRUE, # set to TRUE to overwrite existing files
+  .x = list2(
+    "cmtx_boxplot_lg",
+    "cmtx_boxplot_sm",
+    "cmtx_boxplot_lg_stn",
+    "cmtx_boxplot_sm_stn",
+    "cmtx_boxplot_lg_stcked",
+    "cmtx_boxplot_sm_stcked",
+    "cmtx_boxplot_lg_pct",
+    "cmtx_boxplot_sm_pct",
+    "cmtx_boxplot_lg_stn_pct",
+    "cmtx_boxplot_sm_stn_pct",
+    "cmtx_boxplot_lg_stcked_pct",
+    "cmtx_boxplot_sm_stcked_pct"
+  ),
+  .y = list2(
+      box_lg, box_sm,
+      box_lg_stn, box_sm_stn,
+      box_lg_stcked, box_sm_stcked,
+      box_lg_pct, box_sm_pct,
+      box_lg_stn_pct, box_sm_stn_pct,
+      box_lg_stcked_pct, box_sm_stcked_pct
+      ),
+  \(.x, .y, ...) {
+    .x %>%
+      str_to_lower() %>%
+      str_replace_all("\\s", "_") %>%
+      # glue(., "common suffix", .sep = "_") %>% # remove if none needed
+      save_gg(
+        .y,
+        save_location  = here(dir_plt_save, Sys.Date()),
+        save_name      = .,
+        # time_stamp_fmt = "%Y%m%d_%H%M%S",
+        time_stamp_fmt = NULL,
+        device         = "jpeg",
+        width          = 90,
+        height         = 90 * 0.5625,
+        dpi            = 600,
+        units          = "mm",
+        bg             = "white",
+        ...
+      )
+  }
+)
+
+```
+# ------------------------------ DELETE BELOW ---------------------------------
+
+
+# 6.0 ---- Combine PFT Sub Groups ----
+
+## 6.1 Add: PFT Groups Together
+
+Groups to be combined have multiple types but are merged for ease of use
+- diatom:
+  - diatom 1 
+  - diatom 2
+- cyanobacteria:
+  - cyano 2
+  - cyano 4
+- haptophyte:
+  - hapt 6
+  - hapt 8
+
+```{r station-seasonally-yearly-avgs}
+# # combine same base PFT groups into main group
+# cmtx_w_comb <-
+#   cmtx_w %>%
+#   rowwise() %>%
+#   mutate(
+#     # total = sum(c_across(chloro:pras), na.rm = TRUE),
+#     diat  = diat1 + diat2,
+#     cyano = cyano2 + cyano4,
+#     hapt  = hapt6 + hapt8
+#   ) %>%
+#   ungroup() %>%
+#   # relocate(total, .before = chloro) %T>% 
+#   print()
+# 
+# # calculate PFT fractions (0 - 100%)
+# cmtx_fract_w <-
+#   # cmtx_w_comb %>%
+#   cmtx_w %>%
+#   mutate(
+#     .keep = "unused",
+#     # across(c(1:depth, water_depth:lat)),
+#     across(
+#       # c(pras:hapt, chloro, crypto, dino),
+#       chloro:last_col(),
+#       (\(x) x / total_chl_a),
+#       .names = "frac_{.col}"
+#     )
+#   ) %T>% print()
+# 
+# # convert to long format
+# cmtx_fract_l <- 
+#   cmtx_fract_w %>%
+#   pivot_longer(
+#     contains("frac"),
+#     names_to     = "phyto",
+#     values_to    = "frac",
+#     names_prefix = "frac_"
+#   ) %>%
+#     
+#   # add long names
+#   left_join(phyto_name, by = c("phyto" = "shrt")) %T>% print()
+```
+
+
+## 6.2 View Averages for Both Seasonal and per Station
+
+```{r view-avgs}
+# format_pct <- 
+#   . %>%
+#   mutate(
+#     percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg)
+#   )
+# 
+# # ---- average by season ---- #
+# # only one used further
+# cmtx_avg_season_fract_l <-
+#   cmtx_fract_l %>%
+#   summarise(
+#     .by = c(names, phyto, season),
+#     across(
+#       .cols  = frac,
+#       .fns   = list(
+#           avg = (\(x) mean(x, na.rm = TRUE)),
+#           sd  = (\(x) sd(x, na.rm = TRUE))
+#           ),
+#       .names = "{.col}_{.fn}"
+#     )
+#   ) %>%
+#   mutate(
+#     percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg),
+#     percent_sd  = scales::label_percent(accuracy  = 0.01)(frac_sd)
+#   ) %>%
+#  arrange(season) %T>% print()
+# 
+# 
+# # ---- average by station ---- #
+# cmtx_fract_l %>%
+#   mutate(station = fct_reorder(station, lon)) %>%
+#   arrange(station) %>%
+#   summarise(
+#     .by = c(names, phyto, station),
+#     across(
+#       .cols  = frac,
+#       .fns   = (\(x) mean(x, na.rm = TRUE)),
+#       .names = "{.col}_avg"
+#     )
+#   ) %>%
+#   mutate(
+#     percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg)
+#   ) %>%
+#  arrange(station) %T>% print()
+# 
+# # ---- average by station and season ---- #
+# cmtx_fract_l %>%
+#   mutate(station = fct_reorder(station, lon)) %>%
+#   arrange(station) %>%
+#   summarise(
+#     # .by = c(cruise_id, station, season, names, phyto), # i think this is wrong, remove cruise ID
+#     .by = c(station, season, names, phyto),
+#     across(
+#       .cols  = frac,
+#       .fns   = (\(x) mean(x, na.rm = TRUE)),
+#       .names = "{.col}_avg"
+#     )
+#   )  %>%
+#   mutate(
+#     percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg)
+#   ) %>%
+#  arrange(season) %T>% print()
+```
+
+## 6.4  Plot: Seasonal Fraction of each PFT (Bar)
+
+Stacked Bar Chart
+```{r plt-fracs, fig.width=20, fig.height=10}
+# tol_muted <- c(khroma::color("muted", names = FALSE)(9), "#BBBBBB")
+# 
+# new_dat <- 
+#   summarise(
+#     cmtx_w, 
+#     .by = season, 
+#     chl_avg = mean(total_chl_a), 
+#     chl_sd  = sd(total_chl_a),
+#     chl_se  = chl_sd / sqrt(n())
+#     ) %T>% 
+#   print() 
+# 
+# sec_axe <- 
+#   new_dat %>%
+#   ggh4x::help_secondary(
+#     secondary = c(0, 0.75), 
+#     name = bquote("Concentration"~(mg~L^-1))
+#     )
+# 
+# 
+# 
+# cmtx_avg_season_fract_l %>%
+#   mutate(names = fct_reorder(names, frac_avg)) %>%
+#   ggplot(
+#     aes(
+#       fill  = names,
+#       # color = names,
+#       y     = frac_avg,
+#       x     = season
+#     )
+#   ) +
+#   geom_bar(
+#     color = "black",
+#     position = "fill",
+#     stat     = "identity"
+#   )  +    
+#   geom_line(
+#     data = new_dat,
+#     aes(x = season, y = sec_axe$proj(chl_avg), group = 1),
+#     inherit.aes = FALSE,
+#     linewidth = 2
+#     ) +
+#   geom_point(
+#     data = new_dat,
+#     aes(x = season, y = sec_axe$proj(chl_avg)),
+#     inherit.aes = FALSE,
+#     size = 5
+#     ) +
+#   geom_linerange(
+#     data = new_dat,
+#     aes(
+#       x = season,
+#       ymin = sec_axe$proj(chl_avg) - sec_axe$proj(chl_se),
+#       ymax = sec_axe$proj(chl_avg) + sec_axe$proj(chl_se)),
+#     inherit.aes = FALSE,
+#   ) +
+#   labs(
+#     x     = "Season",
+#     # y     = "Proportion to Total Chl-a",
+#     y     = "PFT:Total Chlorophyll-a (%)",
+#     fill  = "Phytoplankton Functional Type",
+#     color = "Phytoplankton Functional Type"
+#   ) +
+#   scale_fill_manual(values  = tol_muted) +
+#   scale_color_manual(values = tol_muted) +
+#   scale_y_continuous(
+#     labels = scales::percent_format(accuracy = 1),
+#     expand = c(0,0),
+#     limits = c(0,1),
+#     oob    = scales::squish,
+#     sec.axis = sec_axe
+#     ) +
+#   # theme
+#   theme_bw() +
+#   theme(
+#     text             = element_text(family = "serif", size = 20, color = "black"),
+#     axis.title       = element_text(size = 20),
+#     legend.position  = "bottom",
+#     legend.direction = "horizontal",
+#     plot.margin = margin(15,10,10,10, "pt")
+#   )
+# 
+# # ---- save plot
+# save_gg(
+#   plt            = last_plot(), # edit if want specific plot
+#   save_location  = dir_plt_save,
+#   save_name      = "pft_season_avg_prcnt_stack",
+#   verbose        = TRUE,
+#   # overwrite      = FALSE,
+#   overwrite      = TRUE,
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   device         = "jpeg",
+#   height         = 8,
+#   width          = 16,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+#   )
+```
+
+Separated Bar Chart
+
+```{r plt-fracs, fig.width=20, fig.height=10}
+# cmtx_avg_season_fract_l %>%
+#   mutate(names = fct_reorder(names, frac_avg)) %>%
+#   ggplot(
+#     aes(
+#       fill  = season,
+#       # color = season,
+#       y     = frac_avg,
+#       x     = fct_reorder(names, frac_avg, .desc = TRUE)
+#     )
+#   ) +
+#   geom_bar(
+#     color = "black",
+#     # position = "fill",
+#     position = position_dodge(),
+#     stat     = "identity"
+#   ) +
+#   labs(
+#     x     = "Season",
+#     # y     = "Proportion to Total Chl-a",
+#     y     = "PFT:Total Chlorophyll-a (%)",
+#     fill  = "Phytoplankton Functional Type",
+#     color = "Phytoplankton Functional Type"
+#   ) +
+#   scale_fill_manual(values  = tol_muted) +
+#   scale_color_manual(values = tol_muted) +
+#   scale_y_continuous(
+#     labels = scales::percent_format(accuracy = 1),
+#     expand = c(0,0),
+#     limits = c(0,1)
+#     ) +
+#   # theme
+#   theme_classic() +
+#   theme(
+#     text             = element_text(family = "serif", size = 20),
+#     axis.title       = element_text(size = 20),
+#     legend.position  = "bottom",
+#     legend.direction = "horizontal",
+#     plot.margin = margin(15,10,10,10, "pt")
+#   )
+# 
+# # ---- save plot ---- #
+# save_gg(
+#   plt            = last_plot(), # edit if want specific plot
+#   save_location  = dir_plt_save,
+#   save_name      = "pft_season_avg_prcnt_sep",
+#   verbose        = TRUE,
+#   overwrite      = FALSE,
+#   # overwrite      = TRUE,
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   device         = "jpeg",
+#   height         = 8,
+#   width          = 16,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+#   )
+ 
+```
+
+## 3.2 Bar Plot: PFT per **Season** and **Station** as Stacked Percent
+
+```{r chemtax-stacked-bar}
+# # CHEMTAX stacked bar graph
+# cmtx_l %>%
+#   filter(!is.na(conc)) %>%
+#   summarise(
+#   # .by = c(station, season, func_type, names),
+#   .by = c(station, season, phyto, names),
+#   conc = mean(conc)
+#   ) %>%
+#   mutate(
+#     names = fct_reorder(names, conc, .desc = TRUE)
+#   ) %T>% 
+#   print() %>%
+#   ggplot(
+#     aes(
+#       x     = station,
+#       y     = conc,
+#       fill  = names,
+#       # color = names
+#     )
+#   ) +
+#   geom_bar(
+#     color = "black",
+#     position = "fill",
+#     stat = "identity",
+#     na.rm = TRUE,
+#     linewidth = 0.5
+#   ) +
+#   labs(
+#     x     = "Station",
+#     y     = "Percent (%)",
+#     fill  = "Phytoplankton Functional Type",
+#     color = "Phytoplankton Functional Type"
+#   ) +
+#   scale_y_continuous(
+#     labels = scales::label_percent(),
+#     expand = c(0, 0)
+#   ) +
+#   scale_fill_manual(values = tol_muted) +
+#   facet_wrap(~season)
+# 
+# # ---- save plot
+# save_gg(
+#   plt            = last_plot(), # edit if want specific plot
+#   save_location  = dir_plt_save,
+#   save_name      = "pft_bar_percent_season",
+#   verbose        = TRUE,
+#   overwrite      = FALSE,
+#   # overwrite      = TRUE,
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   device         = "jpeg",
+#   height         = 9.7,
+#   width          = 19,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+#   )
+```
+
+## 2.3 Add: Labels for Season and Year
+
+Format:
+- Spring - Autumun is "{season} {year}" 
+- Winter: 
+  - Dec = "{season} {year}-{year+1}"
+  - Jan and Feb = "{season} {year-1}-{year}"
+  
+When a season and year factor was not sampled at all, added a no data
+- Summer 2016
+- Winter 2016 - 2017
+- Spring 2020 (COVID-19 delays)
+
+
+```{r chemtax-add_labels}
+# extra_fct <- 
+#   c(
+#     "Summer 2016 (No Data)",
+#     "Winter 2016-2017 (No Data)", 
+#     "Spring 2020 (No Data)"
+#   )
+# # cmtx_l <-
+#   cmtx_l %>%
+#   arrange(date_time_utc) %>%
+#   mutate(
+#     .after = season,
+#     season_year = case_when(
+#       str_detect(season, "Aut|Spr|Sum") ~ glue("{season} {year}"),
+#       str_detect(month, "Jan|Feb")      ~ glue("{season} {year-1}-{year}"),
+#       str_detect(month, "Dec")          ~ glue("{season} {year}-{year+1}")),
+#     
+#     season_year = fct_inorder(season_year),
+#     season_year = fct_expand(season_year, extra_fct),
+#     season_year = fct_relevel(season_year, extra_fct[1], after = 1),
+#     season_year = fct_relevel(season_year, extra_fct[2], after = 3),
+#     season_year = fct_relevel(season_year, extra_fct[3], after = 16)
+#   ) %T>% print()
+```
+
+## 3.3 Plot: Bar Plot: PFT per **Season** and **Year** as Stacked Percent
+
+
+```{r chemtax-stacked-bar-year-season}
+# extra_fct <- 
+#   c(
+#     "Summer 2016 (No Data)",
+#     "Winter 2016-2017 (No Data)", 
+#     "Spring 2020 (No Data)"
+#   )
+# 
+# add_season_year <-
+#   . %>%
+#   arrange(date_time_utc) %>%
+#   mutate(
+#     .after = season,
+#     season_year = case_when(
+#       str_detect(season, "Aut|Spr|Sum") ~ glue("{season} {year}"),
+#       str_detect(month, "Jan|Feb")      ~ glue("{season} {year-1}-{year}"),
+#       str_detect(month, "Dec")          ~ glue("{season} {year}-{year+1}")),
+#     
+#     season_year = fct_inorder(season_year),
+#     season_year = fct_expand(season_year, extra_fct),
+#     season_year = fct_relevel(season_year, extra_fct[1], after = 1),
+#     season_year = fct_relevel(season_year, extra_fct[2], after = 3),
+#     season_year = fct_relevel(season_year, extra_fct[3], after = 16)
+#   ) 
+# 
+# 
+# # CHEMTAX stacked bar graph with ratio to chlor-a, organized by station
+# cmtx_l %>%
+#   add_season_year %T>% print() %>%
+#   # mutate(station = fct_reorder(station, lon, .na_rm = FALSE)) %>%
+#   # filter(!is.na(station))
+#   ggplot(
+#     aes(
+#       y     = conc,
+#       x     = station,
+#       fill  = names,
+#       color = names
+#     )
+#   ) +
+#   geom_bar(
+#     position = "fill",
+#     stat     = "identity",
+#     na.rm    = TRUE
+#   ) +
+#   labs(
+#     x     = "Station",
+#     y     = "Relative Ratio",
+#     fill  = "Phytoplankton Functional Type",
+#     color = "Phytoplankton Functional Type"
+#   ) +
+#   scale_fill_manual(values = tol_muted) +
+#   scale_color_manual(values = tol_muted) +
+#   scale_y_continuous(
+#     labels = scales::label_percent(),
+#     expand = c(0, 0)
+#   ) +
+#   facet_wrap(~season_year, ncol = 4, drop = FALSE) +
+# 
+#   # theme
+#   theme(
+#     axis.title       = element_text(size = 18),
+#     legend.position  = c(0.6, 0.05),
+#     legend.direction = "horizontal"
+#   )
+# 
+# # ---- save plot
+# save_gg(
+#   plt            = last_plot(), # edit if want specific plot
+#   save_location  = dir_plt_save,
+#   save_name      = "pft_bar_percent_season_year",
+#   verbose        = TRUE,
+#   overwrite      = FALSE,
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   device         = "jpeg",
+#   height         = 9.7,
+#   width          = 19,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+#   )
+# 
+
+```
+
+
+## 3.4 Plot: Bar Plot: PFT per **Season** and **Year** as Absolute VAr
+
+```{r chemtax-stacked-bar-conc-year-season}
+# # chemtax stacked bar graph (not ratio), organized by station
+# cmtx_l %>%
+#   add_season_year %>%
+#   summarize(
+#     conc = mean(conc, na.rm = TRUE),
+#     # .by  = c(season_year, station, func_type)
+#     .by  = c(season_year, station, phyto)
+#   ) %>%
+#   ggplot(aes(
+#     fill  = phyto,
+#     color = phyto,
+#     # fill  = func_type,
+#     # color = func_type,
+#     y     = conc,
+#     x     = station
+#   )) +
+#   geom_bar(stat = "identity") +
+#   labs(
+#     x     = "Station",
+#     y     = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)",
+#     fill  = "Phytoplankton Functional Type",
+#     color = "Phytoplankton Functional Type"
+#   ) +
+#   scale_fill_manual(values  = tol_muted) +
+#   scale_color_manual(values = tol_muted) +
+#   scale_y_continuous(expand = c(0, 0)) +
+#   facet_wrap(~season_year, ncol = 4, drop = FALSE) +
+# 
+#   # theme
+#   theme(
+#     axis.title.y     = element_markdown(),
+#     legend.position  = c(0.6, 0.05),
+#     legend.direction = "horizontal"
+#   )
+# 
+# 
+# # ---- save plot
+# save_gg(
+#   plt            = last_plot(), # edit if want specific plot
+#   save_location  = dir_plt_save,
+#   save_name      = "pft_bar_absolute_season_year",
+#   verbose        = TRUE,
+#   overwrite      = FALSE,
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   device         = "jpeg",
+#   height         = 9.7,
+#   width          = 19,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+#   )
+# 
+
+```
+
+
+## 6.5 Table: PFT Percentages per Season
+
+
+```{r table-pft-proportions}
+# shelf(gt)
+# gt_pft <-
+# # cmtx_l_pct
+#  cmtx_avg_season_fract_l %>%
+#   mutate(
+#     names = fct_reorder(names, frac_avg, .fun = mean, .desc = TRUE),
+#     percent_avg = str_remove(percent_avg, "%"),
+#     percent_lbls = glue("{percent_avg} \u00B1 {percent_sd}")
+#   ) %>%
+#   arrange(names) %>%
+#   pivot_wider(
+#     data         = .,
+#     id_cols      = c(names, phyto), 
+#     names_from   = c(season), 
+#     values_from  = c(percent_lbls)
+#     )  %>%
+#           
+#   # ---- gt table for PFT average +/- std dev per season
+#   gt(
+#     data          = .,
+#     groupname_col = "names"
+#   ) %>%
+#   cols_hide(phyto) %>%
+#   tab_options(
+#     table_body.hlines.width      = 0,
+#     table_body.vlines.width      = 0,
+#     stub.border.width            = 0,
+#     row_group.as_column          = TRUE,
+#     row_group.padding.horizontal = 20,
+#     row_group.padding            = 200,
+#     stub_row_group.font.weight   = "bold",
+#     stub_row_group.border.width  = 0,
+#     row_group.border.top.width   = px(5)
+#   ) %>%
+#   cols_align("center") %>%
+#   tab_style(
+#     cell_text(
+#       v_align = "middle",
+#       align   = "center"
+#     ),
+#     locations = cells_row_groups()
+#   ) %>%
+#   tab_spanner(
+#     label   = "Average % \u00B1 S.D.", 
+#     columns = everything()) %>%
+#   opt_table_font("serif")
+# 
+# gt_pft
+# 
+# # ---- save tables as html and docx
+# if (FALSE) {
+#   file_expr(
+#     loc            = dir_plt_save,
+#     file_base      = "pft_fraction_seasons",
+#     exts           = c("html", "docx"),
+#     time_stamp_fmt = "%Y%m%d_%H%M%S"
+#   ) %$%
+#   eval(file_expr) %>%
+#   walk(
+#     .,
+#     \(file_n) {
+#       gtsave(
+#         gt_pft,
+#         filename = file_n
+#       )
+#     }
+#   )
+# 
+#  
+# }
+#  
+
+```
+
+## 6.3 Plot: Average PFT per Season with Standard Deviation Error Bars
+
+Calculate per PFT:
+- average 
+- standard deviation
+
+```{r cmtx-summary}
+# cmtx_w %>%
+#   summarise(
+#     .by = season,
+#     across(
+#       # chloro:hapt,
+#       chloro:pras,
+#       list(
+#         avg = (\(x) mean(x, na.rm = TRUE)),
+#         sd  = (\(x) sd(x, na.rm = TRUE)),
+#         var = (\(x) var(x, na.rm = TRUE))
+#       )
+#     )
+#   ) %>%
+#   select(-contains(c("var"))) %>%
+#   pivot_longer(
+#     data      = .,
+#     cols      = -season,
+#     names_to  = "phyto",
+#     values_to = "conc", 
+#     ) %>%
+#   separate(phyto, into = c("phyto", "type"), sep = "_") %>%
+#   pivot_wider(
+#     data         = .,
+#     names_from   = type, 
+#     values_from  = c(conc), 
+#     names_repair = janitor::make_clean_names
+#     ) %>%
+#   left_join(phyto_name, by = c("phyto" = "shrt")) %T>% 
+#   print() %>%
+#   ggplot(aes(x = season, y = avg, color = season)) +
+#   geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+#   geom_point() +
+#   geom_linerange(aes(ymin = avg - sd, ymax = avg + sd )) +
+#   scale_y_continuous(breaks = scales::breaks_pretty()) +
+#   labs(
+#     x = "Season",
+#     y = bquote("Concentration"~(mg~L^-1)),
+#     color = NULL
+#   ) +
+#   facet_wrap(~names, ncol = 3, scales = "free_y") +
+#   theme_bw(base_family = "serif") +
+#   theme(legend.position = "top")
+# 
+# # ---- save plot
+# save_gg(
+#   plt            = last_plot(), # edit if want specific plot
+#   save_location  = dir_plt_save,
+#   save_name      = "pft_avg_per_season",
+#   verbose        = TRUE,
+#   overwrite      = FALSE,
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   device         = "jpeg",
+#   height         = 6,
+#   width          = 10,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+#   )
+
+```
