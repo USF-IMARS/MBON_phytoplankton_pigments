@@ -1,0 +1,170 @@
+---
+title: "Density and Histogram Plots"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "04_5_density_plots")
+dir_plt_save  <- here("data", "plots", "04_5_density_plots")
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% 
+  print()
+
+```
+
+```{r convert-long-format}
+# ---- convert to long format ---- #
+# i.e. one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # add percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# ---- convert to percent ---- #
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+```
+
+
+
+# 3.0 ---- Plot -----
+
+## 3.1 Density and Histogram Plots: PFT 
+
+Density and histogram plot for each PFT per season
+
+```{r plotting-chemtax-data}
+plt_cmtx_den_hist <-
+  cmtx_l %>%
+  nest(.by = phyto) %>%
+  filter(!is.na(phyto)) %>%
+  mutate(
+    hist = map(
+      .x = data,
+      .y = phyto,
+      ~ .x %>%
+        ggplot(aes(conc, fill = season)) +
+        geom_histogram(
+          position = "stack",
+          bins = 40,
+          na.rm = TRUE
+        ) +
+        labs(
+          title = .x$names,
+          x     = "Log<sub>\u0065</sub>([PFT] + 1)",
+          y     = "Frequency",
+          fill  = "Season"
+        ) +
+        scale_x_continuous(trans = scales::log1p_trans()) +
+        facet_grid(
+          rows  = season ~ .,
+          scales = "free_x",
+        ) +
+        theme(
+          axis.title.x = element_markdown(margin = margin(t = 20, b = 5))
+        )
+    ),
+    dens = map2(
+      .x = data,
+      .y = phyto,
+      ~ .x %>%
+        ggplot(aes(conc, y = season, fill = season)) +
+        ggridges::geom_density_ridges(
+          na.rm = TRUE,
+          alpha = 0.25
+        ) +
+        labs(
+          title = .x$names,
+          x     = "Log<sub>\u0065</sub>([PFT] + 1)",
+          y     = "Frequency",
+          fill  = "Season"
+        ) +
+        scale_x_continuous(trans = scales::log1p_trans()) +
+        theme(
+          axis.title.x = 
+            element_markdown(margin = margin(t = 20, b = 5))
+        )
+      
+    )
+  )
+
+plt_cmtx_den_hist$dens
+plt_cmtx_den_hist$hist
+```
