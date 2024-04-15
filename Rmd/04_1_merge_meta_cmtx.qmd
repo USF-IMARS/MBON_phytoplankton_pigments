@@ -1,0 +1,291 @@
+---
+title: "Merge Metadata and CHEMTAX"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
++ setup 
+  - load libraries and data
+
++ load-data
+  - load data to be used in this script
+  
+: file-paths-chemtax-data
+  - Search for CHEMTAX data, metadata, and create variables for phytoplankton 
+    names and seasons
+  
+: load-chemtax-data
+  - load CHEMTAX and meta data
+
+: merge-meta-data
+  - merge both with seasons
+
+: save-merged-data
+  - save CHEMTAX and metadata with/out duplicates
+  - save phytoplankton names
+  - save CHEMTAX PFT averages
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+librarian::shelf(
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  
+  # additional
+  rlang, cli,
+  rstatix, readxl
+  )
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+    )
+
+source(here("scripts", "misc_functions.R"))
+```
+
+
+# 3.0 Load Metadata and CHEMTAX Data and Setup Variables
+
+Merged metadata is created in `01_load_data.Rmd`
+- "combined_pig_dat.csv"
+
+CHEMTAX data is created from CHEMTAX program
+- uses: 
+  - "chemtax_season_clust.csv" created in `01_load_data.Rmd` 
+  - takes results from each cluster (1 - 4) 
+  - creates one file per cluster as "1_mbonpig_cluster[1-4].xls"
+  - manually merge into "1_mbonpig.xls"
+- data includes:
+  - Seasonal clusters for each run of CHEMTAX with tabs used in CHEMTAX program
+    - cluster 1: Winter
+    - cluster 2: Spring
+    - cluster 3: Summer
+    - cluster 4: Autumn
+  - Manually merged data set (used in the rest of this project)
+
+## 3.1 Search for File Paths and Setup Variables
+
+```{r file-paths-chemtax-data, include=FALSE}
+# ---- set save directory ---- #
+dir_data_save <- here("data", "processed", "04_1_merge_meta_cmtx")
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+# NOTE: this is the first instance of phytoplankton names and will be saved for 
+# preceding files
+phyto_name <-
+  tibble(
+    names = c(
+      "Chlorophyte", "Cryptophyte", "Cyanobacteria 2",
+      "Cyanobacteria 4", "Diatom 1", "Diatom 2",
+      "Dinoflagellate", "Haptophyte 6", "Haptophyte 8",
+      "Prasinophyte", "Cyanobacteria", "Diatom", "Haptophyte"
+    ),
+    shrt = c(
+      "chloro", "crypto", "cyano2", "cyano4", "diat1", "diat2", "dino", "hapt6",
+      "hapt8", "pras", "cyano", "diat", "hapt"
+    )
+  ) %T>%
+  print()
+
+# ---- CHEMTAX file paths ---- #
+file_chem <-
+  here("data", "raw") %>%
+  dir_ls(
+    recurse = TRUE,
+    regexp  = "mbonpig.*\\.xls$"
+    ) %>% 
+  str_sort() %>%
+  tibble(files = .) %T>% print()
+```
+
+
+## 3.2 Load Metadata and CHEMTAX Data
+
+```{r load-chemtax-data, include=FALSE}
+# ---- load metadata ---- #
+meta_data <-
+  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  select(hplc_gsfc_id:lat) %>%
+  mutate(season = fct(season, szn)) %>%
+  filter(
+    str_detect(name_of_water_body, "Florida Keys")
+    
+    # sample was missed in original analysis
+    & !str_detect(sample, "WS18008_43")
+  ) %T>% 
+  print()
+
+# ---- load average seasonal CHEMTAX data ---- #
+# *not used beyond first plot*
+# average each season
+cmtx_all <-
+  file_chem %>%
+  filter(str_detect(files, "cluster")) %>%
+  mutate(
+    filename = basename(files),
+    filename = tools::file_path_sans_ext(filename),
+    ranges   = c("D177:N178", "D273:N274", "D241:N242", "D305:N306"),
+    cluster  = str_extract(filename, "\\d$"),
+    season   = fct_inorder(szn),
+    data     = map2(
+      files, ranges,
+      ~ read_xls(
+        path  = .x,
+        sheet = "Notes",
+        range = .y,
+        .name_repair = janitor::make_clean_names
+      )
+    )
+  ) %>%
+  select(-c(1:ranges)) %>%
+  unnest(data) %T>% 
+  print()
+
+
+# ---- load merged cluster CHEMTAX data ---- #
+cmtx_raw <-
+  pull(file_chem, files) %>%
+  # remove files with cluster in the name
+  str_subset("cluster", negate = TRUE) %>%
+  readxl::read_xls(
+    .,
+    sheet = "Avgs",
+    .name_repair = janitor::make_clean_names
+  ) %>%
+  filter(!str_detect(sample_id, "WS19210-59")) %T>% 
+  print()
+```
+
+## 3.3 Merge CHEMTAX Results with Metadata
+
+```{r merge-meta-data}
+# ---- join metadata and chemtax data
+cmtx_all_w <-
+  full_join(
+    meta_data,
+    cmtx_raw,
+    by = join_by(
+        "sample" == "sample_id",
+        "hplc_gsfc_id" == "sample"
+        ),
+  ) %T>% print()
+
+# ---- view duplicates  ---- #
+# 2 reason:
+# - 1. duplicate sample taken in field
+#   - this is signified with the same location and is usually +1 of sample ID
+# - 2. internal consistency at NASA where they use subset of sample 
+#   - this is signified with a ###.5
+janitor::get_dupes(cmtx_all_w, cruise_id, date_time_utc, station, depth) 
+
+# removing duplicates by averaging
+cmtx_w <-
+  cmtx_all_w %>%
+  reframe(
+    .by = c(cruise_id, date_time_utc, station, depth),
+    pick(1:cluster_code),
+    across(
+      chloro:pras,
+      \(x) mean(x, na.rm = TRUE)
+    )
+  ) %>%
+  distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE)  %>%
+  mutate(station = str_replace(station, "9B", "9.5")) %T>%
+  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %T>% 
+  print()
+```
+
+## 3.4 Save: CHEMTAX Data
+
+```{r save-merged-data}
+# ---- save chemtax data with metadata ---- #
+if (
+  !file_exists(here(dir_data_save, "chemtax_w_meta_all_wide.csv")) |
+    !file_exists(here(dir_data_save, "chemtax_w_meta_wide.csv"))
+) {
+  # wide format of CHEMTAX and metadata with duplicates
+  save_csv(
+    .data          = cmtx_all_w,
+    save_location  = dir_data_save,
+    save_name      = "chemtax_w_meta_all_wide",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+
+  # wide format of CHEMTAX and metadata without duplicates
+  save_csv(
+    .data          = cmtx_w,
+    save_location  = dir_data_save,
+    save_name      = "chemtax_w_meta_wide",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+} else {
+  cli::cli_alert_info(
+    c(
+      "Skipping saving of {.file chemtax_w_meta} ",
+      "because exists ",
+      "and/or overwrite is set {.var FALSE}"
+    )
+  )
+}
+
+# ---- save average seasonal CHEMTAX results ---- #
+if (!file_exists(here(dir_data_save, "chemtax_avg_seasonal.csv"))) {
+  save_csv(
+    .data          = cmtx_all,
+    save_location  = dir_data_save,
+    save_name      = "chemtax_avg_seasonal",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+} else {
+  cli::cli_alert_info(
+    c(
+      "Skipping saving of {.file chemtax_avg_seasonal.csv} ",
+      "because exists ",
+      "and/or overwrite is set {.var FALSE}"
+    )
+  )
+}
+
+# ---- save phytplankton names ---- #
+if (!file_exists(here(dir_data_save, "phyto_names.csv"))) {
+  save_csv(
+    .data          = phyto_name,
+    save_location  = dir_data_save,
+    save_name      = "phyto_names",
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+} else {
+  cli::cli_alert_info(
+    c(
+      "Skipping saving of {.file phyto_names.csv} ",
+      "because exists ",
+      "and/or overwrite is set {.var FALSE}"
+    )
+  )
+}
+```
+
+
+
