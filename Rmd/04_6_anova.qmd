@@ -1,0 +1,844 @@
+---
+title: "Seasonal CHEMTAX Anova Tests"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+  # additional
+  rlang, cli,
+  rstatix, readxl, ggtext, cowplot,
+  
+  ggstatsplot, vegan
+  )
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+    )
+
+source(here("scripts", "misc_functions.R"))
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# run snippet after saving file
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "04_6_anova")
+dir_plt_save  <- here("data", "plots", "04_6_anova")
+
+dir_create(here(dir_plt_save))
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    # station = str_replace(station, "9B", "9.5"),
+    station = fct_reorder(station, lon),
+    labels = 
+      if_else(
+        str_detect(station, "10|16|7"), 
+        "Nearshore", 
+        "Offshore"
+        )
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% 
+  print()
+
+```
+
+```{r convert-long-format}
+# ---- convert to long format ---- #
+# i.e. one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # add percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# ---- convert to percent ---- #
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+
+```
+
+# 3.0 ---- Perform Kruskal-Wallis and Dunn Test ----
+
+Here Kruskal-Wallis was performed to identify if there was any significant 
+difference between each season and a PFT.
+
+If p-value <= 0.05, next would be pairwise Dunn's test to test season-phyto 
+combination for significance.
+
+
+## 3.1 Abs. ---- K-W PFT on season
+
+Absolute total chlorophyll-a
+
+
+```{r absolute-kruskal-and-dunn}
+# concentration on season grouped by PFT
+cmtx_kruskal_season <-
+  cmtx_l %>% 
+  group_by(phyto) %>% 
+  kruskal_test(conc ~ season) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  arrange(p)
+
+# concentration on stn grouped by PFT
+cmtx_kruskal_stn <-
+  cmtx_l %>% 
+  group_by(phyto) %>% 
+  kruskal_test(conc ~ station) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  arrange(p)
+
+# extract PFT where p value > 0.05
+p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
+p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
+
+# Seasonal Dunn's test 
+cmtx_dunn_season <-
+  cmtx_l %>%
+  # remove PFT with no signficant difference
+  filter(!(phyto %in% p_gt_05_season$phyto)) %>%
+  group_by(phyto) %>%
+  dunn_test(
+    conc ~ season, 
+    p.adjust.method = "bonferroni",
+    detailed = TRUE
+    ) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
+  arrange(phyto, p.adj)
+
+# Station Dunn's test
+cmtx_dunn_stn <-
+  cmtx_l %>%
+  # remove PFT with no signficant difference
+  filter(!(phyto %in% p_gt_05_stn$phyto)) %>%
+  group_by(phyto) %>%
+  dunn_test(
+    conc ~ station, 
+    p.adjust.method = "bonferroni",
+    detailed = TRUE
+    ) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
+  arrange(phyto, p.adj)
+```
+
+
+### 3.1.1 Abs. Summary: Season
+
+Overall not sig. diff.:
+- diat1
+- dino
+
+Based on the results, Diatom1 and Dinoflagellates did not have any significant 
+difference between each season. 
+
+From the pairwise Dunn's test, only 25/48 pairs were significantly different.
+
+```{r season-absolute-kruskal-and-dunn}
+cmtx_kruskal_season
+
+# remove diat1 and dino
+p_gt_05_season
+
+cmtx_dunn_season
+
+# sig Dunn
+cmtx_dunn_season %>%
+  filter(p.adj <= 0.05) %>% # remove PFTs with p>0.05
+  unite("groups", group1, group2, sep = "-") 
+
+# no sig Dunn
+cmtx_dunn_season %>%
+  filter(p.adj > 0.05) %>% 
+  unite("groups", group1, group2, sep = "-")
+```
+
+### 3.1.2 Abs. Summary: Station
+
+Overall not sig. diff.:
+- chloro
+- cyano2 
+- hapt6 
+- pras
+
+Based on the results, Chlorophytes, Cyanobacteria2, Haptophyte6 and Prasinophyte
+did not have any significant difference between each season. 
+
+From the pairwise Dunn's test, only 79/168 pairs were significantly different.
+
+```{r station-absolute-kruskal-and-dunn}
+cmtx_kruskal_stn
+
+# remove chloro, cyano2, hapt6 and pras
+p_gt_05_stn
+
+cmtx_dunn_stn
+
+# sig Dunn
+cmtx_dunn_stn %>%
+  filter(p.adj <= 0.05) %>% 
+  unite("groups", group1, group2, sep = "-") %T>% 
+  print() %>%
+  count(phyto)
+
+# no sig Dunn
+cmtx_dunn_stn %>%
+  filter(p.adj > 0.05) %>% 
+  unite("groups", group1, group2, sep = "-")  %T>% 
+  print() %>%
+  count(phyto)
+
+```
+
+
+## 3.2 Abs. Statsplot: Kruskal-Wallis on PFT Concentrations
+
+```{r k-w-statplot, fig.width=25, fig.asp=0.5}
+cmtx_stat_plt <- 
+  cmtx_l %>%
+  nest(.by = names) %>%
+    
+  mutate(
+    stat_plt_year =
+      map2(
+        .x = data,
+        .y = names,
+        ~ ggbetweenstats(
+          data = .x,
+          x = year,
+          y = conc,
+          xlab = "Season",
+          ylab = "Concentration",
+          title = glue("Year: {.y}"),
+          type = "nonparametric"
+        )
+      ),
+    stat_plt_season =
+      map2(
+        .x = data,
+        .y = names,
+        ~ ggbetweenstats(
+          data = .x,
+          x = season,
+          y = conc,
+          xlab = "Season",
+          ylab = "Concentration",
+          title = glue("Season: {.y}"),
+          type = "nonparametric"
+        )
+      )
+  ) 
+
+pull(cmtx_stat_plt, stat_plt_season)
+pull(cmtx_stat_plt, stat_plt_year)
+
+```
+
+## 3.3 Rel. ---- K-W Abundance of PFTs
+
+```{r relative-kruskal-and-dunn}
+# concentration on season grouped by PFT
+cmtx_kruskal_season <-
+  cmtx_l %>% 
+  group_by(phyto) %>% 
+  kruskal_test(percent ~ season) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  arrange(p)
+
+# concentration on stn grouped by PFT
+cmtx_kruskal_stn <-
+  cmtx_l %>% 
+  group_by(phyto) %>% 
+  kruskal_test(percent ~ station) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  arrange(p)
+
+# concentration on stn grouped by PFT
+cmtx_kruskal_dist <-
+  cmtx_l %>% 
+  group_by(phyto) %>% 
+  kruskal_test(percent ~ labels) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  arrange(p)
+
+# extract PFT where p value > 0.05
+p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
+p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
+p_gt_05_dist   <- filter(cmtx_kruskal_dist, p > 0.05)
+
+# Seasonal Dunn's test 
+cmtx_dunn_season <-
+  cmtx_l %>%
+  # remove PFT with no signficant difference
+  filter(!(phyto %in% p_gt_05_season$phyto)) %>%
+  group_by(phyto) %>%
+  dunn_test(
+    percent ~ season, 
+    p.adjust.method = "bonferroni",
+    detailed = TRUE
+    ) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
+  arrange(phyto, p.adj)
+
+# Station Dunn's test
+cmtx_dunn_stn <-
+  cmtx_l %>%
+  # remove PFT with no signficant difference
+  filter(!(phyto %in% p_gt_05_stn$phyto)) %>%
+  group_by(phyto) %>%
+  dunn_test(
+    percent ~ station, 
+    p.adjust.method = "bonferroni",
+    detailed = TRUE
+    ) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
+  arrange(phyto, p.adj)
+
+# Distance Dunn's test
+cmtx_dunn_dist <-
+  cmtx_l %>%
+  # remove PFT with no signficant difference
+  filter(!(phyto %in% p_gt_05_dist$phyto)) %>%
+  group_by(phyto) %>%
+  dunn_test(
+    percent ~ labels, 
+    p.adjust.method = "bonferroni",
+    detailed = TRUE
+    ) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
+  arrange(phyto, p.adj)
+```
+
+### 3.3.1 Rel. Summary: Season
+
+Overall not sig. diff.:
+- Diatom1
+
+Based on the results, Diatom1 did not have any significant difference between 
+each season. 
+
+From the pairwise Dunn's test, only 29/54 pairs were significantly different.
+
+```{r season-relative-kruskal-and-dunn}
+cmtx_kruskal_season
+
+# remove diat1
+p_gt_05_season 
+
+cmtx_dunn_season
+
+# sig Dunn
+cmtx_dunn_season %>% 
+  filter(p.adj <= 0.05) %>% 
+  unite("groups", group1, group2, sep = "-") %T>%
+  print() %>%
+  count(phyto)
+
+# no sig Dunn
+cmtx_dunn_season %>% 
+  filter(p.adj > 0.05) %>% 
+  unite("groups", group1, group2, sep = "-") %T>%
+  print() %>%
+  count(phyto)
+```
+
+### 3.3.2 Rel. Summary: Station
+
+Overall not sig. diff.:
+- chloro
+- pras
+
+Based on the results, Chlorophytes and Prasinophytes did not have any 
+significant difference between each season. 
+
+From the pairwise Dunn's test, only 89/224 pairs were significantly different.
+
+```{r station-relative-kruskal-and-dunn}
+cmtx_kruskal_stn
+
+# remove chloro and pras
+p_gt_05_stn 
+
+cmtx_dunn_stn
+
+# sig Dunn
+cmtx_dunn_stn %>%
+  filter(p.adj <= 0.05) %>%
+  unite("groups", group1, group2, sep = "-") %T>%
+  print() %>%
+  count(phyto)
+
+# no sig Dunn
+cmtx_dunn_stn %>%
+  filter(p.adj > 0.05) %>%
+  unite("groups", group1, group2, sep = "-")  %T>%
+  print() %>%
+  count(phyto)
+```
+
+
+### 3.3.3 Rel. Summary: Distance from Shore
+
+Overall not sig. diff.:
+- chloro
+- pras
+
+Based on the results, Chlorophytes and Prasinophytes did not have any significant 
+difference between each season. 
+
+From the pairwise Dunn's test, all 8 pairs were significantly different.
+
+```{r distance-relative-kruskal-and-dunn}
+cmtx_kruskal_dist
+
+# remove chloro and pras
+p_gt_05_dist 
+
+cmtx_dunn_dist
+
+# sig Dunn
+cmtx_dunn_dist %>%
+  filter(p.adj <= 0.05) %>%
+  unite("groups", group1, group2, sep = "-") %T>%
+  print() %>%
+  count(phyto)
+
+# no sig Dunn
+cmtx_dunn_dist %>%
+  filter(p.adj > 0.05) %>%
+  unite("groups", group1, group2, sep = "-")  %T>%
+  print() %>%
+  count(phyto)
+
+```
+
+Based on the results, Diatom 1 did not have any significant difference between 
+each season. 
+
+From the pairwise Dunn's test, only 30 pairs were significantly different.
+
+
+## 3.4 Rel. Statsplot: Kruskal-Wallis on PFT Concentrations
+
+```{r relative-kruskal-wallis, fig.width=25, fig.asp=0.5}
+cmtx_stat_plt <- 
+  cmtx_l %>%
+  nest(.by = names) %>%
+  # slice(1) %>%
+    
+  mutate(
+    stat_plt_year =
+      map2(
+        .x = data,
+        .y = names,
+        ~ ggbetweenstats(
+          data = .x,
+          x = year,
+          y = percent,
+          xlab = "Season",
+          ylab = "Concentration",
+          title = glue("Year: {.y}"),
+          type = "nonparametric"
+        )
+      ),
+    stat_plt_season =
+      map2(
+        .x = data,
+        .y = names,
+        ~ ggbetweenstats(
+          data = .x,
+          x = season,
+          y = percent,
+          xlab = "Season",
+          ylab = "Concentration",
+          title = glue("Season: {.y}"),
+          type = "nonparametric"
+        )
+      )
+  ) 
+
+pull(cmtx_stat_plt, stat_plt_season)
+pull(cmtx_stat_plt, stat_plt_year)
+
+```
+
+
+# 4.0 ---- Pairwise Permanova Test ----
+
+- CTD vars (temp, par and sal) vs season
+- PFTs vs season
+  - pairwise seasons
+
+Notes about PERMANOVA (use `betadisper`):
+- homogeniety of dispersion:
+  - needs to be check under the assumption of PERMANOVA
+  - dispersion per grouping factor (i.e. variance within groups) is not 
+    significantly different
+  - however, this may be able to be ignored if when plotted, there is clear 
+    group separation
+  - if there is a significant difference, then you can use the "strata" argument
+    in the `adonis2` function to account for this
+  - this test is to check if the differences we see between groups is due to 
+    differences in dispersion and not due to differences in the mean 
+    (i.e. centroid, or "location")     
+    - we want it to be non-significant so we can check differences between 
+      groups
+    
+- R-squared:
+  - This is the proportion of sum of squares from the total
+  - don't over interpret this!
+  - wrong: this shows the influence of the factor on explained variation, this 
+    will tell you the proportion of total variance explained by the grouping 
+    factor
+    
+- the p-value
+  - the probability of observing the effect size by chance
+  
+- pairwise comparison:
+  - performed if the p-value is significant to determine which groups are 
+    significantly different from each other
+
+
+
+
+## 4.1 Check Homogeneity of Dispersion
+
+
+```{r dispersion}
+set.seed(1082002)
+# PFT conc vs season
+cat("\n-----------------------\n\n---- PFT conc vs season ----\n\n")
+manova_pft_season <-
+  vegdist(
+    select(cmtx_w, chloro:pras),
+    method = "bray"
+  ) %>%
+  betadisper(
+    group = cmtx_w$season
+  ) %T>% print()
+
+TukeyHSD(manova_pft_season)
+anova(manova_pft_season)
+plot(manova_pft_season)
+boxplot(manova_pft_season)
+
+
+cat("\n-----------------------\n\n---- PFT conc vs distance from shore ----\n\n")
+manova_pft_season_dist <-
+  vegdist(
+    select(cmtx_w, chloro:pras),
+    method = "bray"
+  ) %>%
+  betadisper(
+    group = cmtx_w$labels
+  ) %T>% print()
+
+TukeyHSD(manova_pft_season_dist)
+anova(manova_pft_season_dist)
+plot(manova_pft_season_dist)
+boxplot(manova_pft_season_dist)
+
+cat("\n-----------------------\n\n---- PFT perc vs season ----\n\n")
+
+manova_pft_season_pct <-
+  cmtx_w %>%
+  mutate(across(chloro:pras, ~ .x/total_chl_a)) %>%
+  select(chloro:pras) %>%
+  vegdist(
+    .,
+    method = "bray"
+  ) %>%
+  betadisper(
+    group = cmtx_w$season
+  ) %T>% print()    
+
+TukeyHSD(manova_pft_season_pct)
+anova(manova_pft_season_pct)
+plot(manova_pft_season_pct)
+boxplot(manova_pft_season_pct)
+
+```
+
+### 4.2 Function: Permutational MANOVA
+
+```{r season-permanova}
+#' Pairwise Permutation MANOVA
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .data DESCRIPTION.
+#' @param pair_col DESCRIPTION.
+#' @param pairs DESCRIPTION.
+#' @param formula DESCRIPTION.
+#' @param dist_method DESCRIPTION.
+#' @param strata DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+szn_adonis2 <- function(
+        .data, 
+        pair_col, 
+        pairs, 
+        formula = NULL, # something like "season * station" 
+        dist_method = "bray",
+        strata = NULL) {
+
+    dat_pair  <- filter(.data, str_detect( {{ pair_col }}, pairs))
+    value     <- select(dat_pair, chloro:pras) 
+    
+    if (!is.null(strata)) strata <- dat_pair[[strata]]
+    
+    permanova_results <- 
+      adonis2(
+        formula  = as.formula(paste("value ~", formula)), 
+        data     = dat_pair, 
+        method   = dist_method,
+        strata   =  strata 
+        )   
+    
+    
+    return(
+      list(
+        "r_squared"  = permanova_results[["R2"]][1],
+        "pairwise_p" = permanova_results[["Pr(>F)"]][1],
+        "results"    = permanova_results
+        )
+    )
+    
+  # ---- end of szn_adonis2 function    
+}
+```
+
+
+
+### 4.3 Perform Permutational MANOVA
+
+```{r season-permanova}
+set.seed(1082002)
+# PFT vs season
+cat("\n-----------------------\n\n---- PFT conc vs season ----\n\n")
+adonis2(
+  select(cmtx_w, chloro:pras) ~ season,
+  data   = select(cmtx_w, season),
+  method = "bray"
+)
+
+# PFT vs distance
+cat("\n-----------------------\n\n---- PFT conc vs distance ----\n\n")
+adonis2(
+  select(cmtx_w, chloro:pras) ~ labels,
+  data   = select(cmtx_w, labels),
+  method = "bray"
+)
+
+cat("\n-----------------------\n\n---- PFT conc vs distance + season ----\n\n")
+adonis2(
+  select(cmtx_w, chloro:pras) ~ labels + season,
+  data   = select(cmtx_w, labels, season),
+  method = "bray"
+)
+
+cat("\n-----------------------\n\n---- Pairwise Test ----\n\n")
+# pairwise test
+permanova_r <-
+  combn(szn, 2) %>%
+  t() %>%
+  as_tibble() %>%
+  set_colnames(c("szn1", "szn2")) %>%
+  unite(col = "season_pairs", szn1, szn2, sep = "|") %>%
+  mutate(
+    pairwise_p =
+      map(
+        .x = season_pairs,
+        .f =
+          \(.x) {
+             
+           cat("------\n\n", .x, "\n\n") 
+            
+          szn_adonis2(
+            .data    = select(.env$cmtx_w, season, chloro:pras),
+            pairs    = .x,
+            pair_col = season,
+            formula  = "season",
+            strata   = NULL
+            # strata   = "station"
+          ) %T>% 
+              print()
+          }
+      ),
+  ) %>%
+  unnest_wider(pairwise_p) %>%
+    
+  # ---- correct p-values
+  mutate(
+    p_adjust = p.adjust(pairwise_p, method = "bonferroni"),
+    .before = results
+  ) %T>% print()
+
+
+unnest(permanova_r, results)
+permanova_r$results
+
+
+```
+
+
+
+# 5.0 *WIP*: Mann-Kendall Test
+
+Probably won't use this 
+
+Null hypothesis is that the data come from a population with independent 
+realizations and are identically distributed
+
+```{r}
+trend::mk.test()
+
+
+cmtx_l %>%
+  filter(phyto == "chloro") %>%
+  arrange(date_time_utc) %$%
+  trend::mk.test(conc) 
+
+```
+
+# ---- 6.0 *WIP* MANOVA ----
+
+Doesn't really work
+
+
+```{r}
+# # ---- CHEMTAX Season-Year Labels ---- #
+# extra_fct <- 
+#   c(
+#     "Summer 2016 (No Data)",
+#     "Winter 2016-2017 (No Data)", 
+#     "Spring 2020 (No Data)"
+#   )
+# 
+# add_season_year <-
+#   . %>%
+#   arrange(date_time_utc) %>%
+#   mutate(
+#     .after = season,
+#     season_year = case_when(
+#       str_detect(season, "Aut|Spr|Sum") ~ glue("{season} {year}"),
+#       str_detect(month, "Jan|Feb")      ~ glue("{season} {year-1}-{year}"),
+#       str_detect(month, "Dec")          ~ glue("{season} {year}-{year+1}")),
+#     
+#     season_year = fct_inorder(season_year),
+#     season_year = fct_expand(season_year, extra_fct),
+#     season_year = fct_relevel(season_year, extra_fct[1], after = 1),
+#     season_year = fct_relevel(season_year, extra_fct[2], after = 3),
+#     season_year = fct_relevel(season_year, extra_fct[3], after = 16)
+#   ) 
+
+```
+
+
+```{r dunn-season-year}
+# cmtx_dunn2 <-
+#   cmtx_l %>%
+#   add_season_year %>%
+#   group_by(phyto) %>%
+#   dunn_test(
+#     conc ~ season_year,
+#     p.adjust.method = "bonferroni",
+#     detailed = TRUE
+#   ) %>%
+#   mutate(
+#     p     = num(p, digits = 3),
+#     p.adj = num(p.adj, digits = 3),
+#   ) %>%
+#   nest(.by = phyto) %$%
+#   walk2(
+#     .x = phyto,
+#     .y = data,
+#     (\(x, y) mutate(y,
+#       phyto = x,
+#       .before = 1
+#     ) %>%
+#       filter(p < 0.1) %>%
+#       print())
+#   )
+```
+
+
+## 5.2 MANOVA Test
+
+
+```{r manova}
+# cmtx_man <- 
+#   cmtx_w %>%
+#   select(chloro:last_col()) %>%
+#   as.matrix() 
+# 
+# manova(cmtx_man ~ season, data = cmtx_w, season) %>%
+#     summary()
+# 
+# cmtx_w %>%
+#   mutate(season_year = str_c(season, year(date_time_utc), sep = " "),
+#          .before = 2) %>%
+#   manova(cmtx_man ~ season_year, data = .) %>%
+#   summary()
+```
+
