@@ -1,0 +1,182 @@
+---
+title: "Plot for Seasonal CHEMTAX Averages"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+NOTE: not very useful for analysis, but a good exploratory start
+
++ setup 
+  - load libraries and data
+
++ functions-line-box
+  - create function to plot line graphs
+
++ load-data
+  - load CHEMTAX data 
+  
+: line-plt
+  - create line plot for average concentration per PFT
+  
+  
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+  # additional
+  rlang, cli,
+  rstatix, readxl, ggtext, cowplot
+  )
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+    )
+
+source(here("scripts", "misc_functions.R"))
+
+# set colors
+# alternate color palette
+# tol_muted <- 
+# c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
+#   '#CC6677', '#882255', '#AA4499')
+
+tol_muted <- khroma::color("muted", names = FALSE)(9)
+
+```
+
+## 2.2 Line and Box Plot Plotting Functions 
+
+Default Line Plot and Box Plots
+
+```{r functions-line-box}
+# ---- line plot ---- #
+#' Line Plot
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .dat DESCRIPTION.
+#' @param .var DESCRIPTION.
+#' @param .title DESCRIPTION.
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+line_plt <- function(.dat, .var, .title) {
+    
+    # set limits
+    ylims <- c(0, max(.dat[[.var]]) * 1.05)
+    brake <- pretty(ylims, 5)
+    
+    # plot
+    .dat %>%
+    ggplot(aes(x = season, y = .data[[.var]])) +
+    geom_point(size = 2) +
+    geom_line(group = 1, 
+              linewidth  = 1) +
+    
+    # labels
+    labs(
+     title = glue("Average Concentration per Season of {.title}"),
+     x     = "Season",
+     y     = "Concentration of Chlorophyll-a (mg m<sup>-3</sup>)"
+     ) +
+     
+    # scale setup   
+    scale_y_continuous(
+      breaks = brake,
+      limits = ylims,
+      expand = expansion(mult = 0)
+      ) +
+    
+    # theme setup   
+    theme_bw(base_family = "serif") +
+    theme(
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      plot.title         = element_text(size = 15),
+      axis.ticks.length  = unit(-0.05, "in"),
+      axis.text.y        = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.title.y       = element_markdown(size = 10),
+      axis.text.x        = element_text(margin = unit(c(0.3,0.3,0.3,0.3), "cm")),
+      axis.ticks.x       = element_blank(),
+      legend.background  = element_rect(color = "black", fill = "white")
+    )
+}
+```
+
+
+# 3.0 ---- Load Dataset ----
+
+```{r load-data}
+# ---- set location to save data and plots ---- #
+dir_data_save <- here("data", "processed", "04_2_cmtx_seasonal_avg")
+dir_plt_save  <- here("data", "plots", "04_2_cmtx_seasonal_avg")
+
+dir_create(here(dir_plt_save))
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE)  %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_all <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_avg_seasonal.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+```
+
+
+
+
+# 4.0 ---- Line Plot: Average Seasonal PFT vs Season ----
+
+Not super useful
+
+Average PFT in concentration of total chlorophyll-a (mg m^-3)
+
+```{r line-plt}
+cmtx_all %>%
+  select(-rms) %>%
+  pivot_longer(
+    cols      = -c(1:2),
+    names_to  = "phyto",
+    values_to = "avg_conc"
+  ) %>%
+  group_by(phyto) %>%
+  nest() %>%
+  # merge PFT shortname with longname
+  left_join(phyto_name, by = c("phyto" = "shrt")) %$%
+    
+  # plot average concentration per season
+  walk2(
+    data, 
+    names, 
+    ~ line_plt(
+      .dat = .x,
+      .var = "avg_conc",
+      .title = .y
+    ) %>%
+      print()
+  )
+
+```
