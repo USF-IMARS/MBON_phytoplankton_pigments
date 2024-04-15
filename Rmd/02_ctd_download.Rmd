@@ -84,6 +84,7 @@ NOTE: some cruise IDs were modified because there is some slight difference in
 ```{r query-erddap-cruise-id}
 # folder path to save downloaded and average CTD data
 dir_data_dwnld_save <- here("data", "raw", "ctd")       # download path
+dir_data_dwnld_save <- here("D:/", "MBON_phytoplankton_pigments", "data", "raw", "ctd")       # download path
 dir_data_avg_save   <- here("data", "processed", "ctd") # averaged path
 
 dir_create(dir_data_avg_save)
@@ -115,7 +116,7 @@ all_cruise_info <-
   )
 
 all_cruise_ids <-
-  str_extract(all_cruise_info$info$title, "(WS|SAV|WB|H)\\d{3,5}") %>%
+  str_extract(all_cruise_info$info$title, "(WS|SAV|WB|H|HG)\\d{3,5}") %>%
   unique()
 
 
