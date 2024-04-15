@@ -1,0 +1,1419 @@
+---
+title: "Pigment Analysis"
+author: "Sebastian Di Geronimo"
+date: "2024-01-29"
+format: html
+editor: source
+fig_width: 5 
+fig_height: 5 
+---
+
+# 1.0 ---- Summary of Document ----
+
++ setup 
+  - load libraries and data
+
++ load-data
+  - load data to be used in this script
+
+: concentration-vs-time 
+  - one pigment through time for each region, colored by season
+
+: scatter-plot-pigment-tchlor-a 
+  - scatter plot of pigment x to Tchlor-a per region
+  
+: hist-viol 
+  - function to make plots for histogram or violin
+  - hist and viol plots for all pigments and regions
+  
+: chla-boxplot
+  - boxplot for each region of chlor-a for each season
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    ggthemes, ggtext,
+    ggstatsplot
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+source(here("scripts", "misc_functions.R"))
+
+# set size options of figures
+# knitr::opts_chunk$set(fig.width = 19, fig.height = 9.7)
+
+# set ggplot theme
+theme_set(theme_calc(base_size = 12, base_family = "serif"))
+```
+
+## 2.2 Load Dataset
+
+Merged pigment data is created in `01_load_data.Rmd`
+- "combined_pig_dat.csv"
+- includes: 
+  - metadata 
+  - pigment concentrations
+  - size class calculations
+
+```{r load-data}
+# run snippet after saving file
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "03_1_pigment")
+dir_plt_save  <- here("data", "plots", "03_1_pigment")
+
+
+# set season names and order
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# load data
+pig_dat <-
+  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  mutate(season = fct(season, levels = szn)) %T>%
+  print()
+```
+
+# 3.0 ---- Plotting ----
+
+## 3.1 Scatter: Concentration of Chlorophyll-a vs Time
+
+Chlorophyll-a plotted as a time series separated by region
+
+```{r concentration-vs-time, fig.height=15, fig.asp=0.5}
+# ---- over all water bodies ---- # 
+pig_dat %>%
+  ggplot(
+    aes(
+      x = date_time_utc,
+      y = tot_chl_a,
+      color = season,
+      shape = name_of_water_body
+    )
+  ) +
+  geom_point(size = 2) +
+  labs(
+    x = "Year",
+    y = "Concentration (mg m<sup>-3</sup>)",
+    color = "Season",
+    shape = "Region"
+  ) +
+  scale_y_continuous(expand = c(0, 0), na.value = 0) +
+  scale_x_datetime(
+    date_breaks = "3 month",
+    date_labels = "%B\n%Y"
+  ) +
+  facet_wrap(~name_of_water_body,
+    nrow = 3,
+    scales = "free_y"
+  ) +
+  theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+
+# ---- Florida Keys ---- #
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    # str_detect(name_of_water_body, "Keys")
+    
+    ) %>%
+  ggplot(
+    aes(
+      x = date_time_utc,
+      y = tot_chl_a,
+      color = season,
+      shape = station
+    )
+  ) +
+  geom_point(size = 2) +
+  labs(
+    x = "Year",
+    y = "Concentration (mg m<sup>-3</sup>)",
+    color = "Season"
+  ) +
+  scale_y_continuous(expand = c(0, 0), na.value = 0) +
+  scale_x_datetime(
+    date_breaks = "1 year",
+    date_labels = "%Y"
+  ) +
+  facet_wrap(~name_of_water_body,
+    nrow = 3,
+    scales = "free_y"
+  ) +
+  theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+
+# ---- Florida Keys Stations ---- # 
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  ggplot(
+    aes(
+      x = date_time_utc,
+      y = tot_chl_a,
+      color = season
+    )
+  ) +
+  geom_point(size = 2) +
+  labs(
+    x = "Year",
+    y = "Concentration (mg m<sup>-3</sup>)",
+    color = "Season"
+  ) +
+  scale_y_continuous(
+      expand = c(0, 0), 
+      na.value = 0, 
+      breaks = c(seq(0, 1, 0.1), 1:4)
+      ) +
+  scale_x_datetime(
+    date_breaks = "1 year",
+    date_labels = "%Y"
+  ) +
+  facet_wrap(station ~ .,
+    nrow = 3,
+    scales = "free_y"
+  ) +
+  theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15))) +
+  ylim(c(0, NA))
+
+# ---- Florida Keys Box/Violin ---- #
+pig_dat %>%
+  filter(str_detect(name_of_water_body, "Keys")) %>%
+  ggplot(
+    aes(
+      x = season,
+      y = tot_chl_a,
+      fill = season
+      
+    )
+  ) +
+  geom_boxplot(outliers = FALSE) +
+  geom_violin(fill = NA) +
+  geom_jitter(shape = 21, width = 0.2) +
+  scale_y_continuous(breaks = c(seq(0, 1, 0.1), 1:4))
+```
+
+## 3.2 Scatter: Pigment Concentration vs Total Chlorophyll-a 
+
+All pigments vs chlor-a by season and region
+
+```{r scatter-plot-pigment-tchlor-a, fig.height=7, fig.width=10}
+plt_pigment_vs_chlor <-
+  pig_dat %>%
+  pivot_longer(
+    data      = .,
+    cols      = c(tot_chl_b:tchl),
+    names_to  = "pigment",
+    values_to = "conc",
+  ) %>%
+  nest(.by = pigment) %>%
+  mutate(
+    plt_chla = map2(
+      .x = pigment,
+      .y = data,
+      \(.x, .df) {
+        ggplot(
+          .df,
+          aes(
+            x = tot_chl_a,
+            y = conc,
+            fill = name_of_water_body,
+            shape = name_of_water_body
+          )
+        ) +
+          geom_abline(slope = 1) +
+          geom_point(alpha = 0.50) +
+          labs(
+            title = str_replace_all(.x, "_", " "),
+            x = "Total Chlorophyll-a",
+            y = "Pigment Concentration",
+            fill = "Region",
+            shape = "Region"
+          ) +
+          scale_y_continuous(expand = c(0, 0), na.value = 0) +
+          scale_x_continuous(expand = c(0, 0)) +
+          scale_shape_manual(values = c(21, 22, 24)) +
+          coord_cartesian(ylim = c(0, NA)) +
+          facet_wrap(name_of_water_body ~ season, scales = "free") +
+          theme_bw(base_family = "serif", base_size = 12)
+      }
+    ),
+    plt_time = map2(
+      .x = pigment,
+      .y = data,
+      \(.x, .df) {
+        ggplot(
+          .df,
+          aes(
+            x     = date_time_utc,
+            y     = conc,
+            color = season,
+            shape = name_of_water_body
+          )
+        ) +
+          geom_point(size = 2) +
+          labs(
+            title = str_replace_all(.x, "_", " "),
+            x     = "Year",
+            y     = "Concentration (mg m<sup>-3</sup>)",
+            color = "Season",
+            shape = "Region"
+          ) +
+          scale_y_continuous(expand = c(0, 0), na.value = 0) +
+          scale_x_datetime(
+            date_breaks = "6 month",
+            date_labels = "%B\n%Y",
+            limits = c(as_datetime("2015-11-01"), NA)
+          ) +
+          facet_wrap(
+            ~name_of_water_body,
+            nrow = 3,
+            scales = "free_y"
+          ) +
+        theme_bw(base_family = "serif", base_size = 12) +
+        theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+      }
+    ),
+    plt_tod = map2(
+      .x = pigment,
+      .y = data,
+      \(.x, .df) {
+        ggplot(
+          .df,
+          aes(
+            x     = date_time_utc,
+            y     = conc,
+            color = season,
+            shape = name_of_water_body
+          )
+        ) +
+          geom_point(size = 2) +
+          labs(
+            title = str_replace_all(.x, "_", " "),
+            x     = "Year",
+            y     = "Concentration (mg m<sup>-3</sup>)",
+            color = "Season",
+            shape = "Region"
+          ) +
+          scale_y_continuous(expand = c(0, 0), na.value = 0) +
+          # scale_x_datetime(
+          #   date_breaks = "6 month",
+          #   date_labels = "%B\n%Y",
+          #   limits = c(as_datetime("2015-11-01"), NA)
+          # ) +
+          facet_wrap(
+            ~name_of_water_body,
+            nrow = 3,
+            scales = "free_y"
+          ) +
+        theme_bw(base_family = "serif", base_size = 12) +
+        theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+      }
+    )
+  )
+
+plt_pigment_vs_chlor$plt_time
+plt_pigment_vs_chlor$plt_chla[[1]]
+
+# ---- save plot
+# save
+plt_pigment_vs_chlor %$%
+  walk2(
+    pigment,
+    plt_chla,
+    \(.x, .y) {
+      save_gg(
+        plt            = .y, 
+        save_location  = here(dir_plt_save, "pigment_vs_chlor"),
+        save_name      = glue("{.x}_vs_chla"),
+        verbose        = TRUE,
+        time_stamp_fmt = NULL,
+        device         = "jpeg",
+        height         = 9.7,
+        width          = 19,
+        dpi            = 600,
+        units          = "in",
+        bg             = "white"
+      )
+    }
+  )
+
+# save
+plt_pigment_vs_chlor %$%
+  walk2(
+    pigment,
+    plt_time,
+    \(.x, .y) {
+      save_gg(
+        plt            = .y,
+        save_location  = here(dir_plt_save, "pigment_vs_time"),
+        save_name      = glue("{.x}_time"),
+        verbose        = TRUE,
+        time_stamp_fmt = NULL,
+        device         = "jpeg",
+        height         = 9.7,
+        width          = 19,
+        dpi            = 600,
+        units          = "in",
+        bg             = "white"
+      )
+    }
+  )
+
+
+```
+
+
+
+## 3.3 Plot: Pigments vs Time of Day
+
+
+
+```{r time-of-day}
+ pig_dat %>%
+  pivot_longer(
+    data      = .,
+    cols      = c(tot_chl_b:tchl),
+    names_to  = "pigment",
+    values_to = "conc",
+  ) %>%
+  nest(.by = pigment) %>%
+  # slice(1) %>%
+  mutate(
+    plt_tod = map2(
+      .x = pigment,
+      .y = data,
+      \(.x, .df) {
+        
+        .df %>%
+        filter(str_detect(name_of_water_body, "Florida Keys"))  %>%
+        ggplot(
+          
+          aes(
+            x     = time,
+            y     = conc,
+            color = as.factor(year),
+            # shape = name_of_water_body
+          )
+        ) +
+          geom_point(size = 2) +
+          labs(
+            title = str_replace_all(.x, "_", " "),
+            x     = "Time of Day",
+            y     = "Concentration (mg m<sup>-3</sup>)",
+            color = "Season",
+            shape = "Region"
+          ) +
+          scale_y_continuous(expand = c(0, 0), na.value = 0) +
+          # scale_x_time(breaks = "1 hour") + 
+          # scale_x_datetime(
+          #   date_breaks = "6 month",
+          #   date_labels = "%B\n%Y",
+          #   limits = c(as_datetime("2015-11-01"), NA)
+          # ) +
+          facet_wrap(
+            ~season,
+            # nrow = 3,
+            scales = "free_y"
+          ) +
+        theme_bw(base_family = "serif", base_size = 12) +
+        theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+      }
+    ),
+    plt_tod_stn = map2(
+      .x = pigment,
+      .y = data,
+      \(.x, .df) {
+        
+        .df %>%
+        filter(str_detect(name_of_water_body, "Florida Keys"))  %>%
+        ggplot(
+          
+          aes(
+            x     = time,
+            y     = conc,
+            color = as.factor(year),
+            # shape = name_of_water_body
+          )
+        ) +
+          geom_point(size = 2) +
+          labs(
+            title = str_replace_all(.x, "_", " "),
+            x     = "Time of Day",
+            y     = "Concentration (mg m<sup>-3</sup>)",
+            color = "Season",
+            shape = "Region"
+          ) +
+          scale_y_continuous(expand = c(0, 0), na.value = 0) +
+          # scale_x_time(breaks = "1 hour") + 
+          # scale_x_datetime(
+          #   date_breaks = "6 month",
+          #   date_labels = "%B\n%Y",
+          #   limits = c(as_datetime("2015-11-01"), NA)
+          # ) +
+          facet_wrap(
+            ~station,
+            # nrow = 3,
+            # scales = "free_y"
+          ) +
+        theme_bw(base_family = "serif", base_size = 12) +
+        theme(axis.title.y = element_markdown(margin = margin(r = 30, l = 15)))
+      }
+    )
+  ) %>%
+  pull(plt_tod_stn)
+```
+
+
+## 3.4 Histogram and Violin: Each Pigment
+
+Plot all pigments for each season as histogram and violin (density) plots.
+
+The histograms are separated by year, season and region. 
+The violin plots are separated by season and region
+
+```{r hist-viol, fig.height=9.7, fig.width=30}
+plt_pig_hist_viola <-
+  pig_dat %>%
+  pivot_longer(
+    cols      = tot_chl_a:tchl_a_tpg,
+    names_to  = "pigment",
+    values_to = "conc"
+  ) %>%
+  select(season, pigment, conc, name_of_water_body, year) %>%
+  nest(.by = pigment) %>%
+  mutate(
+    hist = map2(
+      .x = data,
+      .y = pigment,
+      ~ .x %>%
+        ggplot(aes(conc,
+          fill = season
+        )) +
+        geom_histogram(
+          position = "stack",
+          bins = 40,
+          na.rm = TRUE
+        ) +
+        labs(
+          title = .y,
+          x     = "Log<sub>\u0065</sub>([Pigment] + 1)",
+          y     = "Frequency",
+          fill  = "Season"
+        ) +
+        scale_x_continuous(
+          trans = log1p_trans(),
+          expand = c(0, 0)
+        ) +
+        scale_y_continuous(expand = c(0, 0)) +
+        coord_cartesian(xlim = c(0, NA)) +
+        facet_grid(
+          name_of_water_body ~ as.character(year) + season,
+          scales = "free_x"
+        ) +
+        theme(
+          axis.title.x =
+            element_markdown(margin = margin(t = 20, b = 5))
+        )
+    ),
+    viol = map2(
+      .x = data,
+      .y = pigment,
+      ~ .x %>%
+        ggplot(aes(x = season, y = conc, color = season)) +
+        geom_violin(
+          trim = TRUE,
+          na.rm = TRUE
+        ) +
+        geom_jitter(
+          width = 0.1,
+          size = 0.5,
+          alpha = 0.5,
+          color = "gray",
+          na.rm = TRUE
+        ) +
+        labs(
+          title = .y,
+          y     = "Concentration",
+          x     = "Season"
+        ) +
+        scale_y_continuous(expand = c(0, 0)) +
+        coord_cartesian(ylim = c(0, NA)) +
+        facet_wrap(~ name_of_water_body) +
+        theme(legend.position = "none")
+    )
+  )
+
+# show subset of plots
+plt_pig_hist_viola %>%
+    slice_sample(n = 5) %T>%
+    walk(.x = .$hist,
+         .f = ~ print(.x))  %>% 
+    walk(.x = .$viol,
+         .f = ~ print(.x)) 
+```
+
+
+# 4.0 ANOVA: Chlorophyll-a 
+
+
+```{r plt-anova}
+# shelf(ggstatsplot)
+
+n_fun <- function(x){
+  return(data.frame(y = 0.95*30,
+                    label = length(x)))
+}
+
+pig_dat_keys <- 
+  pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    & !str_detect(station, "24|3|7|9.5|9B")) %>%
+  mutate(
+    labels = 
+      if_else(
+        str_detect(station, "10|16|7"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) 
+
+
+# between stations
+ggbetweenstats(
+  data  = pig_dat_keys,
+  x     = station,
+  y     = tot_chl_a,
+  title = "Station",
+  xlab  = "Station",
+  ylab  = "Concentration",
+  type  = "nonparametric"
+) %>%
+  print()
+
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ station
+  ) %>%
+  summary()
+
+# between season
+ggbetweenstats(
+  data  = pig_dat_keys,
+  x     = season,
+  y     = tot_chl_a,
+  title = "Season",
+  xlab  = "Season",
+  ylab  = "Concentration",
+  type  = "nonparametric"
+) %>%
+  print()
+
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ season
+  ) %>%
+  summary()
+
+
+
+# between year
+ggbetweenstats(
+  data  = pig_dat_keys,
+  x     = year,
+  y     = tot_chl_a,
+  title = "Year",
+  xlab  = "Year",
+  ylab  = "Concentration",
+  type  = "parametric"
+) %>%
+  print()
+
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ year
+  ) %>%
+  summary()
+
+
+
+# between near/off
+pig_dat_keys %>%
+  filter(
+    str_detect(station, "10|12|16|18")
+    & tot_chl_a < 1.5
+    ) %>%
+ggbetweenstats(
+  data  = ,
+  x     = labels,
+  y     = tot_chl_a,
+  title = "Distance",
+  xlab  = "Distance",
+  ylab  = "Concentration",
+  type  = "nonparametric"
+) %>%
+  print()
+
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ labels
+  ) %>%
+  summary()
+
+
+pig_dat_keys %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+rstatix::dunn_test(
+    .,
+    tot_chl_a ~ labels
+)
+
+pig_dat_keys %>%
+  filter(
+    str_detect(station, "10|12|16|18")
+    & tot_chl_a < 2 
+    ) %>%
+rstatix::kruskal_test(
+    .,
+    tot_chl_a ~ station
+)
+
+pig_dat_keys %>%
+  filter(
+    str_detect(station, "10|12|16|18")
+    # & tot_chl_a < 2 
+    ) %>%
+  select(season, labels, station, tot_chl_a) %>%
+  group_by(labels) %>%
+  rstatix::get_summary_stats(probs = c(0.05, 0.25, 0.5, 0.75, 0.95), type = "quantile")
+
+# ---- interactions ---- #
+# season and year
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ year * season
+  ) %>%
+  summary()
+
+# season and station
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ station * season
+  ) %>%
+  summary()
+
+# season, station and year
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ station * season * year
+  ) %>%
+  summary()
+
+
+
+```
+```{r random-values}
+pig_dat_keys %>%
+  summarise(
+    .by    = year,
+    mean   = mean(tot_chl_a),
+    median = median(tot_chl_a),
+    sd     = sd(tot_chl_a, na.rm = TRUE)
+  ) %>%
+  arrange(median)
+
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    & str_detect(station, "24|3|7|9.5|9B")) %>%
+  count(station)
+```
+
+# 5.0 Boxplot: Total Chlorophyll-a vs Season
+
+Box plots per region and season for chlor-a
+
+
+## 5.1 Create Boxplots 
+
+Removed `geom_jitter` in place of `ggforce::geom_sina` because plots a jitter
+axis as a density plot
+
+geom_jitter(
+  shape = 21,
+  color = "black",
+  fill  = "black",
+  width = 0.1, 
+  size  = 0.1, 
+  alpha = 1, 
+  na.rm = TRUE
+  ) +
+
+```{r chla-boxplot, fig.width=3.54, fig.height=1.99}
+chl_a_box <-
+  pig_dat %>%
+  filter(!str_detect(station, "^24$")  
+         & depth < 6) %>%
+  nest(.by = name_of_water_body) %>%
+  mutate(
+    plt = map2(
+      .x = data,
+      .y = name_of_water_body,
+      function(.x, .y) {
+        
+        if (str_detect(.y, "Florida Keys")) {
+          ylims <- c(0, 0.8)
+        }  else {
+          ylims <- c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE) + 0.5) 
+        }
+        
+        # labels for x axis with number of samples
+        szn_labels <- 
+          .x %>%
+          count(season) %>%
+          mutate(labels = glue("{season} (N = {n})"))
+        
+        .x %>%
+          ggplot(
+            aes(
+              x = season,
+              y = tot_chl_a
+            )
+          ) +
+          geom_boxplot(
+            aes(fill = season),
+            outlier.shape = NA, 
+            linewidth     = 0.2,
+            color = "black",
+            na.rm = TRUE, 
+            alpha = 1,
+            ) +
+          ggforce::geom_sina(
+            data = ~ filter(.x, tot_chl_a < ylims[2]),
+            shape = 16,
+            color = "grey70",
+            size  = 0.55,
+            alpha = 0.5,
+            na.rm = TRUE,
+            seed  = 1234
+          ) + 
+            
+          geom_point(
+              data = ~ filter(.x, tot_chl_a > ylims[2])  %>%
+                       mutate(tot_chl_a = ylims[2] - 0.005 + 0.05),
+              color = "orange",
+              size = 0.25
+          ) +
+          stat_summary(
+            color = "#CC0000",
+            fun   = mean,
+            geom  = "point",
+            shape = 20,
+            size  = 2,
+            na.rm = TRUE
+          ) +
+          labs(
+            title = NULL,
+            x     = NULL,
+            y     = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)"
+          ) +
+            
+          guides(fill = "none") +
+          scale_x_discrete(labels = szn_labels$labels) +
+          scale_y_continuous(
+            breaks = scales::breaks_pretty(n = 4),
+            expand = expansion(add = c(0, 0.05)), 
+            # limits = ylims,
+            # oob = scales::squish
+            # oob = scales::oob_keep
+            ) +
+          scale_fill_manual(
+              values =  c("#88CCEE", "#44AA99", "#DDCC77","#CC6677")
+              ) +
+          # coord_cartesian(y = ylims, clip = "off") +
+          coord_cartesian(y = ylims, clip = "off") +
+          theme(
+            text            = element_text(size = 6),
+            line            = element_line(color = "black", linewidth = 0.2),
+            rect            = element_rect(color = "black", linewidth = 0.2),
+            axis.title.y    = element_markdown(),
+            axis.title.x    = element_markdown(),
+            axis.text.x     = element_text(color = "black"),
+            axis.text.y     = element_text(color = "black"),
+            axis.ticks.x    = element_blank(),
+            plot.background = element_rect(color = "white"),
+            panel.border    = element_rect(color = "black")
+          )
+      }
+    )
+  )
+
+chl_a_box %$% 
+map2(
+  .x = plt,
+  .y = name_of_water_body,
+  \(.x, .y) {
+    .x +
+    labs(title = .y)
+    
+    }
+)
+
+pig_dat %>%
+  filter(!str_detect(station, "^24$")  
+         & depth < 6) %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")  
+    & tot_chl_a > 0.8
+  ) %>%
+  select(season, tot_chl_a) %>%
+  arrange(season)
+
+```
+## 5.2 Save: Chlorophyll-a Plots
+
+```{r save-chla-boxplot}
+chl_a_box %$%
+  walk2(
+    .x = name_of_water_body,
+    .y = plt,
+    # overwrite = FALSE,
+    overwrite = TRUE,
+    titles = "without", # "with", "both"
+    \(.x, .y, overwrite, titles) {
+      naming <-
+        str_to_lower(.x) %>%
+        str_replace_all("\\s", "_")
+
+      # save with a title
+      if (str_detect(titles, "with$|both")) {
+        save_gg(
+          .y +
+          labs(title = .x),
+          save_location  = here(dir_plt_save, "chla_box"),
+          save_name      = glue(naming, "chla_title", .sep = "_"),
+          verbose        = TRUE,
+          overwrite      = overwrite,
+          time_stamp_fmt = "%Y%m%d_%H%M%S",
+          device         = "png",
+          width          = 90,
+          height         = 90 * 0.5625,
+          dpi            = 600,
+          units          = "mm",
+          bg             = "white"
+        )
+      }
+      # save without a title
+      if (str_detect(titles, "without|both")) {
+        save_gg(
+          .y,
+          save_location  = here(dir_plt_save, "chla_box"),
+          save_name      = glue(naming, "chla", .sep = "_"),
+          verbose        = TRUE,
+          overwrite      = overwrite,
+          time_stamp_fmt = "%Y%m%d_%H%M%S",
+          device         = "png",
+          width          = 90,
+          height         = 90 * 0.5625,
+          dpi            = 600,
+          units          = "mm",
+          bg             = "white"
+        )
+      }
+    }
+  )
+
+```
+
+
+## 5.3 Boxplot: Nearshore vs Offshore Total Chlorophyll-a
+
+Figure 3
+
+```{r chla-nearoff}
+chl_a_box <-
+  pig_dat %>%
+  filter(str_detect(station, "10|12|16|18")  
+         & depth < 6
+         & str_detect(name_of_water_body, "Keys")) %>%
+  mutate(
+    nearoff = 
+      if_else(
+        str_detect(station, "10|16"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) %>%
+  nest(.by = name_of_water_body) %>%
+  mutate(
+    plt = map2(
+      .x = data,
+      .y = name_of_water_body,
+      function(.x, .y) {
+        
+        # ylims <- c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE) + 0.5)
+        ylims <- c(0, 0.8)
+
+        # labels for x axis with number of samples
+        szn_labels <- 
+          .x %>%
+          count(season) %>%
+          mutate(labels = glue("{season} (N = {n})"))
+        
+        .x %>%
+          ggplot(
+            aes(
+              x = season,
+              y = tot_chl_a,
+              fill = nearoff
+            )
+          ) +
+          geom_boxplot(
+            aes(fill = nearoff),
+            outlier.shape = NA, 
+            linewidth     = 0.2,
+            color = "black",
+            na.rm = TRUE, 
+            alpha = 1,
+            key_glyph = draw_key_rect
+            ) +
+          geom_point(
+            data  = tibble(
+              season    = c("Winter", "Winter"), 
+              tot_chl_a = c(0.79, NA), 
+              nearoff   = c("Nearshore", "Offshore")
+              ),
+            color = "#CC0000",
+            size  = 2,
+            position = position_dodge2(0.75, preserve = "single"),
+            show.legend = FALSE,
+            na.rm = TRUE
+          ) +
+          stat_summary(
+            color = "#CC0000",
+            fun   = mean,
+            geom  = "point",
+            shape = 20,
+            size  = 2,
+            na.rm = TRUE,
+            show.legend = FALSE,
+            position = position_dodge2(0.75, preserve = "single"),
+          ) +
+          labs(
+            title = NULL,
+            x     = NULL,
+            y     = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+            fill  = NULL
+          ) +
+            
+          # guides(fill = "none") +
+          scale_x_discrete(labels = szn_labels$labels) +
+          scale_y_continuous(
+            breaks = scales::breaks_pretty(n = 4),
+            expand = expansion(add = c(0, 0.009)), 
+            # limits = c(0, 1.5),
+            # oob = scales::squish
+            ) +
+          scale_fill_manual(values =  c("#88CCEE", "#882255")) +
+          # coord_cartesian(y = c(0, 1.5), clip = "off") +
+          coord_cartesian(y = ylims, clip = "off") +
+
+          theme(
+            text            = element_text(size = 6),
+            line            = element_line(color = "black", linewidth = 0.2),
+            rect            = element_rect(color = "black", linewidth = 0.2),
+            axis.title.y    = element_markdown(),
+            axis.title.x    = element_markdown(),
+            axis.text.x     = element_text(color = "black"),
+            axis.text.y     = element_text(color = "black"),
+            axis.ticks.x    = element_blank(),
+            plot.background = element_rect(color = "white"),
+            panel.border    = element_rect(color = "black"),
+            legend.position = c(0.9, 0.9),
+            legend.text = element_text(size = 5),
+            legend.key.size = unit(2.5, "mm"),
+            legend.margin = margin(0.5, 0.5, 0.5, 0.5),
+            legend.background = element_rect(color = "black")
+          )
+      }
+    )
+  )
+
+chl_a_box$plt[[1]]
+
+# average total chlorophyll-a for each season and distance from shore
+pig_dat %>%
+  filter(str_detect(station, "10|12|16|18")  
+         & depth < 6
+         & str_detect(name_of_water_body, "Keys")) %>%
+  mutate(
+    nearoff = 
+      if_else(
+        str_detect(station, "10|16"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) %>%
+  summarise(
+    .by = c(season, nearoff),
+    average = mean(tot_chl_a)
+  ) %>%
+  arrange(season, nearoff)
+
+# ---- save plot
+save_gg(
+  plt            = chl_a_box$plt[[1]], # edit if want specific plot
+  save_location  = here(dir_plt_save, "chla_nearoff_box"),
+  save_name      = "chla_nearoff",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  # overwrite      = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 90,
+  height         = 90 * 0.5625,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+  )
+```
+
+
+## 5.4 TEST Boxplot: Season and Year
+
+Issues not being able to set the colors in seasons
+
+```{r chla-year-season}
+# shelf(camcorder)
+# camcorder::gg_record(
+#     dir    = here::here("data", "cam_test", "chla_box_season_year"),
+#     device = "png",
+#     width  = 90,
+#     height = 90 * 0.5625,
+#     dpi    = 600,
+#     units  = "mm"
+# )
+
+# shell.exec(here::here("data", "cam_test", "chla_box_season_year"))
+# gg_stop_recording()
+
+
+
+chl_a_box2 <- 
+  pig_dat %>%
+  filter(!str_detect(station, "^24$")
+         & depth < 6
+         ) %>%
+  mutate(year_fct = fct_reorder(as.character(year), year, min)) %>%
+
+  nest(.by = name_of_water_body) %>%
+  mutate(
+    plt = map2(
+      .x = data,
+      .y = name_of_water_body,
+      function(.x, .y) {
+        
+        ylims <- c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE) + 0.5)
+        
+        
+        # labels for x axis with number of samples
+        szn_labels <- 
+          .x %>%
+          count(season) %>%
+          mutate(labels = glue("{season} (N = {n})"))
+        
+        .x %>%
+          ggplot(
+            aes(
+              fill = year_fct,
+              y = tot_chl_a,
+              x = season
+            )
+          ) +
+          geom_boxplot(
+            # aes(fill = season),
+            outlier.shape = NA, 
+            linewidth     = 0.2,
+            color = "black",
+            na.rm = TRUE, 
+            alpha = 1,
+            position = position_dodge2(preserve = "single", padding = 0.2)
+            ) +
+          stat_summary(
+              aes(group = year_fct, x = season, y = tot_chl_a),
+            # aes(x = season, fill = year_fct),
+            color = "#CC0000",
+            fun   = mean,
+            geom  = "point",
+            shape = 20,
+            size  = 1,
+            na.rm = TRUE,
+            position = position_dodge2(0.75, preserve = "single"),
+            inherit.aes = FALSE
+          ) +
+          stat_summary(
+            aes(group = year_fct, x = season, y = tot_chl_a),
+            color = "black",
+            fun.data = n_fun,
+            geom  = "text",
+            # shape = 20,
+            size  = 1.5,
+            na.rm = TRUE,
+            position = position_dodge2(0.75, preserve = "single"),
+            inherit.aes = FALSE, 
+            hjust = 0.5,
+            vjust = 1
+          ) +
+          labs(
+            title = NULL,
+            x     = NULL,
+            y     = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+            fill  = "Year",
+            color = "Year"
+          ) +
+            
+         guides(fill = guide_legend(direction = "horizontal", nrow = 1)) +
+          scale_y_continuous(
+            breaks = scales::breaks_pretty(n = 4),
+            expand = expansion(add = c(0, 0.009)), 
+            limits = ylims,
+            oob = scales::squish) +
+          scale_x_discrete(labels = szn_labels$labels, drop = FALSE) +
+          scale_fill_manual(
+              drop = FALSE,
+              values =  c("#88CCEE", "#44AA99", "#117733","#CC6677", "#DDCC77", "#FFAABB")
+              ) +
+          scale_color_manual(
+              drop = FALSE,
+              values =  c("#88CCEE", "#44AA99", "#117733","#CC6677", "#DDCC77", "#FFAABB")
+              ) +
+          coord_cartesian(y = ylims, clip = "off") +
+
+          theme(
+            text            = element_text(size = 6),
+            line            = element_line(color = "black", linewidth = 0.2),
+            rect            = element_rect(color = "black", linewidth = 0.2),
+            axis.title.y    = element_markdown(),
+            axis.title.x    = element_markdown(),
+            axis.text.x     = element_text(color = "black"),
+            axis.text.y     = element_text(color = "black"),
+            axis.ticks.x    = element_blank(),
+            plot.background = element_rect(color = "white"),
+            panel.border    = element_rect(color = "black"),
+            legend.position = "bottom",
+            legend.margin = margin(),
+            legend.box.margin = margin(t = -10)
+            # legend.direction = "horizontal",
+            # legend.box = "horizontal"
+          )
+      }
+    )
+  )
+
+chl_a_box2  %$% 
+map2(
+  .x = plt,
+  .y = name_of_water_body,
+  \(.x, .y) {
+    .x +
+    labs(title = .y)
+    
+    }
+)
+
+chl_a_box2 %>%
+    slice(2) %>%
+    pull(plt)
+
+```
+
+
+
+```{r chla-year-season}
+# shelf(camcorder)
+# camcorder::gg_record(
+#     dir    = here::here("data", "cam_test", "chla_box_season_year"),
+#     device = "png",
+#     width  = 90,
+#     height = 90 * 0.5625,
+#     dpi    = 600,
+#     units  = "mm"
+# )
+
+# shell.exec(here::here("data", "cam_test", "chla_box_season_year"))
+# gg_stop_recording()
+
+
+chl_a_box2 <- 
+  pig_dat %>%
+  filter(!str_detect(station, "^24$")) %>%
+  mutate(year_fct = fct_reorder(as.character(year), year, min)) %>%
+
+  nest(.by = name_of_water_body) %>%
+  mutate(
+    plt = map2(
+      .x = data,
+      .y = name_of_water_body,
+      function(.x, .y) {
+        
+        ylims <- c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE) + 0.5)
+        
+        # labels for x axis with number of samples
+        yr_labels <- 
+          .x %>%
+          count(year) %>%
+          mutate(labels = glue("{year} (N = {n})"))
+        
+        .x %>%
+          ggplot(
+            aes(
+              x = year_fct,
+              y = tot_chl_a,
+              fill = season
+            )
+          ) +
+          geom_boxplot(
+            # aes(fill = season),
+            outlier.shape = NA, 
+            linewidth     = 0.2,
+            color = "black",
+            na.rm = TRUE, 
+            alpha = 1,
+            position = position_dodge2(preserve = "single", padding = 0.2)
+            ) +
+          # ggforce::geom_sina(
+          #   aes(fill = year_fct, color = year_fct),
+          #   shape = 22,
+          #   # color = "black",
+          #   # fill  = "black",
+          #   # width = 0.1,
+          #   size  = 0.1,
+          #   alpha = 1,
+          #   na.rm = TRUE,
+          #   seed  = 1234,
+          #   # maxwidth = 0.2, 
+          #   scale = "width",
+          #   position = position_dodge2(preserve = "single")
+
+          # ) +
+          stat_summary(
+              aes(x = year_fct, group = season, y = tot_chl_a),
+            # aes(x = season, fill = year_fct),
+            color = "#CC0000",
+            fun   = mean,
+            geom  = "point",
+            shape = 20,
+            size  = 1.5,
+            na.rm = TRUE,
+            position = position_dodge2(0.75, preserve = "single"),
+            inherit.aes = FALSE
+          ) +
+          stat_summary(
+              aes(x = year_fct, group = season, y = tot_chl_a),
+            # aes(x = season, fill = year_fct),
+            color = "black",
+            fun.data = n_fun,
+            geom  = "text",
+            # shape = 20,
+            size  = 1.5,
+            na.rm = TRUE,
+            position = position_dodge2(0.75, preserve = "single"),
+            inherit.aes = FALSE, 
+            hjust = 0.5,
+            vjust = 1
+          ) +
+          labs(
+            title = NULL,
+            x     = NULL,
+            y     = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+            fill  = "Season",
+            color = "Season"
+          ) +
+            
+          guides(fill = guide_legend(direction = "horizontal", nrow = 1)) +
+          scale_x_discrete(labels = yr_labels$labels, drop = FALSE) +
+          scale_y_continuous(
+            breaks = scales::breaks_pretty(n = 4),
+            expand = expansion(add = c(0, 0.009)), 
+            limits = ylims,
+            oob = scales::squish) +
+          scale_fill_manual(
+              drop = FALSE,
+              values =  c("#88CCEE", "#44AA99", "#117733","#CC6677", "#DDCC77", "#FFAABB")
+              ) +
+          scale_color_manual(
+              drop = FALSE,
+              values =  c("#88CCEE", "#44AA99", "#117733","#CC6677", "#DDCC77", "#FFAABB")
+              ) +
+          coord_cartesian(y = ylims, clip = "off") +
+
+          theme(
+            text            = element_text(size = 6),
+            line            = element_line(color = "black", linewidth = 0.2),
+            rect            = element_rect(color = "black", linewidth = 0.2),
+            axis.title.y    = element_markdown(),
+            axis.title.x    = element_blank(),
+            axis.text.x     = element_text(color = "black"),
+            axis.text.y     = element_text(color = "black"),
+            axis.ticks.x    = element_blank(),
+            plot.background = element_rect(color = "white"),
+            panel.border    = element_rect(color = "black"),
+            legend.position = "bottom",
+            legend.margin = margin(),
+            legend.box.margin = margin(t = -10)
+            # legend.direction = "horizontal",
+            # legend.box = "horizontal"
+          )
+      }
+    )
+  )
+
+chl_a_box2 %>%
+    slice(2) %>%
+    pull(plt)
+
+
+chl_a_box2 %$% 
+map2(
+  .x = plt,
+  .y = name_of_water_body,
+  \(.x, .y) {
+    .x +
+    labs(title = .y)
+    
+    }
+)
+
+ pig_dat %>%
+  filter(!str_detect(station, "^24$")) %>%
+  mutate(year_fct = fct_reorder(as.character(year), year, min)) %>%
+          count(name_of_water_body, year) %>%
+          mutate(name_of_water_body, labels = glue("{year} (N = {n})"), .keep = "used")
+
+```
+
+
+
+
+
