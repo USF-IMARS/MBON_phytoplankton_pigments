@@ -1,0 +1,334 @@
+---
+title: "Time Series for Stations CHEMTAX"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+  # additional
+  rlang, cli,
+  rstatix, 
+  # readxl, 
+  ggtext, cowplot
+  )
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+    )
+
+source(here("scripts", "misc_functions.R"))
+
+# set colors
+# alternate color palette
+# tol_muted <- 
+# c('#88CCEE', '#44AA99', '#117733', '#332288', '#DDCC77', '#999933',
+#   '#CC6677', '#882255', '#AA4499')
+
+tol_muted <- khroma::color("muted", names = FALSE)(9)
+
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "04_7_time_series_stations")
+dir_plt_save  <- here("data", "plots", "04_7_time_series_stations")
+
+dir_create(here(dir_plt_save))
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    # station = str_replace(station, "9B", "9.5"),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% 
+  print()
+
+```
+
+```{r convert-long-format}
+# ---- convert to long format ---- #
+# i.e. one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # add percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# ---- convert to percent ---- #
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+
+```
+
+## 2.3 Combine PFT Sub Groups
+
+Groups to be combined have multiple types but are merged for ease of use
+- diatom:
+  - diatom 1 
+  - diatom 2
+- cyanobacteria:
+  - cyano 2
+  - cyano 4
+- haptophyte:
+  - hapt 6
+  - hapt 8
+
+```{r station-seasonally-yearly-avgs}
+# combine same base PFT groups into main group
+cmtx_w_comb <-
+  cmtx_w %>%
+  rowwise() %>%
+  mutate(
+    .keep = "unused",       # remove used columns
+    diat  = diat1  + diat2,
+    cyano = cyano2 + cyano4,
+    hapt  = hapt6  + hapt8
+  ) %>%
+  ungroup() %T>%
+  print()
+
+# calculate PFT fractions (0 - 100%)
+cmtx_fract_w_comb <-
+  cmtx_w_comb %>%
+  mutate(
+    .keep = "unused",
+    across(
+      c(pras:hapt, chloro, crypto, dino),
+      (\(x) x / total_chl_a),
+      .names = "percent_{.col}"
+    )
+  ) %T>% print()
+
+# ---- with combining diat, cyano and hapt ---- #
+cmtx_fract_l_comb <- 
+  cmtx_fract_w_comb %>%
+  pivot_longer(
+    contains("percent"),
+    names_to     = "phyto",
+    values_to    = "percent",
+    names_prefix = "percent_"
+  ) %>%
+    
+  # add long names
+  left_join(phyto_name, by = c("phyto" = "shrt")) %T>% print()
+```
+
+
+# 3.0 ---- Time Series of 3 Stations with 2 PFTs -----
+
+## 3.1 Plot: Calculate Fraction and Plot 3 Stations with 2 PFTs (Diatom and Cyano)
+
+Stations 10, 16, WS: Plot Cyano and Diat vs time and 
+
+Stations:
+- 10
+- 16
+- WS
+
+PFT:
+- cyanobacteria (cyano2 and cyano4)
+- diatom (diat1 and diat2)
+
+Shows opposing signals where lower diatoms shows increase in cyano relatively
+
+Issue is this doesn't show abosolute, where cyano could have incrased thus the
+ratio is farther off.
+
+```{r plt-cyano-diat, fig.height=8, fig.width=16}
+time_series_base <- 
+  . %>%
+  # filter for 2 PFTs and 3 stations
+  filter(
+    str_detect(phyto, "diat|cyano")
+    & station %in% c("WS", "10", "16")
+   ) %T>% print()
+  
+cmtx_l_pct %>%
+  time_series_base %>%
+  # plot
+  ggplot(aes(
+    x     = lubridate::ymd_hms(date_time_utc),
+    # y     = frac,
+    y     = percent,
+    color = names,
+    fill  = names
+  )) +
+  geom_point() +
+  geom_line() +
+  
+  labs(
+    x     = NULL,
+    y     = "Relative Abundance (%)",
+    color = "Functional Type",
+    fill  = "Functional Type"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     expand = c(0,0),
+                     limits = c(0,1)) +
+  facet_wrap(facets = "station") +
+  theme_classic() +
+  theme(
+    text                = element_text(family = "serif", size = 40),
+    axis.text           = element_text(size = 30),
+    axis.text.x         = element_text(angle = 45, hjust = 1), 
+    axis.ticks.length.x = unit(10, "pt"),
+    legend.position     = c(0.5, 0.8),
+    panel.spacing       = unit(20, "pt") 
+  )
+
+# ---- save plot
+save_gg(
+  plt            = last_plot(), # edit if want specific plot
+  save_location  = dir_plt_save,
+  save_name      = "stn_subset_frac_sep_diat_cyano",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 8,
+  width          = 16,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+  )
+```
+
+
+## 3.2 Plot: Commbined Fraction and Plot 3 Stations with 2 PFTs (Diatom and Cyano)
+
+```{r plt-comb-cyano-diat, fig.height=8, fig.width=16}
+cmtx_fract_l_comb %>%
+  time_series_base %>%
+  # plot
+  ggplot(aes(
+    x     = lubridate::ymd_hms(date_time_utc),
+    y     = percent,
+    color = names,
+    fill  = names
+  )) +
+  geom_point() +
+  geom_line() +
+  
+  labs(
+    x     = NULL,
+    y     = "Relative Abundance (%)",
+    color = "Functional Type",
+    fill  = "Functional Type"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     expand = c(0,0),
+                     limits = c(0,1)) +
+  facet_wrap(facets = "station") +
+  theme_classic() +
+  theme(
+    text                = element_text(family = "serif", size = 40),
+    axis.text           = element_text(size = 30),
+    axis.text.x         = element_text(angle = 45, hjust = 1), 
+    axis.ticks.length.x = unit(10, "pt"),
+    legend.position     = c(0.5, 0.8),
+    panel.spacing       = unit(20, "pt") 
+  )
+
+# ---- save plot
+save_gg(
+  plt            = last_plot(), # edit if want specific plot
+  save_location  = dir_plt_save,
+  save_name      = "stn_subset_frac_comb_diat_cyano",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 8,
+  width          = 16,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+  )
+
+
+```
+
+## 3.3 Timeseries per Station
+
+
+```{r diat-ts}
+# time series for diatom at specific stations
+cmtx_w_comb %>%
+  pivot_longer(
+    cols      = chloro:hapt,
+    names_to  = "func_type",
+    values_to = "conc"
+  ) %>%
+  print() %>%
+  ggplot(
+    aes(
+      x     = date_time_utc, 
+      y     = conc, 
+      color = func_type, 
+      fill  = func_type
+      )
+    ) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(facets = ~ station) +
+  ggthemes::theme_clean()
+```
