@@ -21,6 +21,14 @@ editor: source
 : photoprotective-photosynthetic
   - plot PPC vs PSC and add linear regression for each season and region
 
+
+===============================================================================
+
+TODO: check sizing of figures when saving by using `camcorder`
+
+
+===============================================================================
+
 # 2.0 ---- Setup ----
 
 
@@ -36,7 +44,11 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional
-    
+    ggthemes,
+    ggbeeswarm,
+    ggtext,
+    rstatix,
+    ggstatsplot
 )
 
 conflicts_prefer(
@@ -101,27 +113,31 @@ chlorophyll-a is higher, but if PI > 1, then photoinhibited
 
 TODO: correlate temperature with PPC and maybe PI ratio?
 ```{r photoprotective-index}
-shelf(ggbeeswarm)
-
 pigm_pi <- mutate(pig_dat, pi = ppc/tot_chl_a)
 
-plt_pi <- 
-  ggplot(pigm_pi, 
-    aes(x = date_time_utc, 
-        y = pi, 
-        color = season,
-        shape = name_of_water_body)) +
+plt_pi <-
+  ggplot(
+    pigm_pi,
+    aes(
+      x = date_time_utc,
+      y = pi,
+      color = season,
+      shape = name_of_water_body
+    )
+  ) +
   geom_point() +
-  labs(color = "Season",
-       shape = "Water Body",
-       x = "Date",
-       y = "Photoprotective Index \n\n(PPC/Total Chlorophyll-a)") +
-# theme
-    theme(
-      axis.title.y     = element_markdown(),
-      # legend.position  = c(0.6, 0.05),
-      # legend.direction = "horizontal"
-          )
+  labs(
+    x     = "Date",
+    y     = "Photoprotective Index \n\n(PPC/Total Chlorophyll-a)",
+    color = "Season",
+    shape = "Water Body",
+  ) +
+  # theme
+  theme(
+    axis.title.y = element_markdown(),
+    # legend.position  = c(0.6, 0.05),
+    # legend.direction = "horizontal"
+  )
 
 plt_pi_all_water_body <- 
   plt_pi /
@@ -173,9 +189,11 @@ pi_box_seasonal_water_body <-
 # view plots
 plt_pi_all_water_body
 pi_box_seasonal_water_body
+```
 
+### 4.2.1 Save 
 
-# save plots
+```{r save-photoprotective-index}
 # ratio vs time
 save_gg(
   plt            = plt_pi_all_water_body,
@@ -318,8 +336,6 @@ Same as 5.3, but using `ggstatsplot` to show differences
 - PI vs year + region
 
 ```{r plt-anova}
-shelf(ggstatsplot)
-
 ggbetweenstats(
   data  = pigm_pi,
   x     = season, 
@@ -438,7 +454,11 @@ plt_ppc_psc <-
   ) 
 
 plt_ppc_psc
+```
 
+## 5.2 Save: PSC:PPC Regression
+
+```{r photoprotective-photosynthetic, fig.height=15, fig.width=30}
 save_gg(
   plt            = plt_ppc_psc,
   save_location  = dir_plt_save,
