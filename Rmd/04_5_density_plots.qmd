@@ -25,7 +25,7 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional
-    
+    ggtext
 )
 
 conflicts_prefer(
@@ -113,6 +113,8 @@ Density and histogram plot for each PFT per season
 ```{r plotting-chemtax-data}
 plt_cmtx_den_hist <-
   cmtx_l %>%
+  # convert to log scale for concentrations
+  mutate(conc = log10(conc + 1)) %>%
   nest(.by = phyto) %>%
   filter(!is.na(phyto)) %>%
   mutate(
@@ -162,9 +164,68 @@ plt_cmtx_den_hist <-
             element_markdown(margin = margin(t = 20, b = 5))
         )
       
+    ),
+    hist_per = map(
+      .x = data,
+      .y = phyto,
+      ~ .x %>%
+        ggplot(aes(percent, fill = season)) +
+        geom_histogram(
+          position = "stack",
+          bins = 40,
+          na.rm = TRUE
+        ) +
+        labs(
+          title = .x$names,
+          x     = "Relative Abundance (%)",
+          y     = "Frequency",
+          fill  = "Season"
+        ) +
+        scale_x_continuous(limits = c(0, 1)) +
+        facet_grid(
+          rows  = season ~ .,
+          scales = "free_x",
+        ) +
+        theme(
+          axis.title.x = element_markdown(margin = margin(t = 20, b = 5))
+        )
+    ),
+    dens_per = map2(
+      .x = data,
+      .y = phyto,
+      ~ .x %>%
+        ggplot(aes(percent, y = season, fill = season)) +
+        ggridges::geom_density_ridges(
+          na.rm = TRUE,
+          alpha = 0.25
+        ) +
+        labs(
+          title = .x$names,
+          x     = "Relative Abundance (%)",
+          y     = "Frequency",
+          fill  = "Season"
+        ) +
+        scale_x_continuous(limits = c(0, 1)) +
+        theme(
+          axis.title.x = 
+            element_markdown(margin = margin(t = 20, b = 5))
+        )
+      
     )
   )
+```
 
+
+## 3.2 Hist/Density: Concentration per Season
+
+```{r plotting-chemtax-conc}
 plt_cmtx_den_hist$dens
 plt_cmtx_den_hist$hist
+```
+
+## 3.3 Hist/Density: Percent per Season
+
+```{r plotting-chemtax-percent}
+plt_cmtx_den_hist$dens_per
+plt_cmtx_den_hist$hist_per
 ```
