@@ -375,7 +375,7 @@ save_gg <- function(
         overwrite      = FALSE,
         verbose        = TRUE,
         time_stamp_fmt = "%Y%m%d_%H%M%S",
-        device         = c("jpeg", "svg"), 
+        device         = c("jpeg", "svg", "pdf", "png"), 
         height         = 15, 
         width          = 30, 
         ...
@@ -442,11 +442,11 @@ save_gg <- function(
     
     # ---- check if need to create file
     create_f <- 
-        fs::dir_ls(
-            save_location,
-            regexp = save_name
-        )  %>%
-        rlang::is_empty()
+      fs::dir_ls(
+        save_location,
+        regexp = save_name
+      ) %>%
+      rlang::is_empty()
     
     if (!create_f && !overwrite) {
         # return early if no need to create
@@ -459,7 +459,7 @@ save_gg <- function(
     if (!create_f && overwrite ) { 
         cli_alert_info(
             "File exist and {.emph is} being {col_red(\"overwritten\")}!")
-    } else if (create_f ) { 
+    } else if (create_f) { 
         cli_alert_info("File does not exists, {col_green(\"creating\")}!")
     }
     
