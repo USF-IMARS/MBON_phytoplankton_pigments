@@ -1,0 +1,466 @@
+---
+title: "Photosynthetic and Photoprotective Carotenoids"
+author: "Sebastian Di Geronimo"
+date: "2024-01-29"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+: photoprotective-index
+  - calc ppc/tchlor-a
+  - plot PI index against time and separate regions
+  - boxplot of PI for seaon and separate regions with jitter axis
+  
++ anova-pi-season-year
+  - kruskal wallis and dunn test on:
+    - PI per season
+    - PI per year
+  
+: photoprotective-photosynthetic
+  - plot PPC vs PSC and add linear regression for each season and region
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+source(here("scripts", "misc_functions.R"))
+
+# set size options of figures
+knitr::opts_chunk$set(fig.width = 19, fig.height = 9.7)
+
+# set ggplot theme
+theme_set(theme_calc(base_size = 12, base_family = "serif"))
+```
+
+## 2.2 Load Dataset
+
+Merged pigment data is created in `01_load_data.Rmd`
+- "combined_pig_dat.csv"
+- includes: 
+  - metadata 
+  - pigment concentrations
+  - size class calculations
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "03_3_ppc_psc")
+dir_plt_save  <- here("data", "plots", "03_3_ppc_psc")
+
+# set season names and order
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# load data
+pig_dat <-
+  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  mutate(season = fct(season, levels = szn)) %T>%
+  print()
+```
+
+# 4.0 ---- Photoprotective Index ----
+
+## 4.1 PI Calculation
+
+$$
+\begin{align}
+& PI~=~\frac{PPC}{\text{Tchl-a}} \\
+& PPC~=~\text{photoproective carotenoids} \\
+& \text{Tchl-a}~=~\text{Total chlorophyll-a (Chl-a + MV-Chl-a)}
+
+\end{align}
+$$
+When PI < 1, means phyto are not being photoinhibited (?) because the total 
+chlorophyll-a is higher, but if PI > 1, then photoinhibited
+
+
+## 4.2 Scatter and Box Plots: PI:Chl-a Plots
+
+- Scatter: Time vs PI 
+- Box: Season vs PI and Season + Region vs PI
+
+TODO: correlate temperature with PPC and maybe PI ratio?
+```{r photoprotective-index}
+shelf(ggbeeswarm)
+
+pigm_pi <- mutate(pig_dat, pi = ppc/tot_chl_a)
+
+plt_pi <- 
+  ggplot(pigm_pi, 
+    aes(x = date_time_utc, 
+        y = pi, 
+        color = season,
+        shape = name_of_water_body)) +
+  geom_point() +
+  labs(color = "Season",
+       shape = "Water Body",
+       x = "Date",
+       y = "Photoprotective Index \n\n(PPC/Total Chlorophyll-a)") +
+# theme
+    theme(
+      axis.title.y     = element_markdown(),
+      # legend.position  = c(0.6, 0.05),
+      # legend.direction = "horizontal"
+          )
+
+plt_pi_all_water_body <- 
+  plt_pi /
+  (
+    plt_pi + 
+    facet_grid(name_of_water_body ~ .) +
+    guides(color = "none",
+           shape = "none")
+   )
+
+
+# with SeaBass calculation for PPC
+plt_pi_box_base <- 
+  ggplot(
+    pigm_pi, 
+    aes(
+      y = pi,
+      # fill = season
+      )) +
+    
+    # geom_boxplot() +
+    labs(
+        x = "Season",
+        y = "Photoprotection Index (PI)") +
+    geom_hline(yintercept = 1, color = "gray", linetype = "dashed") +
+    theme_classic(base_family = "serif", base_size = 12) +
+    theme(legend.position = "none")
+
+# top plot
+pi_box_seasonal_water_body <- 
+  (
+   plt_pi_box_base +  
+   geom_boxplot(aes( x = season, fill = season))
+  ) /
+  # bottom plot separated by water body
+  (
+    plt_pi_box_base + 
+    geom_boxplot(
+      aes(x    = name_of_water_body, 
+          fill = name_of_water_body)) +
+    geom_quasirandom(
+      aes(x     = name_of_water_body, 
+          fill  = name_of_water_body,
+          color = as.factor(year))) +
+    facet_grid( ~ season)
+  )
+
+
+# view plots
+plt_pi_all_water_body
+pi_box_seasonal_water_body
+
+
+# save plots
+# ratio vs time
+save_gg(
+  plt            = plt_pi_all_water_body,
+  save_location  = dir_plt_save,
+  save_name      = "pi_ppc_chl_all_water_body",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
+
+# boxplot ppc vs season
+save_gg(
+  plt            = pi_box_seasonal_water_body,
+  save_location  = dir_plt_save,
+  save_name      = "pi_box_ppc_chl_all_water_body",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 6,
+  width          = 10,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+)
+
+
+```
+
+## 4.3 ANOVA PI vs Season
+
+- Kruskal-Wallis: 
+    - non-parametric 
+    - season and year
+    
+- Dunn's Test
+    - pairwise test
+    - bonferroni adjusted p-values
+    
+PI ~ Season
+PI ~ Year
+
+```{r anova-pi-season-year}
+# function to run ANOVA on pi and arbitrary category
+anova_func <- 
+  list(
+    kw = \(.df, category) { 
+      formulas <- formula(paste("pi ~ ", category)) 
+      kruskal_test(formulas, data = .df)
+    },
+    # Dunn's test - pairwise with adj
+    dunn = \(.df, category) {
+        formulas <- formula(paste("pi ~ ", category)) 
+        dunn_test( 
+          data = .df,
+          formula = formulas,
+          p.adjust.method = "bonferroni"
+        ) %>%
+          mutate(
+            p = num(p, digits = 3),
+            p.adj = num(p.adj, digits = 3)
+          ) %>%
+          arrange(desc(p.adj))
+      }
+)
+
+
+# season factor
+anova_func$kw(.df = pigm_pi, category = "season")
+anova_func$dunn(.df = pigm_pi, category = "season")
+
+
+# year factor
+anova_func$kw(.df = pigm_pi, category = "year")
+anova_func$dunn(.df = pigm_pi, category = "year")
+
+# each region
+pigm_anova <- 
+  pigm_pi %>%
+  nest(.by = name_of_water_body) %>%
+  mutate(
+    # by season
+    season_kw =
+      map2(
+        data,
+        "season",
+        anova_func$kw
+      ),
+    season_dunn =
+      map2(
+        data,
+        "season",
+        anova_func$dunn
+      ),
+    
+    # by year
+    year_kw =
+      map2(
+        data,
+        "year",
+        anova_func$kw
+      ),
+    year_dunn =
+      map2(
+        data,
+        "year",
+        anova_func$dunn
+      )
+  )
+
+# season
+pigm_anova %>%
+  unnest(
+    c(season_kw, season_dunn),
+    names_sep = "_"
+  )
+
+# year
+pigm_anova %>%
+  unnest(
+    c(year_kw, year_dunn),
+    names_sep = "_"
+  )
+
+```
+
+## 4.4 Statsplot of ANOVA
+
+Same as 5.3, but using `ggstatsplot` to show differences
+
+- PI vs season
+- PI vs year
+- PI vs season + region
+- PI vs year + region
+
+```{r plt-anova}
+shelf(ggstatsplot)
+
+ggbetweenstats(
+  data  = pigm_pi,
+  x     = season, 
+  y     = pi, 
+  xlab = "Season",
+  ylab = "PI",
+  title = "Season: all regions",
+  type  = "nonparametric"
+  )
+
+ggbetweenstats(
+  data  = pigm_pi,
+  x     = year, 
+  y     = pi, 
+  title = "Yearly: all regions",
+  xlab = "Year",
+  ylab = "PI",
+  type  = "nonparametric"
+  )
+
+
+pigm_pi %>%
+  nest(.by = name_of_water_body) %$%
+
+  map2(
+    name_of_water_body,
+    data,
+    (\(water_name, .df) {
+      ggbetweenstats(
+        data =  .df,
+        x = season,
+        y = pi,
+        title = glue("Season: {water_name}"),
+        xlab = "Season",
+        ylab = "PI",
+        type = "nonparametric"
+      ) %>%
+        print()
+
+      ggbetweenstats(
+        data = .df,
+        x = year,
+        y = pi,
+        title = glue("Yearly: {water_name}"),
+        xlab = "Year",
+        ylab = "PI",
+        type = "nonparametric"
+      )
+    })
+  )
+
+```
+
+
+# 5.0 ---- PPC:PSC Ratio ----
+
+## 5.1 Scatter Plots with Linear Regression
+
+PPC vs PSC for region and season
+
+Linear regression for year factor and overall regression for region and season
+
+```{r photoprotective-photosynthetic, fig.height=15, fig.width=30}
+# TODO: separate plots by region 
+plt_ppc_psc <- 
+  pigm_pi %>%
+  filter(
+    # !(str_detect(season, "Winter")
+    # & str_detect(name_of_water_body, "Keys")
+    # & ppc > 2)
+      
+    str_detect(name_of_water_body, "Keys") &
+    ppc < 2
+    ) %>%
+  ggplot(
+  aes(
+    x = psc,
+    y = ppc,
+    # shape = season,
+    # color = season
+    # color = name_of_water_body
+  )
+) +
+  geom_point(size = 4, alpha = 0.3, aes(color = as.factor(year))) +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_smooth(
+    aes(color = as.factor(year)),
+    se        = FALSE,
+    method    = "lm",
+    formula   = y ~ x,
+    linetype  = "dashed",
+    linewidth = 1.5
+  ) +
+  geom_smooth(
+    se        = FALSE,
+    color     = "red",
+    method    = "lm",
+    formula   = y ~ x,
+    linetype  = "dashed",
+    linewidth = 2
+  ) +
+  labs(
+    y = "PPC",
+    x = "PSC",
+    color = NULL
+  ) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, NA)) +
+  facet_wrap(name_of_water_body ~ season,
+             scales = "free") +
+  guides(color = guide_legend(nrow = 1, byrow = TRUE)) +
+  theme(
+    text = element_text(family = "serif", size = 20),
+    strip.text.y = element_blank(),
+    legend.position = "bottom"
+  ) 
+
+plt_ppc_psc
+
+save_gg(
+  plt            = plt_ppc_psc,
+  save_location  = dir_plt_save,
+  save_name      = "psc_vs_ppc",
+  verbose        = TRUE,
+  overwrite      = FALSE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "jpeg",
+  height         = 20,
+  width          = 30,
+  dpi            = 600,
+  units          = "in",
+  bg             = "white"
+ )
+
+```
+
+
+Autumn has the most scatter, but looks to have more PSC relating to more
+production
+Summer has areas with more PSC and PPC, but cannot distinquish as to where
+Winter is also mostly PSC heavy, with a couple of points with high PPC
+Spring is the season with the most PPC promience
+
+
