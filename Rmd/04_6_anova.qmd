@@ -213,26 +213,8 @@ difference between each season.
 From the pairwise Dunn's test, only 25/48 pairs were significantly different.
 
 ```{r season-absolute-kruskal-and-dunn}
-# cmtx_kruskal_season
-# 
-# # remove diat1 and dino
-# p_gt_05_season
-# 
-# cmtx_dunn_season
-# 
-# # sig Dunn
-# cmtx_dunn_season %>%
-#   filter(p.adj <= 0.05) %>% # remove PFTs with p>0.05
-#   unite("groups", group1, group2, sep = "-") 
-# 
-# # no sig Dunn
-# cmtx_dunn_season %>%
-#   filter(p.adj > 0.05) %>% 
-#   unite("groups", group1, group2, sep = "-")
-
-
-#
 kruskal_abs$season
+
 # remove diat1 and dino
 kruskal_abs$p_gt_05_season
 
@@ -266,30 +248,8 @@ did not have any significant difference between each season.
 From the pairwise Dunn's test, only 79/168 pairs were significantly different.
 
 ```{r station-absolute-kruskal-and-dunn}
-# cmtx_kruskal_stn
-# 
-# # remove chloro, cyano2, hapt6 and pras
-# p_gt_05_stn
-# 
-# cmtx_dunn_stn
-# 
-# # sig Dunn
-# cmtx_dunn_stn %>%
-#   filter(p.adj <= 0.05) %>% 
-#   unite("groups", group1, group2, sep = "-") %T>% 
-#   print() %>%
-#   count(phyto)
-# 
-# # no sig Dunn
-# cmtx_dunn_stn %>%
-#   filter(p.adj > 0.05) %>% 
-#   unite("groups", group1, group2, sep = "-")  %T>% 
-#   print() %>%
-#   count(phyto)
-# 
-# 
-
 kruskal_abs$staion
+
 # remove chloro, cyano2, hapt6 and pras
 kruskal_abs$p_gt_05_stn
 
@@ -456,27 +416,6 @@ each season.
 From the pairwise Dunn's test, only 29/54 pairs were significantly different.
 
 ```{r season-relative-kruskal-and-dunn}
-# cmtx_kruskal_season
-# 
-# # remove diat1
-# p_gt_05_season 
-# 
-# cmtx_dunn_season
-# 
-# # sig Dunn
-# cmtx_dunn_season %>% 
-#   filter(p.adj <= 0.05) %>% 
-#   unite("groups", group1, group2, sep = "-") %T>%
-#   print() %>%
-#   count(phyto)
-# 
-# # no sig Dunn
-# cmtx_dunn_season %>% 
-#   filter(p.adj > 0.05) %>% 
-#   unite("groups", group1, group2, sep = "-") %T>%
-#   print() %>%
-#   count(phyto)
-
 kruskal_rel$season
 
 # remove diat1
@@ -511,27 +450,6 @@ significant difference between each season.
 From the pairwise Dunn's test, only 89/224 pairs were significantly different.
 
 ```{r station-relative-kruskal-and-dunn}
-# cmtx_kruskal_stn
-# 
-# # remove chloro and pras
-# p_gt_05_stn 
-# 
-# cmtx_dunn_stn
-# 
-# # sig Dunn
-# cmtx_dunn_stn %>%
-#   filter(p.adj <= 0.05) %>%
-#   unite("groups", group1, group2, sep = "-") %T>%
-#   print() %>%
-#   count(phyto)
-# 
-# # no sig Dunn
-# cmtx_dunn_stn %>%
-#   filter(p.adj > 0.05) %>%
-#   unite("groups", group1, group2, sep = "-")  %T>%
-#   print() %>%
-#   count(phyto)
-
 kruskal_rel$station
 
 # remove chloro and pras
@@ -570,28 +488,6 @@ difference between each season.
 From the pairwise Dunn's test, all 8 pairs were significantly different.
 
 ```{r distance-relative-kruskal-and-dunn}
-# cmtx_kruskal_dist
-# 
-# # remove chloro and pras
-# p_gt_05_dist 
-# 
-# cmtx_dunn_dist
-# 
-# # sig Dunn
-# cmtx_dunn_dist %>%
-#   filter(p.adj <= 0.05) %>%
-#   unite("groups", group1, group2, sep = "-") %T>%
-#   print() %>%
-#   count(phyto)
-# 
-# # no sig Dunn
-# cmtx_dunn_dist %>%
-#   filter(p.adj > 0.05) %>%
-#   unite("groups", group1, group2, sep = "-")  %T>%
-#   print() %>%
-#   count(phyto)
-# 
-
 kruskal_rel$near_off
 
 # remove chloro and pras
