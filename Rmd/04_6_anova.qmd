@@ -47,6 +47,7 @@ source(here("scripts", "misc_functions.R"))
 dir_data_save <- here("data", "processed", "04_6_anova")
 dir_plt_save  <- here("data", "plots", "04_6_anova")
 
+dir_create(here(dir_data_save))
 dir_create(here(dir_plt_save))
 
 # ---- set season names and order ---- #
@@ -114,6 +115,17 @@ cmtx_l_pct <-
   select(-conc) %T>% 
   print()
 
+
+cmtx_w_pct <- 
+  cmtx_l_pct %>%
+  select(-names) %>%
+  pivot_wider(
+    data         = .,
+    names_from   = c(phyto),
+    values_from  = c(percent),
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    )
 ```
 
 # 3.0 ---- Perform Kruskal-Wallis and Dunn Test ----
@@ -542,12 +554,14 @@ Notes about PERMANOVA (use `betadisper`):
     - we want it to be non-significant so we can check differences between 
       groups
     
-- R-squared:
+- R-squared (technically sum of square):
   - This is the proportion of sum of squares from the total
-  - don't over interpret this!
-  - wrong: this shows the influence of the factor on explained variation, this 
-    will tell you the proportion of total variance explained by the grouping 
-    factor
+  - refers to the variation in the dissimilarities between samples.
+  - reflect the proportion of variation attributable to a factor or unexplained
+    variation, but not the explained variance of a specific response variable
+  - ex: A high percentage for the factor (season) might suggest that seasonality 
+    plays a significant role in shaping the community composition, 
+    but doesn't say anything about the magnitude of the effect
     
 - the p-value
   - the probability of observing the effect size by chance
@@ -556,70 +570,38 @@ Notes about PERMANOVA (use `betadisper`):
   - performed if the p-value is significant to determine which groups are 
     significantly different from each other
 
+## 4.1 Function: Permutational MANOVA
+
+1. disper_sum_func = dispersion summary
+2. disper_plt = dispersion summary plot
+3. szn_adonis2 = pairwise permanova
+
+```{r permanova_func}
+disper_sum_func <- function(x) {
+ 
+  calls <- x$call$group %>%
+  as.character() %>%
+    .[3]
+  x %>%
+  anova() %>%
+  as_tibble(rownames = "type") %>%
+  janitor::clean_names() %>%
+  mutate(group = calls, .before = type)
+}
+
+disper_plt <- function(x) {
+  title <- 
+    deparse(substitute(x)) %>%
+    str_remove(".*\\$")
+  TukeyHSD(x) %>%
+    print()
+  anova(x) %>%
+    print()
+  plot(x, main = title)
+  boxplot(x, main = title)
+}
 
 
-
-## 4.1 Check Homogeneity of Dispersion
-
-
-```{r dispersion}
-set.seed(1082002)
-# PFT conc vs season
-cat("\n-----------------------\n\n---- PFT conc vs season ----\n\n")
-manova_pft_season <-
-  vegdist(
-    select(cmtx_w, chloro:pras),
-    method = "bray"
-  ) %>%
-  betadisper(
-    group = cmtx_w$season
-  ) %T>% print()
-
-TukeyHSD(manova_pft_season)
-anova(manova_pft_season)
-plot(manova_pft_season)
-boxplot(manova_pft_season)
-
-
-cat("\n-----------------------\n\n---- PFT conc vs distance from shore ----\n\n")
-manova_pft_season_dist <-
-  vegdist(
-    select(cmtx_w, chloro:pras),
-    method = "bray"
-  ) %>%
-  betadisper(
-    group = cmtx_w$labels
-  ) %T>% print()
-
-TukeyHSD(manova_pft_season_dist)
-anova(manova_pft_season_dist)
-plot(manova_pft_season_dist)
-boxplot(manova_pft_season_dist)
-
-cat("\n-----------------------\n\n---- PFT perc vs season ----\n\n")
-
-manova_pft_season_pct <-
-  cmtx_w %>%
-  mutate(across(chloro:pras, ~ .x/total_chl_a)) %>%
-  select(chloro:pras) %>%
-  vegdist(
-    .,
-    method = "bray"
-  ) %>%
-  betadisper(
-    group = cmtx_w$season
-  ) %T>% print()    
-
-TukeyHSD(manova_pft_season_pct)
-anova(manova_pft_season_pct)
-plot(manova_pft_season_pct)
-boxplot(manova_pft_season_pct)
-
-```
-
-### 4.2 Function: Permutational MANOVA
-
-```{r season-permanova}
 #' Pairwise Permutation MANOVA
 #'
 #' FUNCTION_DESCRIPTION
@@ -634,6 +616,7 @@ boxplot(manova_pft_season_pct)
 #' @return RETURN_DESCRIPTION
 #' @examples
 #' # ADD_EXAMPLES_HERE
+#' 
 szn_adonis2 <- function(
         .data, 
         pair_col, 
@@ -655,89 +638,281 @@ szn_adonis2 <- function(
         strata   =  strata 
         )   
     
-    
-    return(
-      list(
-        "r_squared"  = permanova_results[["R2"]][1],
-        "pairwise_p" = permanova_results[["Pr(>F)"]][1],
-        "results"    = permanova_results
-        )
-    )
+    return(permanova_results)
     
   # ---- end of szn_adonis2 function    
 }
-```
 
-
-
-### 4.3 Perform Permutational MANOVA
-
-```{r season-permanova}
-set.seed(1082002)
-# PFT vs season
-cat("\n-----------------------\n\n---- PFT conc vs season ----\n\n")
-adonis2(
-  select(cmtx_w, chloro:pras) ~ season,
-  data   = select(cmtx_w, season),
-  method = "bray"
-)
-
-# PFT vs distance
-cat("\n-----------------------\n\n---- PFT conc vs distance ----\n\n")
-adonis2(
-  select(cmtx_w, chloro:pras) ~ labels,
-  data   = select(cmtx_w, labels),
-  method = "bray"
-)
-
-cat("\n-----------------------\n\n---- PFT conc vs distance + season ----\n\n")
-adonis2(
-  select(cmtx_w, chloro:pras) ~ labels + season,
-  data   = select(cmtx_w, labels, season),
-  method = "bray"
-)
-
-cat("\n-----------------------\n\n---- Pairwise Test ----\n\n")
-# pairwise test
-permanova_r <-
+season_pairs <- 
   combn(szn, 2) %>%
   t() %>%
   as_tibble() %>%
   set_colnames(c("szn1", "szn2")) %>%
-  unite(col = "season_pairs", szn1, szn2, sep = "|") %>%
+  # unite(col = "season_pairs", szn1, szn2, sep = "|") %>%
+  unite(col = "group", szn1, szn2, sep = "|") %T>% 
+  print()
+```
+
+
+## 4.2 Check Homogeneity of Dispersion
+
+
+```{r dispersion}
+set.seed(1082002)
+
+perm_disp <- list()
+
+# PFT conc vs season
+cat("\n-----------------------\n\n---- PFT Rel vs season ----\n\n")
+perm_disp$season <-
+  cmtx_w_pct %>%
+  select(chloro:pras) %>%
+  vegdist(
+    .,
+    method = "bray"
+  ) %>%
+  betadisper(
+    group = cmtx_w$season
+  ) %T>% print()
+
+disper_plt(perm_disp$season)
+  
+cat("\n-----------------------\n\n---- PFT Rel vs distance from shore ----\n\n")
+# manova_pft_season_dist <-
+perm_disp$near_off <-
+  cmtx_w_pct %>%
+  select(chloro:pras) %>%
+  vegdist(
+    .,
+    method = "bray"
+  ) %>%
+  betadisper(
+    group = select(cmtx_w, "near_off" = labels)[["near_off"]]
+  ) %T>% print()
+
+disper_plt(perm_disp$near_off )
+
+# cat("\n-----------------------\n\n---- PFT perc vs season ----\n\n")
+# 
+# manova_pft_season_pct <-
+#   cmtx_w_pct %>%
+#   select(chloro:pras) %>%
+#   vegdist(
+#     .,
+#     method = "bray"
+#   ) %>%
+#   betadisper(
+#     group = cmtx_w$season
+#   ) %T>% print()    
+# 
+# disper_plt(manova_pft_season_pct)
+
+perm_disp$disper_summary <-
+  reduce(
+    list2(
+      disper_sum_func(perm_disp$season),
+      disper_sum_func(perm_disp$near_off)
+    ),
+    bind_rows
+  ) %T>%
+  print()
+```
+
+
+
+
+
+## 4.3 Absolute Concentration: Perform Permutational MANOVA
+
+```{r abs-season-permanova}
+set.seed(1082002)
+
+# ---- extract PFT matrix ---- #
+chemtax_matrix <- select(cmtx_w, chloro:pras) 
+perm_abs_summ <- list()
+
+# ---- PFT vs season ---- #
+cat("\n-----------------------\n\n---- PFT conc vs season ----\n\n")
+perm_abs_summ$season <-
+  adonis2(
+    chemtax_matrix ~ season,
+    data   = select(cmtx_w, season),
+    method = "bray"
+  ) %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "season", .before = 1) 
+
+# ---- PFT vs distance ---- #
+cat("\n-----------------------\n\n---- PFT conc vs distance ----\n\n")
+perm_abs_summ$near_off <-
+  adonis2(
+    chemtax_matrix ~ near_off,
+    data   = select(cmtx_w, "near_off" = labels),
+    method = "bray"
+  ) %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "near_off", .before = 1)
+
+# ---- PFT vs distance + season ---- #
+cat("\n-----------------------\n\n---- PFT conc vs distance + season ----\n\n")
+perm_abs_summ$near_off_season <-
+  adonis2(
+    chemtax_matrix ~ near_off + season,
+    data   = select(cmtx_w, "near_off" = labels, season),
+    method = "bray"
+  ) %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "near_off + season", .before = 1)
+
+
+# ---- pairwise season test ---- #
+cat("\n-----------------------\n\n---- Pairwise Test ----\n\n")
+perm_abs_summ$permanova_r <-
+  season_pairs %>%
   mutate(
     pairwise_p =
       map(
-        .x = season_pairs,
+        .x = group,
         .f =
           \(.x) {
-             
-           cat("------\n\n", .x, "\n\n") 
-            
-          szn_adonis2(
-            .data    = select(.env$cmtx_w, season, chloro:pras),
-            pairs    = .x,
-            pair_col = season,
-            formula  = "season",
-            strata   = NULL
-            # strata   = "station"
-          ) %T>% 
+            cat("------\n\n", .x, "\n\n")
+
+            szn_adonis2(
+              .data    = select(.env$cmtx_w, season, chloro:pras),
+              pairs    = .x,
+              pair_col = season,
+              formula  = "season",
+              strata   = NULL
+              # strata   = "station"
+            ) %T>%
+              print() %>%
+            as_tibble(rownames = "results_id") 
+          }
+      ),
+  ) %>%
+  unnest(pairwise_p) 
+
+perm_abs_summ$all <-
+  reduce(
+    perm_abs_summ,
+    bind_rows
+  ) %>%
+  janitor::clean_names() %>%
+  # ---- correct p-values
+  mutate(
+    p_adjust = p.adjust(pr_f, method = "bonferroni"),
+    .before  = results_id
+  ) %T>% 
+  print()
+
+```
+
+
+
+## 4.4 Relative Abundance: Perform Permutational MANOVA
+
+```{r rel-season-permanova}
+set.seed(1082002)
+
+# ---- extract PFT matrix ---- #
+chemtax_matrix_pct <- select(cmtx_w_pct, chloro:pras) 
+perm_rel_summ <- list()
+
+
+# ---- PFT vs season ---- #
+cat("\n-----------------------\n\n---- PFT rel vs season ----\n\n")
+perm_rel_summ$season <-
+  adonis2(
+    chemtax_matrix_pct ~ season,
+    data   = select(cmtx_w, season),
+    method = "bray"
+  ) %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "season", .before = 1) 
+
+# ---- PFT vs near_off ---- #
+cat("\n-----------------------\n\n---- PFT rel vs distance ----\n\n")
+perm_rel_summ$near_off <-
+  adonis2(
+    chemtax_matrix_pct ~ near_off,
+    data   = select(cmtx_w, "near_off" = labels),
+    method = "bray"
+  ) %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "near_off", .before = 1) 
+
+# ---- PFT vs near_off + season ---- #
+cat("\n-----------------------\n\n---- PFT rel vs distance + season ----\n\n")
+perm_rel_summ$near_off_season <-
+  adonis2(
+    chemtax_matrix_pct ~ near_off + season,
+    data   = select(cmtx_w, "near_off" = labels, season),
+    method = "bray"
+  ) %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "near_off", .before = 1) 
+
+
+# ---- pairwise season test ---- #
+cat("\n-----------------------\n\n---- Pairwise Test ----\n\n")
+perm_rel_summ$permanova_r <-
+  season_pairs %>%
+  mutate(
+    pairwise_p =
+      map(
+        .x = group,
+        .f =
+          \(.x) {
+            cat("------\n\n", .x, "\n\n")
+            x <-
+              szn_adonis2(
+                .data    = select(.env$cmtx_w_pct, season, chloro:pras),
+                pairs    = .x,
+                pair_col = season,
+                formula  = "season",
+                strata   = NULL
+                # strata   = "station"
+              ) %T>%
               print()
           }
       ),
   ) %>%
-  unnest_wider(pairwise_p) %>%
-    
+  unnest(pairwise_p) 
+
+perm_rel_summ$all <-
+  reduce(
+    perm_rel_summ,
+    bind_rows
+  ) %>%
+  janitor::clean_names() %>%
   # ---- correct p-values
   mutate(
-    p_adjust = p.adjust(pairwise_p, method = "bonferroni"),
-    .before = results
-  ) %T>% print()
+    p_adjust = p.adjust(pr_f, method = "bonferroni"),
+    .before  = results_id
+  ) %T>%
+  print()
 
+```
+## 4.5 Save: Results of Dispersion and PerMANOVA
 
-unnest(permanova_r, results)
-permanova_r$results
+```{r save-perm-disper}
+if (!file_exists(here(dir_data_save, "permanova_results.xlsx"))) {
+  list(
+    rel_abund  = perm_rel_summ$all,
+    rel_disper = disper_summary,
+    abs_abund  = perm_abs_summ$all
+  ) %T>%
+    print() %>%
+    writexl::write_xlsx(path = here(dir_data_save, "permanova_results.xlsx"))
 
+  shell.exec(here(dir_data_save, "permanova_results.xlsx"))
+}
 
 ```
 
