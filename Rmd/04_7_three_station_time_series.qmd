@@ -132,7 +132,7 @@ Groups to be combined have multiple types but are merged for ease of use
   - hapt 6
   - hapt 8
 
-```{r station-seasonally-yearly-avgs}
+```{r combine-pft}
 # combine same base PFT groups into main group
 cmtx_w_comb <-
   cmtx_w %>%
