@@ -96,10 +96,17 @@ pig_dat <-
 
 $$
 \begin{align}
+& \text{Tchl-a}~=~\text{Total chlorophyll-a}  = Chla + \text{MV-}Chla \\
+& Chlbc~=~Chlb + Chlc1 + Chlc2 + Chlc3 \\
+& PPC~=~\text{photoproective carotenoids}~=~ 
+  All + Caro + Diad + Diato + Lut + Viol + Zea \\
+& PSC~=~\text{photosyntehic carotenoids}~=~But + Fuc + Hex + Per \\
+& TP_{pig}~=~\text{total pigments}~=~TChla + Chlbc + PPC + PSC \\
+& \\
 & PI~=~\frac{PPC}{\text{Tchl-a}} \\
-& PPC~=~\text{photoproective carotenoids} \\
-& \text{Tchl-a}~=~\text{Total chlorophyll-a (Chl-a + MV-Chl-a)}
-
+& TChla_{TP}~=~\frac{TChla}{TP_{pig}} \\
+& PPC_{TP}~=~\frac{PPC}{TP_{pig}} \\
+& PSC_{TP}~=~\frac{PSC}{TP_{pig}} \\
 \end{align}
 $$
 When PI < 1, means phyto are not being photoinhibited (?) because the total 
