@@ -146,32 +146,29 @@ Absolute total chlorophyll-a
 kruskal_abs <- list()
 
 # concentration on season grouped by PFT
-kruskal_abs$season <- 
-# cmtx_kruskal_season <-
+kruskal_abs$season <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(conc ~ season) %>%
-  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3,
+         group1 = "season") %>%
   arrange(p)
 
 # concentration on stn grouped by PFT
-kruskal_abs$station <- 
-# cmtx_kruskal_stn <-
+kruskal_abs$station <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(conc ~ station) %>%
-  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3,
+         group1 = "station") %>%
   arrange(p)
 
 # extract PFT where p value > 0.05
-# p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
-# p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
 kruskal_abs$p_gt_05_season <- filter(kruskal_abs$season, p > 0.05)
 kruskal_abs$p_gt_05_stn    <- filter(kruskal_abs$station, p > 0.05)
 
 # Seasonal Dunn's test 
 kruskal_abs$season_dunn <-
-# cmtx_dunn_season <- 
   cmtx_l %>%
   # remove PFT with no signficant difference
   filter(!(phyto %in% kruskal_abs$p_gt_05_season$phyto)) %>%
@@ -185,8 +182,7 @@ kruskal_abs$season_dunn <-
   arrange(phyto, p.adj)
 
 # Station Dunn's test
-kruskal_abs$station_dunn <-
-# cmtx_dunn_stn <-     
+kruskal_abs$station_dunn <-  
   cmtx_l %>%
   # remove PFT with no signficant difference
   filter(!(phyto %in% kruskal_abs$p_gt_05_stn$phyto)) %>%
@@ -198,6 +194,9 @@ kruskal_abs$station_dunn <-
     ) %>%
   mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
   arrange(phyto, p.adj)
+
+kruskal_abs %>%
+  reduce(bind_rows)
 ```
 
 
@@ -229,9 +228,6 @@ kruskal_abs$season_dunn %>%
 kruskal_abs$season_dunn %>%
   filter(p.adj > 0.05) %>% 
   unite("groups", group1, group2, sep = "-")
-
-
-
 ```
 
 ### 3.1.2 Abs. Summary: Station
@@ -268,10 +264,6 @@ kruskal_abs$station_dunn %>%
   unite("groups", group1, group2, sep = "-")  %T>% 
   print() %>%
   count(phyto)
-
-kruskal_abs %>%
-  reduce(bind_rows)
-
 ```
 
 
@@ -325,41 +317,37 @@ kruskal_rel <- list()
 
 # concentration on season grouped by PFT
 kruskal_rel$season <-
-# cmtx_kruskal_season <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(percent ~ season) %>%
-  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3,
+         group1 = "season") %>%
   arrange(p)
 
 # concentration on stn grouped by PFT
 kruskal_rel$station <-
-# cmtx_kruskal_stn <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(percent ~ station) %>%
-  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3,
+         group1 = "season") %>%
   arrange(p)
 
 # concentration on stn grouped by PFT
 kruskal_rel$near_off <-
-# cmtx_kruskal_dist
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(percent ~ labels) %>%
-  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3,
+         group1 = "near_off") %>%
   arrange(p)
 
 # extract PFT where p value > 0.05
-# p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
-# p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
-# p_gt_05_dist   <- filter(cmtx_kruskal_dist, p > 0.05)
 kruskal_rel$p_gt_05_season <- filter(kruskal_rel$season, p > 0.05)
 kruskal_rel$p_gt_05_stn    <- filter(kruskal_rel$station, p > 0.05)
 kruskal_rel$p_gt_05_dist   <- filter(kruskal_rel$near_off, p > 0.05)
 
-# Seasonal Dunn's test 
-# cmtx_dunn_season <-
+# Seasonal Dunn's test
 kruskal_rel$season_dunn <-
   cmtx_l %>%
   # remove PFT with no signficant difference
@@ -560,6 +548,34 @@ pull(cmtx_stat_plt, stat_plt_season)
 pull(cmtx_stat_plt, stat_plt_year)
 
 ```
+
+```{r}
+list(
+  rel_abund =
+    reduce(
+      kruskal_rel,
+      bind_rows
+    ) %>%
+      relocate(group2, .after = group1),
+  abs_abund =
+    reduce(
+      kruskal_abs,
+      bind_rows
+    ) %>%
+      relocate(group2, .after = group1)
+) %T>%
+  print() %>%
+  {
+    if (!file_exists(here(dir_data_save, "kruskal_results2.xlsx"))) {
+      cli_alert_info("Writing Kruskal-Wallis Results File")
+      writexl::write_xlsx(., path = here(dir_data_save, "kruskal_results2.xlsx"))
+      shell.exec(here(dir_data_save, "kruskal_results2.xlsx"))
+    } else {
+      cli_alert_info("Ignoring Kruskal-Wallis Results File")
+    }
+  }
+```
+
 
 
 # 4.0 ---- Pairwise Permanova Test ----
@@ -931,17 +947,22 @@ perm_rel_summ$all <-
 ## 4.5 Save: Results of Dispersion and PerMANOVA
 
 ```{r save-perm-disper}
-if (!file_exists(here(dir_data_save, "permanova_results.xlsx"))) {
-  list(
-    rel_abund  = perm_rel_summ$all,
-    rel_disper = disper_summary,
-    abs_abund  = perm_abs_summ$all
+list(
+  rel_abund  = perm_rel_summ$all,
+  rel_disper = perm_disp,
+  abs_abund  = perm_abs_summ$all
   ) %T>%
-    print() %>%
-    writexl::write_xlsx(path = here(dir_data_save, "permanova_results.xlsx"))
+  print() %>%
+  {
+    if (!file_exists(here(dir_data_save, "permanova_results.xlsx"))) {
+      cli_alert_info("Writing PerMANOVA Results File")
+      writexl::write_xlsx(., path = here(dir_data_save, "permanova_results.xlsx"))
+      shell.exec(here(dir_data_save, "permanova_results.xlsx"))
+    } else {
+      cli_alert_info("Ignoring PerMANOVA Results File")
+    }
+  }
 
-  shell.exec(here(dir_data_save, "permanova_results.xlsx"))
-}
 
 ```
 
