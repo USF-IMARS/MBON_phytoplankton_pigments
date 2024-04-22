@@ -143,8 +143,11 @@ Absolute total chlorophyll-a
 
 
 ```{r absolute-kruskal-and-dunn}
+kruskal_abs <- list()
+
 # concentration on season grouped by PFT
-cmtx_kruskal_season <-
+kruskal_abs$season <- 
+# cmtx_kruskal_season <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(conc ~ season) %>%
@@ -152,7 +155,8 @@ cmtx_kruskal_season <-
   arrange(p)
 
 # concentration on stn grouped by PFT
-cmtx_kruskal_stn <-
+kruskal_abs$station <- 
+# cmtx_kruskal_stn <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(conc ~ station) %>%
@@ -160,14 +164,17 @@ cmtx_kruskal_stn <-
   arrange(p)
 
 # extract PFT where p value > 0.05
-p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
-p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
+# p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
+# p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
+kruskal_abs$p_gt_05_season <- filter(kruskal_abs$season, p > 0.05)
+kruskal_abs$p_gt_05_stn    <- filter(kruskal_abs$station, p > 0.05)
 
 # Seasonal Dunn's test 
-cmtx_dunn_season <-
+kruskal_abs$season_dunn <-
+# cmtx_dunn_season <- 
   cmtx_l %>%
   # remove PFT with no signficant difference
-  filter(!(phyto %in% p_gt_05_season$phyto)) %>%
+  filter(!(phyto %in% kruskal_abs$p_gt_05_season$phyto)) %>%
   group_by(phyto) %>%
   dunn_test(
     conc ~ season, 
@@ -178,10 +185,11 @@ cmtx_dunn_season <-
   arrange(phyto, p.adj)
 
 # Station Dunn's test
-cmtx_dunn_stn <-
+kruskal_abs$station_dunn <-
+# cmtx_dunn_stn <-     
   cmtx_l %>%
   # remove PFT with no signficant difference
-  filter(!(phyto %in% p_gt_05_stn$phyto)) %>%
+  filter(!(phyto %in% kruskal_abs$p_gt_05_stn$phyto)) %>%
   group_by(phyto) %>%
   dunn_test(
     conc ~ station, 
@@ -205,22 +213,43 @@ difference between each season.
 From the pairwise Dunn's test, only 25/48 pairs were significantly different.
 
 ```{r season-absolute-kruskal-and-dunn}
-cmtx_kruskal_season
+# cmtx_kruskal_season
+# 
+# # remove diat1 and dino
+# p_gt_05_season
+# 
+# cmtx_dunn_season
+# 
+# # sig Dunn
+# cmtx_dunn_season %>%
+#   filter(p.adj <= 0.05) %>% # remove PFTs with p>0.05
+#   unite("groups", group1, group2, sep = "-") 
+# 
+# # no sig Dunn
+# cmtx_dunn_season %>%
+#   filter(p.adj > 0.05) %>% 
+#   unite("groups", group1, group2, sep = "-")
 
+
+#
+kruskal_abs$season
 # remove diat1 and dino
-p_gt_05_season
+kruskal_abs$p_gt_05_season
 
-cmtx_dunn_season
+kruskal_abs$season_dunn
 
 # sig Dunn
-cmtx_dunn_season %>%
+kruskal_abs$season_dunn %>%
   filter(p.adj <= 0.05) %>% # remove PFTs with p>0.05
   unite("groups", group1, group2, sep = "-") 
 
 # no sig Dunn
-cmtx_dunn_season %>%
+kruskal_abs$season_dunn %>%
   filter(p.adj > 0.05) %>% 
   unite("groups", group1, group2, sep = "-")
+
+
+
 ```
 
 ### 3.1.2 Abs. Summary: Station
@@ -237,26 +266,51 @@ did not have any significant difference between each season.
 From the pairwise Dunn's test, only 79/168 pairs were significantly different.
 
 ```{r station-absolute-kruskal-and-dunn}
-cmtx_kruskal_stn
+# cmtx_kruskal_stn
+# 
+# # remove chloro, cyano2, hapt6 and pras
+# p_gt_05_stn
+# 
+# cmtx_dunn_stn
+# 
+# # sig Dunn
+# cmtx_dunn_stn %>%
+#   filter(p.adj <= 0.05) %>% 
+#   unite("groups", group1, group2, sep = "-") %T>% 
+#   print() %>%
+#   count(phyto)
+# 
+# # no sig Dunn
+# cmtx_dunn_stn %>%
+#   filter(p.adj > 0.05) %>% 
+#   unite("groups", group1, group2, sep = "-")  %T>% 
+#   print() %>%
+#   count(phyto)
+# 
+# 
 
+kruskal_abs$staion
 # remove chloro, cyano2, hapt6 and pras
-p_gt_05_stn
+kruskal_abs$p_gt_05_stn
 
-cmtx_dunn_stn
+kruskal_abs$station_dunn
 
 # sig Dunn
-cmtx_dunn_stn %>%
+kruskal_abs$station_dunn %>%
   filter(p.adj <= 0.05) %>% 
   unite("groups", group1, group2, sep = "-") %T>% 
   print() %>%
   count(phyto)
 
 # no sig Dunn
-cmtx_dunn_stn %>%
+kruskal_abs$station_dunn %>%
   filter(p.adj > 0.05) %>% 
   unite("groups", group1, group2, sep = "-")  %T>% 
   print() %>%
   count(phyto)
+
+kruskal_abs %>%
+  reduce(bind_rows)
 
 ```
 
@@ -307,8 +361,11 @@ pull(cmtx_stat_plt, stat_plt_year)
 ## 3.3 Rel. ---- K-W Abundance of PFTs
 
 ```{r relative-kruskal-and-dunn}
+kruskal_rel <- list()
+
 # concentration on season grouped by PFT
-cmtx_kruskal_season <-
+kruskal_rel$season <-
+# cmtx_kruskal_season <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(percent ~ season) %>%
@@ -316,7 +373,8 @@ cmtx_kruskal_season <-
   arrange(p)
 
 # concentration on stn grouped by PFT
-cmtx_kruskal_stn <-
+kruskal_rel$station <-
+# cmtx_kruskal_stn <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(percent ~ station) %>%
@@ -324,7 +382,8 @@ cmtx_kruskal_stn <-
   arrange(p)
 
 # concentration on stn grouped by PFT
-cmtx_kruskal_dist <-
+kruskal_rel$near_off <-
+# cmtx_kruskal_dist
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(percent ~ labels) %>%
@@ -332,15 +391,19 @@ cmtx_kruskal_dist <-
   arrange(p)
 
 # extract PFT where p value > 0.05
-p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
-p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
-p_gt_05_dist   <- filter(cmtx_kruskal_dist, p > 0.05)
+# p_gt_05_season <- filter(cmtx_kruskal_season, p > 0.05)
+# p_gt_05_stn    <- filter(cmtx_kruskal_stn, p > 0.05)
+# p_gt_05_dist   <- filter(cmtx_kruskal_dist, p > 0.05)
+kruskal_rel$p_gt_05_season <- filter(kruskal_rel$season, p > 0.05)
+kruskal_rel$p_gt_05_stn    <- filter(kruskal_rel$station, p > 0.05)
+kruskal_rel$p_gt_05_dist   <- filter(kruskal_rel$near_off, p > 0.05)
 
 # Seasonal Dunn's test 
-cmtx_dunn_season <-
+# cmtx_dunn_season <-
+kruskal_rel$season_dunn <-
   cmtx_l %>%
   # remove PFT with no signficant difference
-  filter(!(phyto %in% p_gt_05_season$phyto)) %>%
+  filter(!(phyto %in% kruskal_rel$p_gt_05_season$phyto)) %>%
   group_by(phyto) %>%
   dunn_test(
     percent ~ season, 
@@ -351,10 +414,10 @@ cmtx_dunn_season <-
   arrange(phyto, p.adj)
 
 # Station Dunn's test
-cmtx_dunn_stn <-
+kruskal_rel$station_dunn <-
   cmtx_l %>%
   # remove PFT with no signficant difference
-  filter(!(phyto %in% p_gt_05_stn$phyto)) %>%
+  filter(!(phyto %in% kruskal_rel$p_gt_05_stn$phyto)) %>%
   group_by(phyto) %>%
   dunn_test(
     percent ~ station, 
@@ -365,10 +428,10 @@ cmtx_dunn_stn <-
   arrange(phyto, p.adj)
 
 # Distance Dunn's test
-cmtx_dunn_dist <-
+kruskal_rel$near_off_dunn <-
   cmtx_l %>%
   # remove PFT with no signficant difference
-  filter(!(phyto %in% p_gt_05_dist$phyto)) %>%
+  filter(!(phyto %in% kruskal_rel$p_gt_05_dist$phyto)) %>%
   group_by(phyto) %>%
   dunn_test(
     percent ~ labels, 
@@ -377,6 +440,9 @@ cmtx_dunn_dist <-
     ) %>%
   mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
   arrange(phyto, p.adj)
+
+kruskal_rel %>%
+  reduce(bind_rows)
 ```
 
 ### 3.3.1 Rel. Summary: Season
@@ -390,22 +456,43 @@ each season.
 From the pairwise Dunn's test, only 29/54 pairs were significantly different.
 
 ```{r season-relative-kruskal-and-dunn}
-cmtx_kruskal_season
+# cmtx_kruskal_season
+# 
+# # remove diat1
+# p_gt_05_season 
+# 
+# cmtx_dunn_season
+# 
+# # sig Dunn
+# cmtx_dunn_season %>% 
+#   filter(p.adj <= 0.05) %>% 
+#   unite("groups", group1, group2, sep = "-") %T>%
+#   print() %>%
+#   count(phyto)
+# 
+# # no sig Dunn
+# cmtx_dunn_season %>% 
+#   filter(p.adj > 0.05) %>% 
+#   unite("groups", group1, group2, sep = "-") %T>%
+#   print() %>%
+#   count(phyto)
+
+kruskal_rel$season
 
 # remove diat1
-p_gt_05_season 
+kruskal_rel$p_gt_05_season 
 
-cmtx_dunn_season
+kruskal_rel$season_dunn
 
 # sig Dunn
-cmtx_dunn_season %>% 
+kruskal_rel$season_dunn %>%
   filter(p.adj <= 0.05) %>% 
   unite("groups", group1, group2, sep = "-") %T>%
   print() %>%
   count(phyto)
 
 # no sig Dunn
-cmtx_dunn_season %>% 
+kruskal_rel$season_dunn %>%
   filter(p.adj > 0.05) %>% 
   unite("groups", group1, group2, sep = "-") %T>%
   print() %>%
@@ -424,26 +511,50 @@ significant difference between each season.
 From the pairwise Dunn's test, only 89/224 pairs were significantly different.
 
 ```{r station-relative-kruskal-and-dunn}
-cmtx_kruskal_stn
+# cmtx_kruskal_stn
+# 
+# # remove chloro and pras
+# p_gt_05_stn 
+# 
+# cmtx_dunn_stn
+# 
+# # sig Dunn
+# cmtx_dunn_stn %>%
+#   filter(p.adj <= 0.05) %>%
+#   unite("groups", group1, group2, sep = "-") %T>%
+#   print() %>%
+#   count(phyto)
+# 
+# # no sig Dunn
+# cmtx_dunn_stn %>%
+#   filter(p.adj > 0.05) %>%
+#   unite("groups", group1, group2, sep = "-")  %T>%
+#   print() %>%
+#   count(phyto)
+
+kruskal_rel$station
 
 # remove chloro and pras
-p_gt_05_stn 
+kruskal_rel$p_gt_05_stn 
 
-cmtx_dunn_stn
+
+kruskal_rel$station_dunn
 
 # sig Dunn
-cmtx_dunn_stn %>%
+kruskal_rel$station_dunn %>%
   filter(p.adj <= 0.05) %>%
   unite("groups", group1, group2, sep = "-") %T>%
   print() %>%
   count(phyto)
 
 # no sig Dunn
-cmtx_dunn_stn %>%
+kruskal_rel$station_dunn %>%
   filter(p.adj > 0.05) %>%
   unite("groups", group1, group2, sep = "-")  %T>%
   print() %>%
   count(phyto)
+
+
 ```
 
 
@@ -459,22 +570,44 @@ difference between each season.
 From the pairwise Dunn's test, all 8 pairs were significantly different.
 
 ```{r distance-relative-kruskal-and-dunn}
-cmtx_kruskal_dist
+# cmtx_kruskal_dist
+# 
+# # remove chloro and pras
+# p_gt_05_dist 
+# 
+# cmtx_dunn_dist
+# 
+# # sig Dunn
+# cmtx_dunn_dist %>%
+#   filter(p.adj <= 0.05) %>%
+#   unite("groups", group1, group2, sep = "-") %T>%
+#   print() %>%
+#   count(phyto)
+# 
+# # no sig Dunn
+# cmtx_dunn_dist %>%
+#   filter(p.adj > 0.05) %>%
+#   unite("groups", group1, group2, sep = "-")  %T>%
+#   print() %>%
+#   count(phyto)
+# 
+
+kruskal_rel$near_off
 
 # remove chloro and pras
-p_gt_05_dist 
+kruskal_rel$p_gt_05_dist 
 
-cmtx_dunn_dist
+kruskal_rel$near_off_dunn
 
 # sig Dunn
-cmtx_dunn_dist %>%
+kruskal_rel$near_off_dunn %>%
   filter(p.adj <= 0.05) %>%
   unite("groups", group1, group2, sep = "-") %T>%
   print() %>%
   count(phyto)
 
 # no sig Dunn
-cmtx_dunn_dist %>%
+kruskal_rel$near_off_dunn %>%
   filter(p.adj > 0.05) %>%
   unite("groups", group1, group2, sep = "-")  %T>%
   print() %>%
