@@ -27,7 +27,6 @@ librarian::shelf(
   # additional
   rlang, cli,
   rstatix, readxl, ggtext, cowplot,
-  
   ggstatsplot, vegan
   )
 
@@ -92,6 +91,26 @@ cmtx_w <-
   print()
 
 ```
+## 2.2.1 Remove Outliers?
+
+```{r remove-outliers}
+remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+if (remove_out == 1) {
+  cmtx_w <-
+    cmtx_w %>%
+    filter(
+      total_chl_a <= 1
+    )
+  
+  file_suffix <- "_no_out"
+} else {
+  file_suffix <- ""
+}
+```
+
+
+## 2.3 Convert to Long Format
 
 ```{r convert-long-format}
 # ---- convert to long format ---- #
@@ -283,7 +302,7 @@ cmtx_stat_plt <-
           data = .x,
           x = year,
           y = conc,
-          xlab = "Season",
+          xlab = "Year",
           ylab = "Concentration",
           title = glue("Year: {.y}"),
           type = "nonparametric"
@@ -324,16 +343,16 @@ kruskal_rel$season <-
          group1 = "season") %>%
   arrange(p)
 
-# concentration on stn grouped by PFT
+# concentration on station grouped by PFT
 kruskal_rel$station <-
   cmtx_l %>% 
   group_by(phyto) %>% 
   kruskal_test(percent ~ station) %>%
   mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3,
-         group1 = "season") %>%
+         group1 = "station") %>%
   arrange(p)
 
-# concentration on stn grouped by PFT
+# concentration on dist grouped by PFT
 kruskal_rel$near_off <-
   cmtx_l %>% 
   group_by(phyto) %>% 
@@ -342,10 +361,20 @@ kruskal_rel$near_off <-
          group1 = "near_off") %>%
   arrange(p)
 
+# concentration on year grouped by PFT
+kruskal_rel$year <-
+  cmtx_l %>% 
+  group_by(phyto) %>% 
+  kruskal_test(percent ~ year) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p), .before = 3,
+         group1 = "year") %>%
+  arrange(p)
+
 # extract PFT where p value > 0.05
 kruskal_rel$p_gt_05_season <- filter(kruskal_rel$season, p > 0.05)
 kruskal_rel$p_gt_05_stn    <- filter(kruskal_rel$station, p > 0.05)
 kruskal_rel$p_gt_05_dist   <- filter(kruskal_rel$near_off, p > 0.05)
+kruskal_rel$p_gt_05_year   <- filter(kruskal_rel$year, p > 0.05)
 
 # Seasonal Dunn's test
 kruskal_rel$season_dunn <-
@@ -383,6 +412,20 @@ kruskal_rel$near_off_dunn <-
   group_by(phyto) %>%
   dunn_test(
     percent ~ labels, 
+    p.adjust.method = "bonferroni",
+    detailed = TRUE
+    ) %>%
+  mutate(p2_adj = scales::label_pvalue(0.05)(p.adj), .before = 3) %>%
+  arrange(phyto, p.adj)
+
+# Annual Dunn's test
+kruskal_rel$year_dunn <-
+  cmtx_l %>%
+  # remove PFT with no signficant difference
+  filter(!(phyto %in% kruskal_rel$p_gt_05_year$phyto)) %>%
+  group_by(phyto) %>%
+  dunn_test(
+    percent ~ year, 
     p.adjust.method = "bonferroni",
     detailed = TRUE
     ) %>%
@@ -449,9 +492,10 @@ kruskal_rel$station_dunn
 # sig Dunn
 kruskal_rel$station_dunn %>%
   filter(p.adj <= 0.05) %>%
-  unite("groups", group1, group2, sep = "-") %T>%
+  unite("groups", group1, group2, sep = "-", remove = FALSE) %T>%
   print() %>%
   count(phyto)
+
 
 # no sig Dunn
 kruskal_rel$station_dunn %>%
@@ -498,6 +542,46 @@ kruskal_rel$near_off_dunn %>%
   count(phyto)
 
 ```
+### 3.3.4 Rel. Summary: Yearly
+
+Overall not sig. diff.:
+- diat2	
+- cyano2	
+- cyano4	
+- dino	
+- diat1
+
+Based on the results, above did not have any significant difference between each
+year 
+
+From the pairwise Dunn's test, 4 pairs were significantly different.
+
+
+```{r year-relative-kruskal-and-dunn}
+kruskal_rel$year %>%
+  arrange(phyto)
+
+# remove chloro and pras
+kruskal_rel$p_gt_05_year
+
+kruskal_rel$year_dunn %>%
+    arrange(p.adj)
+
+# sig Dunn
+kruskal_rel$year_dunn %>%
+  filter(p.adj <= 0.05) %>%
+  unite("groups", group1, group2, sep = "-") %T>%
+  print() %>%
+  count(phyto)
+
+# no sig Dunn
+kruskal_rel$year_dunn %>%
+  filter(p.adj > 0.05) %>%
+  unite("groups", group1, group2, sep = "-")  %T>%
+  print() %>%
+  count(phyto)
+
+```
 
 Based on the results, Diatom 1 did not have any significant difference between 
 each season. 
@@ -522,7 +606,7 @@ cmtx_stat_plt <-
           data = .x,
           x = year,
           y = percent,
-          xlab = "Season",
+          xlab = "Year",
           ylab = "Concentration",
           title = glue("Year: {.y}"),
           type = "nonparametric"
@@ -566,10 +650,27 @@ list(
 ) %T>%
   print() %>%
   {
-    if (!file_exists(here(dir_data_save, "kruskal_results2.xlsx"))) {
+    if (!file_exists(
+      here(
+        dir_data_save,
+        glue("kruskal_results", file_suffix, ".xlsx")
+      )
+    )
+    ) {
       cli_alert_info("Writing Kruskal-Wallis Results File")
-      writexl::write_xlsx(., path = here(dir_data_save, "kruskal_results2.xlsx"))
-      shell.exec(here(dir_data_save, "kruskal_results2.xlsx"))
+      writexl::write_xlsx(
+        .,
+        path = here(
+          dir_data_save,
+          glue("kruskal_results", file_suffix, ".xlsx")
+        )
+      )
+      shell.exec(
+        here(
+          dir_data_save,
+          glue("kruskal_results", file_suffix, ".xlsx")
+        )
+      )
     } else {
       cli_alert_info("Ignoring Kruskal-Wallis Results File")
     }
@@ -685,14 +786,14 @@ szn_adonis2 <- function(
     
     return(permanova_results)
     
-  # ---- end of szn_adonis2 function    
+  # ---- end of szn_adonis2 function ---- #  
 }
 
-season_pairs <- 
+season_pairs <-
   combn(szn, 2) %>%
   t() %>%
-  as_tibble() %>%
   set_colnames(c("szn1", "szn2")) %>%
+  as_tibble() %>%
   # unite(col = "season_pairs", szn1, szn2, sep = "|") %>%
   unite(col = "group", szn1, szn2, sep = "|") %T>% 
   print()
@@ -723,7 +824,6 @@ perm_disp$season <-
 disper_plt(perm_disp$season)
   
 cat("\n-----------------------\n\n---- PFT Rel vs distance from shore ----\n\n")
-# manova_pft_season_dist <-
 perm_disp$near_off <-
   cmtx_w_pct %>%
   select(chloro:pras) %>%
@@ -735,7 +835,21 @@ perm_disp$near_off <-
     group = select(cmtx_w, "near_off" = labels)[["near_off"]]
   ) %T>% print()
 
-disper_plt(perm_disp$near_off )
+disper_plt(perm_disp$near_off)
+
+cat("\n-----------------------\n\n---- PFT Rel vs Year ----\n\n")
+perm_disp$year <-
+  cmtx_w_pct %>%
+  select(chloro:pras) %>%
+  vegdist(
+    .,
+    method = "bray"
+  ) %>%
+  betadisper(
+    group = cmtx_w$year
+  ) %T>% print()
+
+disper_plt(perm_disp$year)
 
 # cat("\n-----------------------\n\n---- PFT perc vs season ----\n\n")
 # 
@@ -756,7 +870,8 @@ perm_disp$disper_summary <-
   reduce(
     list2(
       disper_sum_func(perm_disp$season),
-      disper_sum_func(perm_disp$near_off)
+      disper_sum_func(perm_disp$near_off),
+      disper_sum_func(perm_disp$year)
     ),
     bind_rows
   ) %T>%
@@ -891,6 +1006,18 @@ perm_rel_summ$near_off <-
   as_tibble(rownames = "results_id") %>%
   mutate(group = "near_off", .before = 1) 
 
+# ---- PFT vs year ---- #
+cat("\n-----------------------\n\n---- PFT rel vs year ----\n\n")
+perm_rel_summ$year <-
+  adonis2(
+    chemtax_matrix_pct ~ year,
+    data   = select(cmtx_w, year),
+    method = "bray"
+  ) %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "year", .before = 1)
+
 # ---- PFT vs near_off + season ---- #
 cat("\n-----------------------\n\n---- PFT rel vs distance + season ----\n\n")
 perm_rel_summ$near_off_season <-
@@ -949,15 +1076,20 @@ perm_rel_summ$all <-
 ```{r save-perm-disper}
 list(
   rel_abund  = perm_rel_summ$all,
-  rel_disper = perm_disp,
+  rel_disper = perm_disp$disper_summary,
   abs_abund  = perm_abs_summ$all
   ) %T>%
   print() %>%
   {
-    if (!file_exists(here(dir_data_save, "permanova_results.xlsx"))) {
+    if (!file_exists(
+        here(dir_data_save, glue("permanova_results", file_suffix, ".xlsx"))
+        )) {
       cli_alert_info("Writing PerMANOVA Results File")
-      writexl::write_xlsx(., path = here(dir_data_save, "permanova_results.xlsx"))
-      shell.exec(here(dir_data_save, "permanova_results.xlsx"))
+      writexl::write_xlsx(
+        ., 
+        path = here(dir_data_save, glue("permanova_results", file_suffix, ".xlsx"))
+        )
+      shell.exec(here(dir_data_save, glue("permanova_results", file_suffix, ".xlsx")))
     } else {
       cli_alert_info("Ignoring PerMANOVA Results File")
     }
@@ -976,14 +1108,19 @@ Null hypothesis is that the data come from a population with independent
 realizations and are identically distributed
 
 ```{r}
-trend::mk.test()
-
-
+cmtx_l %>%
+  filter(phyto == "chloro") %>%
+  arrange(date_time_utc) %$%
+  trend::sens.slope(conc) 
 cmtx_l %>%
   filter(phyto == "chloro") %>%
   arrange(date_time_utc) %$%
   trend::mk.test(conc) 
-
+cmtx_l %>%
+  filter(phyto == "chloro") %>%
+  arrange(date_time_utc) %$%
+  Kendall::MannKendall(conc) %>%
+  summary()
 ```
 
 # ---- 6.0 *WIP* MANOVA ----

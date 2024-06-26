@@ -25,7 +25,8 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional
-    rlang
+    rlang,
+    ggthemes
 )
 
 conflicts_prefer(
@@ -34,6 +35,8 @@ conflicts_prefer(
   )
 
 source(here("scripts", "misc_functions.R"))
+
+theme_set(theme_calc(base_size = 12, base_family = "serif"))
 ```
 
 ## 2.2 Load Dataset
@@ -78,6 +81,24 @@ cmtx_w <-
   print()
 
 ```
+## 2.2.1 Remove Outliers?
+
+```{r remove-outliers}
+remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+if (remove_out == 1) {
+  cmtx_w <-
+    cmtx_w %>%
+    filter(
+      total_chl_a <= 1
+    )
+  
+  file_suffix <- "_no_out"
+} else {
+  file_suffix <- ""
+}
+```
+
 
 
 ## 2.3 Convert to Long Format
@@ -114,7 +135,7 @@ cmtx_l_pct <-
 
 # 3.0 ---- Combine PFT Sub Groups ----
 
-## 3.1 Add: PFT Groups Together
+## 3.1 <NOT USED> Add: PFT Groups Together
 
 Groups to be combined have multiple types but are merged for ease of use
 - diatom:
@@ -127,67 +148,44 @@ Groups to be combined have multiple types but are merged for ease of use
   - hapt 6
   - hapt 8
 
-```{r station-seasonally-yearly-avgs}
-# combine same base PFT groups into main group
-cmtx_w_comb <-
-  cmtx_w %>%
-  rowwise() %>%
-  mutate(
-    .keep = "unused",       # remove used columns
-    diat  = diat1  + diat2,
-    cyano = cyano2 + cyano4,
-    hapt  = hapt6  + hapt8
-  ) %>%
-  ungroup() %T>%
-  print()
-
-# calculate PFT fractions (0 - 100%)
-cmtx_fract_w <-
-  cmtx_w %>%
-  mutate(
-    .keep = "unused",
-    across(
-      chloro:last_col(),
-      (\(x) x / total_chl_a),
-      .names = "frac_{.col}"
-    )
-  ) %T>% print()
-
-# calculate PFT fractions (0 - 100%)
-cmtx_fract_w_comb <-
-  cmtx_w_comb %>%
-  mutate(
-    .keep = "unused",
-    across(
-      c(pras:hapt, chloro, crypto, dino),
-      (\(x) x / total_chl_a),
-      .names = "frac_{.col}"
-    )
-  ) %T>% print()
-
-# convert to long format function
-cmtx_fract_l_base <- 
-  . %>%
-  pivot_longer(
-    contains("frac"),
-    names_to     = "phyto",
-    values_to    = "frac",
-    names_prefix = "frac_"
-  ) %>%
-    
-  # add long names
-  left_join(phyto_name, by = c("phyto" = "shrt")) %T>% print()
-
-# ---- without combining diat, cyano and hapt ---- #
-cmtx_fract_l <- 
-  cmtx_fract_w %>%
-  cmtx_fract_l_base
-
-# ---- without combining diat, cyano and hapt ---- #
-cmtx_fract_l_comb <- 
-  cmtx_fract_w_comb %>%
-  cmtx_fract_l_base
-
+```{r combine-pft}
+# # combine same base PFT groups into main group
+# cmtx_w_comb <-
+#   cmtx_w %>%
+#   rowwise() %>%
+#   mutate(
+#     .keep = "unused",       # remove used columns
+#     diat  = diat1  + diat2,
+#     cyano = cyano2 + cyano4,
+#     hapt  = hapt6  + hapt8
+#   ) %>%
+#   ungroup() %T>%
+#   print()
+# 
+# # calculate PFT fractions (0 - 100%)
+# cmtx_fract_w_comb <-
+#   cmtx_w_comb %>%
+#   mutate(
+#     .keep = "unused",
+#     across(
+#       c(pras:hapt, chloro, crypto, dino),
+#       (\(x) x / total_chl_a),
+#       .names = "percent_{.col}"
+#     )
+#   ) %T>% print()
+# 
+# # ---- with combining diat, cyano and hapt ---- #
+# cmtx_fract_l_comb <- 
+#   cmtx_fract_w_comb %>%
+#   pivot_longer(
+#     contains("percent"),
+#     names_to     = "phyto",
+#     values_to    = "percent",
+#     names_prefix = "percent_"
+#   ) %>%
+#     
+#   # add long names
+#   left_join(phyto_name, by = c("phyto" = "shrt")) %T>% print()
 ```
 
 ## 3.2 View Averages for Both Seasonal and per Station
@@ -196,7 +194,9 @@ cmtx_fract_l_comb <-
 # ---- average by season ---- #
 # only one used further
 cmtx_avg_season_fract_l <-
-  cmtx_fract_l %>%
+  # cmtx_fract_l %>%
+  cmtx_l_pct %>%
+  rename("frac" = percent) %>%
   summarise(
     .by = c(names, phyto, season),
     across(
@@ -219,9 +219,10 @@ cmtx_avg_season_fract_l <-
   ) %>%
  arrange(season) %T>% print()
 
-
 # ---- average by station ---- #
-cmtx_fract_l %>%
+# cmtx_fract_l %>%
+cmtx_l_pct %>%
+  rename("frac" = percent) %>%
   mutate(station = fct_reorder(station, lon)) %>%
   arrange(station) %>%
   summarise(
@@ -238,7 +239,9 @@ cmtx_fract_l %>%
  arrange(station) %T>% print()
 
 # ---- average by station and season ---- #
-cmtx_fract_l %>%
+# cmtx_fract_l %>%
+cmtx_l_pct %>%
+  rename("frac" = percent) %>%
   mutate(station = fct_reorder(station, lon)) %>%
   arrange(station) %>%
   summarise(
@@ -254,6 +257,7 @@ cmtx_fract_l %>%
   ) %>%
  arrange(season) %T>% print()
 ```
+
 
 ## 3.3  Plot: Seasonal Fraction of each PFT (Bar)
 
@@ -365,9 +369,8 @@ cmtx_avg_season_fract_l %>%
 save_gg(
   plt            = last_plot(), # edit if want specific plot
   save_location  = here(dir_plt_save, "season_stacked"),
-  save_name      = "pft_season_avg_prcnt_stack",
+  save_name      = glue("pft_season_avg_prcnt_stack", file_suffix),
   verbose        = TRUE,
-  overwrite      = FALSE,
   # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
@@ -382,55 +385,62 @@ save_gg(
 ### 3.3.1 Separated Bar Chart
 
 ```{r plt-fracs, fig.width=20, fig.height=10}
-cmtx_avg_season_fract_l %>%
-  mutate(names = fct_reorder(names, frac_avg)) %>%
+cmtx_l_pct %>%
+  mutate(names = fct_reorder(names, percent, .desc = TRUE)) %>%
   ggplot(
     aes(
-      fill  = season,
-      y     = frac_avg,
-      x     = fct_reorder(names, frac_avg, .desc = TRUE)
-    )
+      x     = names,
+      y     = percent,
+      fill  = season
+      )
   ) +
-  geom_bar(
+  geom_boxplot(
+    outlier.size = 0.1,
+    linewidth     = 0.2,
     color = "black",
-    # position = "fill",
-    position = position_dodge(),
-    stat     = "identity"
+    na.rm = TRUE, 
+    alpha = 1,
+    key_glyph = draw_key_rect  
   ) +
     
   labs(
-    x     = "Season",
-    # y     = "Proportion to Total Chl-a",
-    # y     = "PFT:Total Chlorophyll-a (%)",
+    fill  = "Season",
     y     = "Relative Abundance (%)",
-    fill  = "Phytoplankton Functional Type",
-    color = "Phytoplankton Functional Type"
+    x     = NULL,
   ) +
-  scale_fill_manual(values  = tol_muted) +
-  scale_color_manual(values = tol_muted) +
+  scale_fill_manual(values  = c("#88CCEE", "#44AA99", "#DDCC77","#CC6677")) +
+  scale_color_manual(values = c("#88CCEE", "#44AA99", "#DDCC77","#CC6677")) +
   scale_y_continuous(
-    labels = scales::percent_format(accuracy = 1),
-    expand = c(0,0),
-    limits = c(0,1),
-    sec.axis = sec_axe
+    labels = scales::label_percent(accuracy = 1),
+    breaks = seq(0, 1, 0.1),
+    expand = c(0, 0),
     ) +
+  # coord_cartesian(y = c(0, 0.7), clip = "off") +    
+  coord_cartesian(y = c(0, 1), clip = "off") +    
+    
   # theme
-  theme_classic() +
   theme(
-    text             = element_text(family = "serif", size = 20),
-    axis.title       = element_text(size = 20),
-    legend.position  = "bottom",
-    legend.direction = "horizontal",
-    plot.margin = margin(15,10,10,10, "pt")
+    text              = element_text(size = 6),
+    line              = element_line(color = "black", linewidth = 0.2),
+    rect              = element_rect(color = "black", linewidth = 0.2),
+    axis.text.x       = element_text(color = "black", size = 3),
+    axis.text.y       = element_text(color = "black"),
+    axis.ticks.x      = element_blank(),
+    plot.background   = element_rect(color = "white"),
+    legend.position   = c(0.9, 0.8),
+    legend.text       = element_text(size = 5),
+    legend.key.size   = unit(2.5, "mm"),
+    legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
+    legend.background = element_rect(color = "black"),
+    panel.border      = element_rect(color = "black")
   )
 
 # ---- save plot ---- #
 save_gg(
   plt            = last_plot(), # edit if want specific plot
   save_location  = here(dir_plt_save, "separated"),
-  save_name      = "pft_season_avg_prcnt_sep",
+  save_name      = glue("pft_season_avg_prcnt_sep", file_suffix),
   verbose        = TRUE,
-  overwrite      = FALSE,
   # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
@@ -506,14 +516,15 @@ cmtx_stck_bar_szn_stn <-
     position  = "fill",
     stat      = "identity",
     na.rm     = TRUE,
-    linewidth = 0.1
+    linewidth = 0.1,
+    width = 0.6
   ) +
   geom_rect(
     data = tibble(
       station = c("16", "10", "7"), 
       x  = c(2.6, 4.6, 6.6), 
       x2 = c(3.4, 5.4, 7.4)), 
-    aes(xmin = x, xmax = x2, ymin = 0.01, ymax = 0.99),
+    aes(xmin = x, xmax = x2, ymin = 0.005, ymax = 0.995),
     fill        = NA,
     color       = "red",
     linewidth   = 0.4,
@@ -595,13 +606,13 @@ cmtx_stck_bar_szn_stn %>%
 save_gg(
   plt            = last_plot(), # edit if want specific plot
   save_location  = here(dir_plt_save, "season_station"),
-  save_name      = "pft_bar_percent_season",
+  save_name      = glue("pft_bar_percent_season", file_suffix),
   verbose        = TRUE,
-  overwrite      = FALSE,
   # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
-  height         = 90 * 0.5625,
+  # height         = 90 * 0.5625,
+  height         = 90,
   width          = 90,
   dpi            = 600,
   units          = "mm",
@@ -619,7 +630,7 @@ Decide which to use.
 ```{r table-pft-proportions}
 shelf(gt)
 gt_pft <-
-# cmtx_l_pct
+# cmtx_l_pct %>%
  cmtx_avg_season_fract_l %>%
   mutate(
     names = fct_reorder(names, frac_avg, .fun = mean, .desc = TRUE),
@@ -671,8 +682,8 @@ gt_pft
 # ---- save tables as html and docx
 if (FALSE) {
   file_expr(
-    loc            = dir_plt_save,
-    file_base      = "pft_fraction_seasons",
+    loc            = here(dir_plt_save, "table"),
+    file_base      = glue("pft_fraction_seasons", file_suffix),
     exts           = c("html", "docx"),
     time_stamp_fmt = "%Y%m%d_%H%M%S"
   ) %$%
@@ -783,11 +794,11 @@ cmtx_l %>%
 
 # ---- save plot
 save_gg(
-  plt            = last_plot(), # edit if want specific plot
+  plt            = last_plot(),
   save_location  = here(dir_plt_save, "percent_season_year"),
-  save_name      = "pft_bar_percent_season_year",
+  save_name      = glue("pft_bar_percent_season_year", file_suffix),
   verbose        = TRUE,
-  overwrite      = FALSE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 9.7,
@@ -842,11 +853,11 @@ cmtx_l %>%
 
 # ---- save plot
 save_gg(
-  plt            = last_plot(), # edit if want specific plot
+  plt            = last_plot(),
   save_location  = here(dir_plt_save, "absolute_season_year"),
-  save_name      = "pft_bar_absolute_season_year",
+  save_name      = glue("pft_bar_absolute_season_year", file_suffix),
   verbose        = TRUE,
-  overwrite      = FALSE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 9.7,
@@ -914,12 +925,11 @@ cmtx_w %>%
 
 # ---- save plot
 save_gg(
-  plt            = last_plot(), # edit if want specific plot
+  plt            = last_plot(),
   save_location  = here(dir_plt_save, "pft_average_season"),
-  save_name      = "pft_avg_per_season",
+  save_name      = glue("pft_avg_per_season", file_suffix),
   verbose        = TRUE,
-  # overwrite      = FALSE,
-  overwrite      = TRUE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 6,

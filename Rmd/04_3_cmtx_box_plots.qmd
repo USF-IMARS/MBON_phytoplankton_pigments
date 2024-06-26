@@ -83,7 +83,23 @@ cmtx_w <-
   print()
 
 ```
+## 2.2.1 Remove Outliers?
 
+```{r remove-outliers}
+remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+if (remove_out == 1) {
+  cmtx_w <-
+    cmtx_w %>%
+    filter(
+      total_chl_a <= 1
+    )
+  
+  file_suffix <- "_no_out"
+} else {
+  file_suffix <- ""
+}
+```
 
 ## 2.3 Convert to Long Format with Percent
 
@@ -190,6 +206,26 @@ box_plt <- function(.dat, .var, .title, ...) {
     )
 }
 ```
+
+# 3.0 Summarize Stations
+
+May move to somewhere else
+
+```{r}
+cmtx_w %>%
+  count(station, season, lon, lat) %>%
+  pivot_wider(
+    data         = .,
+    id_cols      = c(station, lon, lat), # *optional* vector of unaffected columns,
+    names_from   = c(season), # category column(s) to pivot wide
+    values_from  = c(n), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    )
+
+cmtx_w
+```
+
 
 
 # 4.0 ---- Box Plots ----
@@ -543,10 +579,10 @@ walk2(
     .x %>%
       str_to_lower() %>%
       str_replace_all("\\s", "_") %>%
-      # glue(., "common suffix", .sep = "_") %>% # remove if none needed
+      glue(., .env$file_suffix)  %>% #, .sep = "_") %>% # remove if none needed
       save_gg(
         .y,
-        save_location  = here(dir_plt_save, Sys.Date()),
+        save_location  = here(dir_plt_save, Sys.Date(), str_remove(file_suffix, "^_")),
         save_name      = .,
         # time_stamp_fmt = "%Y%m%d_%H%M%S",
         time_stamp_fmt = NULL,

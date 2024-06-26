@@ -86,9 +86,116 @@ szn <- c("Winter", "Spring", "Summer", "Autumn")
 pig_dat <-
   here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
   read_csv(show_col_types = FALSE) %>%
-  mutate(season = fct(season, levels = szn)) %T>%
+  mutate(season = fct(season, levels = szn)) %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth) &
+      depth < 20
+  ) %T>%
   print()
 ```
+
+
+```{r}
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    & !str_detect(station, "24|3|7|9.5|9B") 
+  ) %>%
+  summarise(
+    .by = season,
+    chl_avg = mean(tot_chl_a, na.rm = TRUE),
+    chl_med = median(tot_chl_a, na.rm = TRUE),
+    chl_sd = sd(tot_chl_a, na.rm = TRUE),
+    chl_25 = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
+    chl_75 = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
+  )
+
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    & !str_detect(station, "24|3|7|9.5|9B") 
+    &  tot_chl_a <= 1
+  ) %>%
+  summarise(
+    .by = season,
+    chl_avg = mean(tot_chl_a, na.rm = TRUE),
+    chl_med = median(tot_chl_a, na.rm = TRUE),
+    chl_sd = sd(tot_chl_a, na.rm = TRUE),
+    chl_25 = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
+    chl_75 = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
+  )
+
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    & !str_detect(station, "24|3|7|9.5|9B") 
+  ) %>%
+  summarise(
+    .by = year,
+    chl_avg = mean(tot_chl_a, na.rm = TRUE),
+    chl_med = median(tot_chl_a, na.rm = TRUE),
+    chl_sd = sd(tot_chl_a, na.rm = TRUE),
+    chl_25 = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
+    chl_75 = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
+  )
+
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    & !str_detect(station, "24|3|7|9.5|9B") 
+    &  tot_chl_a <= 1
+  ) %>%
+  summarise(
+    .by = year,
+    chl_avg = mean(tot_chl_a, na.rm = TRUE),
+    chl_med = median(tot_chl_a, na.rm = TRUE),
+    chl_sd = sd(tot_chl_a, na.rm = TRUE),
+    chl_25 = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
+    chl_75 = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
+  )
+
+pig_dat %>%
+ filter(
+    str_detect(name_of_water_body, "Keys")
+    & !str_detect(station, "24|3|7|9.5|9B") 
+  ) %>%
+  ggplot(aes(x = date_time_utc, y = tot_chl_a)) +
+  geom_point(aes(color = station)) #+
+  # geom_line(aes(color = station)) 
+
+pig_dat %>%
+  filter(
+    str_detect(name_of_water_body, "Keys")
+    & !str_detect(station, "24|3|7|9.5|9B") 
+    &  tot_chl_a <= 1
+  ) %>%
+  ggplot(aes(x = date_time_utc, y = tot_chl_a)) +
+  # geom_point(aes(color = station)) #+
+  geom_point(aes(color = season)) #+
+  # geom_line(aes(color = station)) 
+
+
+```
+
+## 2.2.1 Remove Outliers?
+
+```{r rm-outlier}
+remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+if (remove_out == 1) {
+  pig_dat <-
+    pig_dat %>%
+    filter(
+      tot_chl_a <= 1
+    )
+  
+  file_suffix <- "_no_out"
+} else {
+  file_suffix <- ""
+}
+```
+
 
 # 3.0 ---- Plotting ----
 
@@ -337,7 +444,7 @@ plt_pigment_vs_chlor %$%
     \(.x, .y) {
       save_gg(
         plt            = .y, 
-        save_location  = here(dir_plt_save, "pigment_vs_chlor"),
+        save_location  = here(dir_plt_save, "pigment_vs_chlor", str_remove(file_suffix, "^_")),
         save_name      = glue("{.x}_vs_chla"),
         verbose        = TRUE,
         time_stamp_fmt = NULL,
@@ -359,7 +466,7 @@ plt_pigment_vs_chlor %$%
     \(.x, .y) {
       save_gg(
         plt            = .y,
-        save_location  = here(dir_plt_save, "pigment_vs_time"),
+        save_location  = here(dir_plt_save, "pigment_vs_time", str_remove(file_suffix, "^_")),
         save_name      = glue("{.x}_time"),
         verbose        = TRUE,
         time_stamp_fmt = NULL,
@@ -383,7 +490,7 @@ plt_pigment_vs_chlor %$%
 
 
 ```{r time-of-day}
- pig_dat %>%
+pig_dat %>%
   pivot_longer(
     data      = .,
     cols      = c(tot_chl_b:tchl),
@@ -570,30 +677,28 @@ plt_pig_hist_viola %>%
 # 4.0 ANOVA: Chlorophyll-a 
 
 
-```{r plt-anova}
-# shelf(ggstatsplot)
-
-n_fun <- function(x){
-  return(data.frame(y = 0.95*30,
-                    label = length(x)))
-}
-
-pig_dat_keys <- 
+```{r data-filter}
+pig_dat_keys <-
   pig_dat %>%
   filter(
-    str_detect(name_of_water_body, "Keys")
-    & !str_detect(station, "24|3|7|9.5|9B")) %>%
+    str_detect(name_of_water_body, "Keys") &
+      !str_detect(station, "24|3|7|9.5|9B")
+  ) %>%
   mutate(
-    labels = 
+    labels =
       if_else(
-        str_detect(station, "10|16|7"), 
-        "Nearshore", 
+        str_detect(station, "10|16|7"),
+        "Nearshore",
         "Offshore"
-        )
-    ) 
+      )
+  ) %T>%
+  print()
+```
 
+## 4.1 Between Stations
 
-# between stations
+```{r station-anova}
+# ---- between stations ---- #
 ggbetweenstats(
   data  = pig_dat_keys,
   x     = station,
@@ -605,6 +710,7 @@ ggbetweenstats(
 ) %>%
   print()
 
+# ---- parametric ---- #
 pig_dat_keys %>%
   aov(
     data = .,
@@ -612,7 +718,20 @@ pig_dat_keys %>%
   ) %>%
   summary()
 
-# between season
+# ---- nonparametric ---- #
+pig_dat_keys %>%
+  rstatix::kruskal_test(
+    .,
+    tot_chl_a ~ station
+  ) 
+
+```
+
+
+## 4.2 Between Season
+
+
+```{r season-anova}
 ggbetweenstats(
   data  = pig_dat_keys,
   x     = season,
@@ -624,6 +743,7 @@ ggbetweenstats(
 ) %>%
   print()
 
+# ---- parametric ---- #
 pig_dat_keys %>%
   aov(
     data = .,
@@ -631,9 +751,28 @@ pig_dat_keys %>%
   ) %>%
   summary()
 
+# ---- nonparametric ---- #
+pig_dat_keys %>%
+  rstatix::kruskal_test(
+    .,
+    tot_chl_a ~ season
+  ) 
 
+# ---- pairwise Dunn's test ---- #
+pig_dat_keys %>%
+  rstatix::dunn_test(
+    .,
+    tot_chl_a ~ season
+  )
+```
 
-# between year
+## 4.3 Between Years
+
+Both parametric and nonparametric are not significant
+
+Fail to reject the null hypothesis
+```{r year-anova}
+# ---- between year ---- #
 ggbetweenstats(
   data  = pig_dat_keys,
   x     = year,
@@ -641,10 +780,11 @@ ggbetweenstats(
   title = "Year",
   xlab  = "Year",
   ylab  = "Concentration",
-  type  = "parametric"
+  type  = "nonparametric"
 ) %>%
   print()
 
+# ---- parametric ---- #
 pig_dat_keys %>%
   aov(
     data = .,
@@ -652,14 +792,66 @@ pig_dat_keys %>%
   ) %>%
   summary()
 
-
-
-# between near/off
+# ---- nonparametric ---- #
 pig_dat_keys %>%
-  filter(
-    str_detect(station, "10|12|16|18")
-    & tot_chl_a < 1.5
-    ) %>%
+  rstatix::kruskal_test(
+    .,
+    tot_chl_a ~ year
+  ) 
+
+# ---- pairwise Dunn's test ---- #
+pig_dat_keys %>%
+  rstatix::dunn_test(
+    .,
+    tot_chl_a ~ year
+  )
+```
+
+## 4.4 Distance From Shore
+```{r distance-anova}
+pig_dat_keys %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+ggbetweenstats(
+  data  = ,
+  x     = labels,
+  y     = tot_chl_a,
+  title = "Distance",
+  xlab  = "Distance",
+  ylab  = "Concentration",
+  type  = "parametric"
+) %>%
+  print()
+
+# ---- parametric ---- #
+pig_dat_keys %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  aov(
+    data = .,
+    tot_chl_a ~ labels
+  ) %>%
+  summary()
+
+# ---- nonparametric ---- #
+pig_dat_keys %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  rstatix::kruskal_test(
+    .,
+    tot_chl_a ~ labels
+  )
+
+# ---- pairwise Dunn's test ---- #
+pig_dat_keys %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  rstatix::dunn_test(
+    .,
+    tot_chl_a ~ labels
+  )
+```
+
+
+```{r distance-anova}
+pig_dat_keys %>%
+  # filter(str_detect(station, "10|12|16|18")) %>%
 ggbetweenstats(
   data  = ,
   x     = labels,
@@ -671,31 +863,36 @@ ggbetweenstats(
 ) %>%
   print()
 
+# ---- parametric ---- #
 pig_dat_keys %>%
+  # filter(str_detect(station, "10|12|16|18")) %>%
   aov(
     data = .,
     tot_chl_a ~ labels
   ) %>%
   summary()
 
-
+# ---- nonparametric ---- #
 pig_dat_keys %>%
-  filter(str_detect(station, "10|12|16|18")) %>%
-rstatix::dunn_test(
+  # filter(str_detect(station, "10|12|16|18")) %>%
+  rstatix::kruskal_test(
     .,
     tot_chl_a ~ labels
-)
+  )
 
+# ---- pairwise Dunn's test ---- #
 pig_dat_keys %>%
-  filter(
-    str_detect(station, "10|12|16|18")
-    & tot_chl_a < 2 
-    ) %>%
-rstatix::kruskal_test(
+  # filter(str_detect(station, "10|12|16|18")) %>%
+  rstatix::dunn_test(
     .,
-    tot_chl_a ~ station
-)
+    tot_chl_a ~ labels
+  )
+```
 
+
+## 4.5 Interactions
+
+```{r plt-anova}
 pig_dat_keys %>%
   filter(
     str_detect(station, "10|12|16|18")
@@ -722,6 +919,14 @@ pig_dat_keys %>%
   ) %>%
   summary()
 
+# year and station
+pig_dat_keys %>%
+  aov(
+    data = .,
+    tot_chl_a ~ station * year
+  ) %>%
+  summary()
+
 # season, station and year
 pig_dat_keys %>%
   aov(
@@ -729,8 +934,6 @@ pig_dat_keys %>%
     tot_chl_a ~ station * season * year
   ) %>%
   summary()
-
-
 
 ```
 ```{r random-values}
@@ -770,7 +973,7 @@ geom_jitter(
   na.rm = TRUE
   ) +
 
-```{r chla-boxplot, fig.width=3.54, fig.height=1.99}
+```{r chla-boxplot, fig.width=10}
 chl_a_box <-
   pig_dat %>%
   filter(!str_detect(station, "^24$")  
@@ -824,6 +1027,18 @@ chl_a_box <-
                        mutate(tot_chl_a = ylims[2] - 0.005 + 0.05),
               color = "orange",
               size = 0.25
+          ) +
+          stat_summary(
+            color = "#CC0000",
+            # color = "blue",
+            # fun.data   = mean_sdl, # std dev * 2
+            # fun.data   = mean_cl_normal, # lower and upper Gaussian confidence limits 
+            fun.data   = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
+            geom  = "linerange",
+            linewidth = 0.5,
+            # shape = 20,
+            size  = 0.5,
+            na.rm = TRUE
           ) +
           stat_summary(
             color = "#CC0000",
@@ -894,7 +1109,8 @@ pig_dat %>%
 ## 5.2 Save: Chlorophyll-a Plots
 
 ```{r save-chla-boxplot}
-chl_a_box %$%
+chl_a_box  %>%
+  filter(str_detect(name_of_water_body, "Keys")) %$%
   walk2(
     .x = name_of_water_body,
     .y = plt,
@@ -911,8 +1127,8 @@ chl_a_box %$%
         save_gg(
           .y +
           labs(title = .x),
-          save_location  = here(dir_plt_save, "chla_box"),
-          save_name      = glue(naming, "chla_title", .sep = "_"),
+          save_location  = here(dir_plt_save, "chla_box", str_remove(file_suffix, "^_")),
+          save_name      = glue(naming, "_chla_title", file_suffix),
           verbose        = TRUE,
           overwrite      = overwrite,
           time_stamp_fmt = "%Y%m%d_%H%M%S",
@@ -928,8 +1144,8 @@ chl_a_box %$%
       if (str_detect(titles, "without|both")) {
         save_gg(
           .y,
-          save_location  = here(dir_plt_save, "chla_box"),
-          save_name      = glue(naming, "chla", .sep = "_"),
+          save_location  = here(dir_plt_save, "chla_box", str_remove(file_suffix, "^_")),
+          save_name      = glue(naming, "_chla", file_suffix),
           verbose        = TRUE,
           overwrite      = overwrite,
           time_stamp_fmt = "%Y%m%d_%H%M%S",
@@ -981,7 +1197,8 @@ chl_a_box <-
           count(season) %>%
           mutate(labels = glue("{season} (N = {n})"))
         
-        .x %>%
+        plt <- 
+          .x %>%
           ggplot(
             aes(
               x = season,
@@ -998,17 +1215,17 @@ chl_a_box <-
             alpha = 1,
             key_glyph = draw_key_rect
             ) +
-          geom_point(
-            data  = tibble(
-              season    = c("Winter", "Winter"), 
-              tot_chl_a = c(0.79, NA), 
-              nearoff   = c("Nearshore", "Offshore")
-              ),
-            color = "#CC0000",
-            size  = 2,
-            position = position_dodge2(0.75, preserve = "single"),
+          stat_summary(
+            color       = "#CC0000",
+            # fun.data    = mean_sdl, # std dev * 2
+            # fun.data    = mean_cl_normal, # lower and upper Gaussian confidence limits
+            fun.data    = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
+            geom        = "linerange",
+            linewidth   = 0.5,
+            size        = 0.5,
+            na.rm       = TRUE,
             show.legend = FALSE,
-            na.rm = TRUE
+            position    = position_dodge2(0.75, preserve = "single"),
           ) +
           stat_summary(
             color = "#CC0000",
@@ -1017,8 +1234,8 @@ chl_a_box <-
             shape = 20,
             size  = 2,
             na.rm = TRUE,
-            show.legend = FALSE,
             position = position_dodge2(0.75, preserve = "single"),
+            show.legend = FALSE,
           ) +
           labs(
             title = NULL,
@@ -1040,22 +1257,41 @@ chl_a_box <-
           coord_cartesian(y = ylims, clip = "off") +
 
           theme(
-            text            = element_text(size = 6),
-            line            = element_line(color = "black", linewidth = 0.2),
-            rect            = element_rect(color = "black", linewidth = 0.2),
-            axis.title.y    = element_markdown(),
-            axis.title.x    = element_markdown(),
-            axis.text.x     = element_text(color = "black"),
-            axis.text.y     = element_text(color = "black"),
-            axis.ticks.x    = element_blank(),
-            plot.background = element_rect(color = "white"),
-            panel.border    = element_rect(color = "black"),
-            legend.position = c(0.9, 0.9),
-            legend.text = element_text(size = 5),
-            legend.key.size = unit(2.5, "mm"),
-            legend.margin = margin(0.5, 0.5, 0.5, 0.5),
+            text              = element_text(size = 6),
+            line              = element_line(color = "black", linewidth = 0.2),
+            rect              = element_rect(color = "black", linewidth = 0.2),
+            axis.title.y      = element_markdown(),
+            axis.title.x      = element_markdown(),
+            axis.text.x       = element_text(color = "black"),
+            axis.text.y       = element_text(color = "black"),
+            axis.ticks.x      = element_blank(),
+            plot.background   = element_rect(color = "white"),
+            panel.border      = element_rect(color = "black"),
+            legend.position   = c(0.9, 0.9),
+            legend.text       = element_text(size = 5),
+            legend.key.size   = unit(2.5, "mm"),
+            legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
             legend.background = element_rect(color = "black")
           )
+        
+        if (.env$remove_out == 2) {
+            plt <-
+              plt +
+            geom_point(
+            data  = tibble(
+              season    = c("Winter", "Winter"),
+              tot_chl_a = c(0.79, NA),
+              nearoff   = c("Nearshore", "Offshore")
+              ),
+            color = "#CC0000",
+            size  = 2,
+            position = position_dodge2(0.75, preserve = "single"),
+            show.legend = FALSE,
+            na.rm = TRUE
+          ) 
+        }
+        
+        return(plt)
       }
     )
   )
@@ -1084,10 +1320,9 @@ pig_dat %>%
 # ---- save plot
 save_gg(
   plt            = chl_a_box$plt[[1]], # edit if want specific plot
-  save_location  = here(dir_plt_save, "chla_nearoff_box"),
+  save_location  = here(dir_plt_save, "chla_nearoff_box", str_remove(file_suffix, "^_")),
   save_name      = "chla_nearoff",
   verbose        = TRUE,
-  overwrite      = FALSE,
   # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
@@ -1118,6 +1353,10 @@ Issues not being able to set the colors in seasons
 # shell.exec(here::here("data", "cam_test", "chla_box_season_year"))
 # gg_stop_recording()
 
+n_fun <- function(x){
+  return(data.frame(y = 0.95*30,
+                    label = length(x)))
+}
 
 
 chl_a_box2 <- 
