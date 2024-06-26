@@ -11,58 +11,562 @@ output: html_document
 
 ----- 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library("rnoaa")
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional packages, if from GitHub, include username
+    rnoaa
+)
+
+conflicts_prefer(
+    dplyr::filter, 
+    dplyr::select
+    )
 ```
 
-```{r wind-speed-data}
-# rnoaa package seems promising to gather this data
-# https://docs.ropensci.org/rnoaa/articles/rnoaa.html
+# Hurricanes that Affected the Florida Keys
 
+```{r hurricane-dates}
+hurricane_dates <-
+  tribble(
+    ~date, ~name,
+    # "2015-08-30", "Erika",
+    "2016-10-12", "Nicole",
+    "2017-07-31", "Emily",
+    "2017-09-10", "Irma",
+    "2017-10-29", "Philippe",
+    "2018-09-03", "Gordon",
+    "2019-09-01", "Dorian",
+    "2020-05-25", "Bertha",
+    "2020-08-26", "Laura"
+  ) %>%
+  mutate(date = ymd(date)) %T>% 
+  print()
+
+
+```
+
+# Add NOAA Key to `.Renvrion`
+
+`rnoaa` package seems promising to gather wind data
+<https://docs.ropensci.org/rnoaa/articles/rnoaa.html>
+
+go to <https://www.ncdc.noaa.gov/cdo-web/token> to get token
+then paste into `.Renvrion` using below code
+copy and paste: NOAAKEY = "<ENTER TOKEN HERE>"
+
+NOTE: `.Renviron` should be ignored in `.gitignore`
+
+```{r wind-speed-data}
 path_in <- here("data", "raw")
 # wind_url <- "https://meteostat.net/en/station/72211?t=2016-01-01/2021-12-31"
 
-# will need to go to https://www.ncdc.noaa.gov/cdo-web/token to get token
-# then paste into .Rprofile using below code, should be ignored in .gitignore
-usethis::edit_r_profile(scope = "project")
 
-# when running, we have to source it,
-source(here::here(".Rprofile"))
+if (str_equal(Sys.getenv("NOAAKEY"), "")) {
+  # usethis::edit_r_profile(scope = "project") # <-- old way
 
-# then set the options to it
-# DO NOT paste the raw key here - use above
-options(noaakey = noaakey)
+  # copy and paste: NOAAKEY = "<ENTER TOKEN HERE>"
+  usethis::edit_r_environ(scope = "project")
+  message("RESTART R!")
+} else {
+  message("`NOAAKEY` found in `.Renviron`")
+  
+  # set noaakey in options
+  options(noaakey = Sys.getenv("NOAAKEY"))
+}
+
+```
+## Test `noaakey` Works with `rnoaa`
+
+```{r test-rnoaa}
+stopifnot(
+  "Restart R for `.Renvrion` to take effect" = !is.null(getOption("noaakey"))
+)
+
 
 # test that it works
 ncdc_locs(locationcategoryid = "CITY", sortfield = "name", sortorder = "desc")
 
 # might want data from https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/gsom-gsoy.pdf
-ncdc_datasets(locationid = "ZIP:33050", startdate = "2015-03-01", enddate = "2022-05-31")
-rnoaa::ncdc_stations(locationid = "ZIP:33050")
-ncdc(locationid = "ZIP:33050", startdate = "2010-03-01", enddate = "2010-05-31", datasetid = "GHCND")
-
-# need to check station ids around the florida keys
-out <- ghcnd(stationid = "USW00012873", date_min = "2010-01-01", add_units = T) %>%
-  filter(year >= 2016 & year <= 2021)
-alldat <- ghcnd_splitvars(out)
-awnd_df <- as.data.frame(alldat$awnd) %>%
-  separate(col = "date", into = c("year", "month", "day"), sep = "-", remove = F)
-
-wsf5_df <- as.data.frame(alldat$wsf5) %>%
-  separate(col = "date", into = c("year", "month", "day"), sep = "-", remove = F)
-
-# average wind speeds (AWND) and fastest 5-second wind speeds (WSF5) are in tenths of meters per second
-ggplot(filter(awnd_df, year == 2016), aes(x = date, y = awnd)) +
-  geom_point()
+# ncdc_datasets(
+#   locationid = "ZIP:33050", 
+#   startdate  = "2015-03-01", 
+#   enddate    = "2022-05-31"
+#   )
+```
 
 
-# plotting wind speeds during Hurricane Irma
-ggplot(filter(awnd_df, year == 2017 & month == "09"), aes(x = date, y = awnd)) +
-  geom_point()
 
-ggplot(filter(wsf5_df, year == 2017 & month == "09"), aes(x = date, y = wsf5)) +
-  geom_point()
+# NOAA Data
+
+
+Explain variables:
+<https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/gsom-gsoy.pdf>
+
+## Find NOAA Stations in Florida Keys
+
+```{r search-noaa}
+noaa_station_search <- 
+  ncdc_stations(locationid = "ZIP:33050") %$%
+  data %>%
+  mutate(
+    min_date = as_date(mindate),
+    max_date = as_date(maxdate),
+    name2    = str_remove(name, ", FL US")
+  ) %>%
+  filter(
+    !str_detect(name2, "(?i)miami|lauderdale")
+    & max_date > as_date("2016-01-01") 
+    & min_date < as_date("2020-01-01")
+  ) %T>% 
+  print() 
+
+# quickly plot
+noaa_station_search %>%
+  ggplot(aes(x = longitude, y = latitude)) +
+  geom_point() +
+  ggrepel::geom_text_repel(aes(label = name2), max.overlaps = 20) +
+  coord_cartesian(xlim = c(NA, -80.6), ylim = c(24, 25.5)) +
+  theme_bw()
+```
+
+
+## Extract Time Series from NOAA Stations
+
+```{r extract-noaa-data}
+noaa_station_data <-
+  noaa_station_search %>%
+  filter(str_detect(id, "(?i)ghcnd")) %>%
+  mutate(
+      id2 = str_remove(id, "GHCND:"),
+      
+      # extract data from NOAA
+      data = map(
+        id2,
+        \(.x) {
+          ghcnd(
+            stationid = .x,
+            date_min  = "2010-01-01",
+            add_units = TRUE
+          ) %>%
+            filter(
+              year >= 2016 
+              & year <= 2021
+            )
+        }
+      ),
+      
+      # separate data into individual variables
+      vars = map(
+        data,
+        ~ ghcnd_splitvars(.x) %>%
+          map(
+            \(.y) {
+              .y %>%
+                separate_wider_delim(
+                  cols  = "date",
+                  names = c("year", "month", "day"),
+                  delim = "-",
+                  cols_remove = FALSE
+                )
+            }
+          )
+      )
+    ) %>%
+    unnest_wider(vars, names_sep = "_") %>%
+  select(!contains(c("snow", "snwd")))  
+    
+noaa_station_data %T>% 
+  print() %>%
+  select("id_og" = id, out_prcp) %>%
+  unnest(out_prcp, names_repair = "unique", keep_empty = TRUE)
+
+
+names(noaa_station_data)
+```
+
+
+## Extract Precipitation
+
+Units: mL
+
+```{r ts-prcp-stn, fig.width=20}
+noaa_station_data %>%
+  mutate(
+    plt_prcp = map2(
+      out_prcp,
+      name2,
+      .hurr = hurricane_dates,
+      \(.x, .y, .hurr) {
+        .x %>%
+          ggplot(aes(x = date, y = prcp)) +
+          geom_line(na.rm = TRUE) +
+          geom_vline(xintercept = .hurr$date, color = "red", linetype = "dashed") +
+          geom_text(
+            data = .hurr, 
+            aes(x = date, y = 2000, label = name,),
+            angle = 90,
+            vjust = -0.5,
+            inherit.aes = FALSE,
+            ) +
+          # geom_smooth(method = "loess", span = 0.05, se = FALSE) +
+          scale_x_date(
+            expand = c(0, 0),
+            date_breaks = "1 year",
+            date_labels = "%Y"
+          ) +
+          theme_bw()
+      }
+    )
+  ) %>%
+  pull(plt_prcp)
+```
+
+
+
+
+```{r ts-precip, fig.width=25}
+prcp_data <-
+  noaa_station_data %T>%
+  print() %>%
+  select("id_og" = id, name2, out_prcp) %>%
+  unnest(out_prcp, names_repair = "unique", keep_empty = TRUE) %>%
+  arrange(date)
+
+
+prcp_daily <-
+  prcp_data %>%
+  summarize(
+    .by = c(date),
+    prcp_avg = mean(prcp, na.rm = TRUE),
+    prcp_sd  = sd(prcp, na.rm = TRUE)
+  ) %>%
+  mutate(
+    prcp_avg2 = prcp_avg,
+    prcp_avg = if_else(prcp_sd < 0.05, NA, prcp_avg),
+    # prcp_avg = if_else(prcp_sd < 100, NA, prcp_avg),
+    err_max = prcp_avg + prcp_sd,
+    err_min = prcp_avg - prcp_sd
+  ) %T>% 
+  print()
+
+prcp_monthly <-
+  prcp_data %>%
+  summarize(
+    .by = c(year, month),
+    prcp_avg = mean(prcp, na.rm = TRUE),
+    prcp_sd  = sd(prcp, na.rm = TRUE)
+  ) %>%
+  mutate(
+    date = paste(year, month, sep = "-"),
+    date = ym(date),
+    err_max = prcp_avg + prcp_sd,
+    err_min = prcp_avg - prcp_sd
+  ) %T>% 
+  print()
+  
+
+
+
+prcp_data %>%
+  ggplot(aes(x = date, y = prcp, color = name2)) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_line(
+    linewidth = 1.25,
+    na.rm = TRUE,
+    show.legend = FALSE
+    ) +
+  geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
+  geom_text(
+      data = hurricane_dates, 
+      aes(x = date, y = 2000, label = name,),
+      angle = 90,
+      vjust = -0.5,
+      inherit.aes = FALSE,
+      ) +
+  geom_step(
+    data = prcp_monthly,
+    aes(x = date, y = prcp_avg),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  geom_pointrange(
+    data = prcp_monthly,
+    aes(x = date, y = prcp_avg, ymin = err_min, ymax = err_max),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  labs(
+    x = NULL
+  ) +
+  scale_x_date(
+    expand = expansion(0, 0),
+    date_breaks = "1 year",
+    date_labels = "%Y",
+    date_minor_breaks = "6 month"
+  ) +
+  facet_wrap(~name2, ncol = 1) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    legend.margin = margin(t = -10)
+  )
+
+
+
+ggplot() +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
+  geom_text(
+      data = hurricane_dates, 
+      aes(x = date, y = 2000, label = name,),
+      angle = 90,
+      vjust = -0.5,
+      inherit.aes = FALSE,
+      ) +
+  geom_pointrange(
+    data = prcp_daily,
+    aes(x = date,  y = prcp_avg, ymin = err_min, ymax = err_max),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+ geom_step(
+    data = prcp_monthly,
+    aes(x = date, y = prcp_avg),
+    linewidth = 1.25,
+    color = "lightblue",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  geom_pointrange(
+    data = prcp_monthly,
+    aes(x = date, y = prcp_avg, ymin = err_min, ymax = err_max),
+    color = "darkblue",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  scale_x_date(
+    expand = expansion(0, 0),
+    date_breaks = "1 year",
+    date_labels = "%Y",
+    date_minor_breaks = "6 month"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    legend.margin = margin(t = -10)
+  )
+
+ggplot() +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
+  geom_text(
+      data = hurricane_dates, 
+      aes(x = date, y = 2000, label = name,),
+      angle = 90,
+      vjust = -0.5,
+      inherit.aes = FALSE,
+      ) +
+  geom_point(
+    data = prcp_daily,
+    aes(x = date,  y = prcp_avg, ymin = err_min, ymax = err_max),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  geom_smooth(
+    data = prcp_daily,
+    aes(x = date, y = prcp_avg2),
+    method = "loess", 
+    span = 0.05
+  ) +
+  labs(
+    y = expression("Precipitation"~(mL))
+  ) +
+  scale_x_date(
+    expand = expansion(0, 0),
+    date_breaks = "1 year",
+    date_labels = "%Y",
+    date_minor_breaks = "6 month"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    legend.margin = margin(t = -10)
+  )
+
+```
+
+## AWND – Average Wind Speed/Fastest 2-minute
+
+units: m/s
+
+```{r ts-wind-speed, fig.width=25}
+awnd_data <-
+  noaa_station_data %T>%
+  print() %>%
+  select("id_og" = id, name2, out_awnd) %>%
+  unnest(out_awnd, names_repair = "unique", keep_empty = FALSE) %>%
+  arrange(date) %T>% 
+  print()
+
+awnd_monthly <-
+  awnd_data %>%
+  summarize(
+    .by = c(year, month),
+    awnd_avg = mean(awnd, na.rm = TRUE),
+    awnd_sd  = sd(awnd, na.rm = TRUE)
+  ) %>%
+  mutate(
+    date = paste(year, month, sep = "-"),
+    date = ym(date),
+    err_max = awnd_avg + awnd_sd,
+    err_min = awnd_avg - awnd_sd
+  ) %T>% 
+  print()
+  
+
+
+
+awnd_data %>%
+  ggplot(aes(x = date, y = awnd, color = name2)) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_line(
+    linewidth   = 0.75,
+    na.rm       = TRUE,
+    show.legend = FALSE,
+    color       = "blue"
+    ) +
+  geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
+  geom_text(
+      data = hurricane_dates, 
+      aes(x = date, y = 200, label = name,),
+      angle = 90,
+      vjust = -0.5,
+      inherit.aes = FALSE,
+      ) +
+  geom_step(
+    data = awnd_monthly,
+    aes(x = date, y = awnd_avg),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  geom_pointrange(
+    data = awnd_monthly,
+    aes(x = date, y = awnd_avg, ymin = err_min, ymax = err_max),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  geom_smooth(method = "loess", span = 0.05, show.legend = FALSE) +
+  labs(
+    x = NULL,
+    y = expression("Average Daily Wind Speed"~(m~s^-1)) 
+    ) +
+  scale_x_date(
+    expand = expansion(0, 0),
+    date_breaks = "1 year",
+    date_labels = "%Y",
+    date_minor_breaks = "6 month"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    legend.margin = margin(t = -10)
+  )
+```
+## WSF2 – Maximum Wind Speed/Fastest 2-minute
+
+units: m/s
+
+```{r ts-wind-speed, fig.width=25}
+wsf2_data <-
+  noaa_station_data %T>%
+  print() %>%
+  select("id_og" = id, name2, out_wsf2) %>%
+  unnest(out_wsf2, names_repair = "unique", keep_empty = FALSE) %>%
+  arrange(date) %T>% 
+  print()
+
+wsf2_monthly <-
+  wsf2_data %>%
+  summarize(
+    .by = c(year, month),
+    wsf2_avg = mean(wsf2, na.rm = TRUE),
+    wsf2_sd  = sd(wsf2, na.rm = TRUE)
+  ) %>%
+  mutate(
+    date = paste(year, month, sep = "-"),
+    date = ym(date),
+    err_max = wsf2_avg + wsf2_sd,
+    err_min = wsf2_avg - wsf2_sd
+  ) %T>% 
+  print()
+  
+
+
+
+wsf2_data %>%
+  ggplot(aes(x = date, y = wsf2, color = name2)) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_line(
+    linewidth   = 0.75,
+    na.rm       = TRUE,
+    show.legend = FALSE,
+    color       = "blue"
+    ) +
+  geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
+  geom_text(
+      data = hurricane_dates, 
+      aes(x = date, y = 200, label = name,),
+      angle = 90,
+      vjust = -0.5,
+      inherit.aes = FALSE,
+      ) +
+  geom_step(
+    data = wsf2_monthly,
+    aes(x = date, y = wsf2_avg),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  geom_pointrange(
+    data = wsf2_monthly,
+    aes(x = date, y = wsf2_avg, ymin = err_min, ymax = err_max),
+    color = "red",
+    inherit.aes = FALSE,
+    na.rm = TRUE
+  ) +
+  geom_smooth(method = "loess", span = 0.05, show.legend = FALSE) +
+  labs(
+    x = NULL,
+    y = expression("Max 2 Minute Wind Speed"~(m~s^-1)) 
+    ) +
+  scale_x_date(
+    expand = expansion(0, 0),
+    date_breaks = "1 year",
+    date_labels = "%Y",
+    date_minor_breaks = "6 month"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    legend.margin = margin(t = -10)
+  )
+
+
 
 
 ```
+
+
 
