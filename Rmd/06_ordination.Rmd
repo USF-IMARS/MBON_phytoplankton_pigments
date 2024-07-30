@@ -21,7 +21,7 @@ librarian::shelf(
     # broom # optional
     
     # additional
-     vegan, gavinsimpson/ggvegan, fawda123/ggord, jfq3/ggordiplots,
+    vegan, gavinsimpson/ggvegan, fawda123/ggord, jfq3/ggordiplots,
     GGally, cowplot, ggfortify, ape,
     ecodist # not sure if needed
 )
@@ -57,25 +57,47 @@ dir_plt_save  <- here("data", "plots", "ordination")
 
 dir_create(here(dir_plt_save))
 
-# set season names and order
+# set season names and order  ---- #
 szn <- c("Winter", "Spring", "Summer", "Autumn")
 
-# ---- CHEMTAX files
-cmtx_dat <- 
-  here("data", "processed", "chemtax_analysis", "chemtax_w_meta_wide.csv") %>%
-  read_csv(show_col_types = FALSE) %>%
-  mutate(season = fct_relevel(season, szn)) %T>% print()
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
 
-cmtx_dat %>%
-    mutate(.by = c(cruise, station),
-          stn_samp = n(),
-           .before = station) %>%
-    filter(
-      .by = c(cruise_id, station),
-      min(depth) == depth 
-      & depth < 20
-    ) %>%
-      arrange(-depth)
+# # ---- CHEMTAX files
+# cmtx_dat <- 
+#   here("data", "processed", "chemtax_analysis", "chemtax_w_meta_wide.csv") %>%
+#   read_csv(show_col_types = FALSE) %>%
+#   mutate(season = fct_relevel(season, szn)) %T>% print()
+# 
+# cmtx_dat %>%
+#     mutate(.by = c(cruise, station),
+#           stn_samp = n(),
+#            .before = station) %>%
+#     filter(
+#       .by = c(cruise_id, station),
+#       min(depth) == depth 
+#       & depth < 20
+#     ) %>%
+#       arrange(-depth)
+
+
+
+
+
+# ---- load chemtax data in wide format ---- #
+cmtx_nutr <-
+  here("data", "processed", "06_1_merge_chemtax_nutrient", "chemtax_nutrient.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  mutate(
+    season  = fct(season, levels = szn),
+    station = fct_reorder(station, lon.x)
+  ) %T>% 
+  print()
+
+
 
 # ---- CTD data
 ctd_dat_summary <- 
@@ -86,12 +108,7 @@ ctd_dat_summary <-
 
 # ---- merge data
 env_cmtx <-
-  cmtx_dat %>%
-  filter(
-    .by = c(cruise_id, station),
-    min(depth) == depth &
-      depth < 20
-  ) %>%
+  cmtx_nutr %>%
   left_join(
     ctd_dat_summary,
     by = join_by(
@@ -156,7 +173,8 @@ Vectors can be plotted as well.
 #' @param  vector_dat Data to add vectors to plot. Needs to have the same rows 
 #'                    of data
 #'                    Default: data, but can be other variables.        
-#' @param .group_var A grouping variable to add color to plot
+#' @param .group_var_col A grouping variable to add color to plot
+#' @param .group_var_shape A grouping variable to add shapes to plot
 #' @param pc The principal components to plot
 #' @param level Confidence interval for ellipsis on grouping variable
 #' @param dist_meth Distance metric Default: "bray"
@@ -171,7 +189,8 @@ Vectors can be plotted as well.
 gg_pcoa2 <- function(
     data,
     vector_dat = data,
-    .group_var = NULL,
+    .group_var_col = NULL,
+    .group_var_shape = NULL,
     pc         = c(1, 2),
     level      = 0.68,
     dist_meth  = "bray",
@@ -192,7 +211,8 @@ gg_pcoa2 <- function(
   # calc distance matrix
   pcoa <-
     vegdist(
-      data[, -1],
+      # data[, -1],
+      select(data, -contains(c(.group_var_col, .group_var_shape))),
       method = dist_meth,
       na.rm  = TRUE
     ) %>%
@@ -213,7 +233,7 @@ gg_pcoa2 <- function(
   # extract site values
   dat_pcoa <-
     as_tibble(pcoa$vectors) %>%
-    bind_cols("group" = data[[.group_var]], .) %>%
+    bind_cols("group" = data[[.group_var_col]], .) %>%
     rename_with(
       .cols = contains("Axis"),
       .fn   = \(x) str_replace(x, "Axis\\.", "PCoA")
@@ -232,7 +252,8 @@ gg_pcoa2 <- function(
       aes(
         x     = .data[[x_var]],
         y     = .data[[y_var]],
-        color = group
+        color = group,
+        # shape = group2
       )
     ) +
     geom_vline(
@@ -251,7 +272,7 @@ gg_pcoa2 <- function(
   # add vectors
   if (plt_vector) {
       
-    vector_dat   <- select(vector_dat, -{{ .group_var }})
+    vector_dat   <- select(vector_dat, -{{ .group_var_col }})
 
     pr_coo       <- pcoa$vectors
     pr_coo[, pc] <- pr_coo[, pc] %*% diag(pc)
@@ -307,7 +328,8 @@ gg_pcoa2 <- function(
     plt +
     vect_list[[1]] +
     geom_point(
-      aes(color = group),
+      aes(color = group, 
+          shape = group),
       size = 1.5,
       alpha = 1
     ) +
@@ -322,7 +344,8 @@ gg_pcoa2 <- function(
     vect_list[[2]] +
     labs(
       x = eig$labels[pc[1]],
-      y = eig$labels[pc[2]]
+      y = eig$labels[pc[2]],
+      shape = "Season"
     ) +
 
     scale_color_discrete(name = "Season") +
@@ -358,16 +381,24 @@ Two different data can be used:
 Perform PCA on CTD Data
 
 Very simple, no vectors plotted
-```{r plt-pcoa-pca, fig.width=10, fig.height=6}
+
+
+
+```{r plt-pcoa-pca, fig.width=15, fig.height=10}
 # ---- PCoA on PFT groups
 ## calc and plot
 pcoa_dat <-
   # select(cmtx_dat, season, chloro:pras) %>% # using all data
-   select(env_cmtx, season, chloro:pras) %>% # using filtered data with CTD
+   select(env_cmtx, 
+          station, 
+          # season, 
+          chloro:pras) %>% # using filtered data with CTD
+  filter(str_detect(station, "10|12|18|16")) %>%
   gg_pcoa2(
     pc         = c(1, 2),
     .correct   = "none",
-    .group_var = "season",
+    # .group_var_col = "season",
+    .group_var_col = "station",
     plt_vector = TRUE
   )
 
@@ -388,6 +419,7 @@ pca_plt <-
     env_pca,
     data   = select(env_cmtx_filt,  season, temp, sal, par, sal),
     colour = "season"
+    # colour = "station"
   ) +
   scale_colour_discrete(name = "Season") +
   theme_classic() +
@@ -422,6 +454,7 @@ save_gg(
   save_name      = "pft_pcoa",
   verbose        = TRUE,
   overwrite      = FALSE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "jpeg",
   height         = 10,
@@ -474,36 +507,43 @@ Notes about PERMANOVA (use `betadisper`):
 ```{r dispersion}
 set.seed(1082002)
 # PFT vs season
-vegdist(
-  select(env_cmtx_filt, chloro:pras),
-  method = "bray"
+manova_pft_season <-
+  vegdist(
+    select(env_cmtx_filt, chloro:pras),
+    method = "bray"
   ) %>%
   betadisper(
-    group = env_cmtx_filt$season  
-  ) %T>% print() %>%
-  anova()
+    group = env_cmtx_filt$season
+  ) %T>% print()
 
+anova(manova_pft_season)
+plot(manova_pft_season)
+boxplot(manova_pft_season)
+    
 # CTD vs season
 ctd_perm_test <- 
   select(env_cmtx_filt, season, temp, sal, par) %>%
   mutate(across(where(is.numeric), scale)) 
 
-ctd_perm_test %>%
+manova_ctd_season <-
+  ctd_perm_test %>%
   select(-season) %>%
   dist(
     method = "euclidean"
   ) %>%
   betadisper(
-    group = env_cmtx_filt$season  
-  ) %T>% print() %>%
-  anova()
+    group = env_cmtx_filt$season
+  ) %T>% print() 
 
+anova(manova_ctd_season)
+plot(manova_ctd_season)
+boxplot(manova_ctd_season)
 
 ```
 
 ### 4.1.2 Perform Permanova
 
-```{r permanova}
+```{r season-permanova}
 #' Pairwise Permutation MANOVA
 #'
 #' FUNCTION_DESCRIPTION
@@ -572,14 +612,15 @@ permanova_r <-
   t() %>%
   as_tibble() %>%
   set_colnames(c("szn1", "szn2")) %>%
-  unite(season_pairs, szn1, szn2, sep = "|") %>%
+  unite(col = "season_pairs", szn1, szn2, sep = "|") %>%
   mutate(
     pairwise_p =
       map(
         .x = season_pairs,
         .f =
           ~ szn_adonis2(
-            .data    = cmtx_dat,
+            # .data    = cmtx_dat,
+            .data    = select(env_cmtx_filt, season, chloro:pras),
             pairs    = .x,
             pair_col = season,
             formula  = "season",
@@ -596,7 +637,55 @@ permanova_r <-
     .before = results
   ) %T>% print()
 
+
+unnest(permanova_r, results)
 permanova_r$results
+
+
+```
+
+
+```{r year-permanova}
+# PFT vs year
+adonis2(
+  select(env_cmtx_filt, chloro:pras) ~ year,
+  data   = select(env_cmtx_filt, year),
+  method = "bray"
+)
+
+permanova_r_year <- 
+  combn(c(2016:2021), 2) %>%
+  t() %>%
+  as_tibble() %>%
+  set_colnames(c("year1", "year2")) %>%
+  unite(col = "year_pairs", year1, year2, sep = "|") %>%
+  mutate(
+    pairwise_p =
+      map(
+        .x = year_pairs,
+        .f =
+          ~ szn_adonis2(
+            # .data    = cmtx_dat,
+            .data    = select(env_cmtx_filt, year, chloro:pras),
+            pairs    = .x,
+            pair_col = year,
+            formula  = "year",
+            strata   = NULL
+            # strata   = "station"
+          )
+      ),
+  ) %>%
+  unnest_wider(pairwise_p) %>%
+    
+  # ---- correct p-values
+  mutate(
+    p_adjust = p.adjust(pairwise_p, method = "bonferroni"),
+    .before = results
+  ) %T>% print()
+
+
+unnest(permanova_r_year, results)
+permanova_r_year$results
 
 ```
 
