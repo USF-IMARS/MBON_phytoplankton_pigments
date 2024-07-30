@@ -1,0 +1,1145 @@
+---
+title: "Time Series Plots"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    ggthemes
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+theme_set(theme_calc(base_family  = "serif"))
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "05_1_time_series_plots")
+dir_plt_save  <- here("data", "plots", "05_1_time_series_plots")
+
+dir_create(here(dir_plt_save))
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    # station = str_replace(station, "9B", "9.5"),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% 
+  print()
+
+```
+
+
+## 2.2.1 Remove Outliers?
+
+```{r remove-outliers}
+remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+if (remove_out == 1) {
+  cmtx_w <-
+    cmtx_w %>%
+    filter(
+      total_chl_a <= 1
+    ) %T>% 
+    print()
+  
+  file_suffix <- "_no_out"
+} else {
+  file_suffix <- ""
+}
+```
+
+
+## 2.3 Convert to Long Format
+
+
+Pivot longer by taking PFT columns and pivot to two columns of `phyto` for name
+and `conc` for concentration.
+
+Next, convert to percentage by `conc` / `total_chl_a`
+
+
+```{r convert-long-format}
+# ---- convert to long format ---- #
+# i.e. one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # add percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# ---- convert to percent ---- #
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+
+cmtx_w_pct <- 
+  cmtx_l_pct %>%
+  select(-names) %>%
+  pivot_wider(
+    data         = .,
+    names_from   = c(phyto),
+    values_from  = c(percent),
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    )
+
+# maybe delete
+# # ---- convert to long format ---- #
+# # i.e. one column for all PFT and one for concentrations
+# cmtx_l <-
+#   cmtx_w %>%
+#   pivot_longer(
+#     cols      = chloro:pras,
+#     names_to  = "phyto",
+#     values_to = "conc"
+#   ) %>%
+#   left_join(phyto_name, by = c("phyto" = "shrt"))
+# 
+# # ---- convert to percent ---- #
+# cmtx_l_pct <-
+#   cmtx_w %>%
+#   mutate(across(chloro:pras, ~ .x/total_chl_a)) %>%
+#   
+#   pivot_longer(
+#     cols      = chloro:pras,
+#     names_to  = "phyto",
+#     values_to = "conc"
+#   ) %>%
+#   left_join(phyto_name, by = c("phyto" = "shrt"))
+# 
+# # rm(file_chem, meta_data, cmtx_raw, cmtx_all_w)
+```
+
+
+
+# 4.0 Timeseries Plots
+
+## 4.1 *WIP* Line Plot: Timesseries PFT with LOESS Smoother
+
+This was an attempt to see if a smoother could show seasonal trends for each
+PFT.
+
+The 3 plots:
+- for all y = concentration, facet = PFT
+  1. entire series, x = datetime
+  2. day of year, x = doy
+  3. month, x = month
+
+```{r pft-ts-loess, fig.width=30, fig.height=15}
+# base plot list
+plt_fun <-
+  list(
+    aes(
+      y     = conc,
+      color = names
+    ),
+    geom_point(
+      show.legend = FALSE, ,
+      na.rm       = TRUE
+    ),
+    # geom_smooth(
+    #   formula     = y ~ s(x),
+    #   method      = "gam",
+    #   se          = FALSE,
+    #   show.legend = FALSE
+    # ),
+    geom_smooth(
+      formula     = y ~ x,
+      method      = "loess",
+      span        = 0.3,
+      se          = FALSE,
+      show.legend = FALSE,
+      na.rm       = TRUE
+    ),
+    labs(
+      x = NULL,
+      y = "Pigment:Chlorophyll-a",
+      color = NULL
+    ),
+    scale_y_continuous(expand = c(0, 0)),
+    scale_color_brewer(palette = "Paired"),
+    facet_grid(names ~ .,
+      # scales = "free_y"
+      scales = "fixed"
+    )
+  )
+
+
+# point plot with smoothing line for 1 functional group, colored by season
+plt_smooth <-
+  cmtx_l_pct %>%
+  filter(!is.na(conc)) %>%
+  ggplot() +
+  plt_fun
+
+
+# combine the three versions
+shelf(patchwork)
+(plt_smooth +
+  aes(x = date_time_utc) +
+        labs(x = "Date")
+    ) +
+  (plt_smooth +
+    aes(x = yday(date_time_utc)) +
+    labs(y = NULL,
+         x = "Day of Year")
+   ) +
+  (plt_smooth +
+    aes(x = month(date_time_utc)) +
+    labs(y = NULL,
+         x = "Month")
+   ) 
+```
+
+
+
+
+```{r, fig.width=40, fig.asp=0.5}
+cmtx_l_pct %>%
+  mutate(
+    names2 = names
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc)
+  ) %>%
+  nest(.by = names2) %>%
+  # slice(1) %>%
+
+  mutate(
+    plt =
+      map2(
+        data,
+        names2,
+        ~ ggplot(
+          .x,
+          aes(
+            x     = date_time_utc,
+            y     = conc,
+          )
+          ) +
+          geom_hline(yintercept = 0, color = "red", alpha = 0.2) +
+          geom_smooth(
+            color       = "grey70",
+            alpha       = 0.5,
+            formula     = y ~ s(x, bs = "tp", k = 10),
+            method      = "gam",
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          geom_smooth(
+            color       = "grey70",
+            alpha       = 0.5,
+            linetype    = "dashed",
+            formula     = y ~ x,
+            method      = "loess",
+            span        = 0.3,
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          geom_smooth(
+           aes(y = total_chl_a),
+            color       = "red",
+            alpha       = 0.8,
+            linetype    = "dashed",
+            formula     = y ~ x,
+            method      = "loess",
+            span        = 0.3,
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          geom_point(
+            aes(y = total_chl_a),
+            fill = "red",
+            size = 3,
+            shape = 24,
+            na.rm = TRUE
+          ) +
+          geom_point(
+            aes(fill = season),
+            shape = 23,
+            size  = 4,
+            na.rm = TRUE
+          ) +
+          labs(title = .y) +
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+            minor_breaks = "3 months"
+          ) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, NA),
+            breaks = seq(0.0, 1, 0.1),
+            minor_breaks = seq(0.05, 1, 0.15)
+          ) +
+          facet_wrap(
+            station ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          coord_cartesian(ylim = c(0, 1)) +
+          theme(
+            panel.grid.major.x = element_line(color = "grey", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey", linewidth = 0.2,
+                                              linetype = "dashed")
+            )
+      )
+  ) %>%
+  pull(plt)
+```
+
+
+
+What trends are visible?
+
+Choloro
+- range 0 - 15% of total chl-a, average ~5 - 7%
+- cyclic pattern
+- station WS and LK have peaks in Spring and Winter
+  - lowest in Autumn
+  
+Crypto
+- most stations 0 - 10% of total chl-a
+- station 16 has largest range from 0 - 45% of total chl-a
+  - nearer shore, near channel to West Florida Shelf
+- no clear seasonal trend  
+
+
+Cyano2
+- range 0 - 50% of total chl-a
+- always above 10% of total chl-a
+- no clear trend
+- potential bloom in station 16 in winter 2019 with chloro and diat2
+
+Cyano 4 (prochlorococcus)
+- station 16, 7, and 10 were lowest, with 0 - 5% of total chl-a
+  - station 16 especially low for most of it with one spike in winter 2019
+  - station 7 had more variabiliy with peaks ~8% in autumn and spring
+- all other stations had 5 - 30% of total chl-a
+- WS and LK seem to share similar trend
+- MR
+
+Diat 1 
+- potential bloom in station 16 in winter 2018 autumn
+
+```{r, fig.width=40, fig.asp=0.5}
+cmtx_l_pct %>%
+  mutate(
+    # conc = conc / total_chl_a,
+    names2 = names
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc)
+  ) %>%
+  nest(.by = station) %>%
+  # slice(1) %>%
+
+  mutate(
+    plt =
+      map2(
+        data,
+        station,
+        \(.x, .y) {    
+            
+        sec <- ggh4x::help_secondary(
+            .x,
+            primary   = c(0, 1), 
+            secondary = total_chl_a,
+            method = "range",
+            name = "Total Chlor a"
+            )
+            
+        plts <-     
+        ggplot(
+          .x,
+          aes(
+            x = date_time_utc,
+            y = conc
+          )
+          ) +
+          geom_hline(yintercept = c(0, 0.5), color = "red", alpha = 0.2) +
+          # geom_hline(
+          #     aes(yintercept = ave(conc, names, FUN = range),
+          #                        
+          #         color = names), 
+          #     alpha = 0.8,
+          #     linetype = "dashed",
+          #     show.legend = FALSE
+          #     ) +
+          geom_point(
+            # aes(y = total_chl_a),
+            aes(y = sec$proj(total_chl_a)),
+            fill = "grey50",
+            alpha = 0.5,
+            size = 3,
+            shape = 24,
+            na.rm = TRUE
+          ) +
+          geom_line(
+            # aes(y = total_chl_a),
+            aes(y = sec$proj(total_chl_a)),
+            # fill = "grey50",
+            color = "grey40",
+            alpha = 0.5,
+            linetype = "twodash",
+            # size = 3,
+            # shape = 24,
+            na.rm = TRUE
+          ) +
+          # geom_smooth(
+          #  # aes(y = total_chl_a),
+          #   aes(y = sec$proj(total_chl_a)),
+          #   color       = "grey50",
+          #   alpha       = 0.5,
+          #   linetype    = "dashed",
+          #   formula     = y ~ x,
+          #   method      = "loess",
+          #   span        = 0.3,
+          #   se          = FALSE,
+          #   show.legend = FALSE,
+          #   na.rm       = TRUE
+          # ) +
+          geom_smooth(
+            color       = "grey70",
+            alpha       = 0.5,
+            formula     = y ~ s(x, bs = "tp", k = 10),
+            method      = "gam",
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          # geom_smooth(
+          #   color       = "grey70",
+          #   alpha       = 0.5,
+          #   # linetype    = "dashed",
+          #   formula     = y ~ x,
+          #   method      = "loess",
+          #   span        = 0.3,
+          #   se          = FALSE,
+          #   show.legend = FALSE,
+          #   na.rm       = TRUE
+          # ) +
+          geom_point(
+            aes(fill = season),
+            shape = 23,
+            size  = 4,
+            na.rm = TRUE
+          ) +
+          geom_line(
+            na.rm = TRUE
+          ) +
+          labs(title = .y) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, NA),
+            breaks = seq(0.0, 1, 0.1),
+            minor_breaks = seq(0.05, 1, 0.1),
+            sec.axis = sec
+          ) +  
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+            # minor_breaks = "6 months"
+          ) +
+          facet_wrap(
+            names ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          # coord_cartesian(ylim = c(0, 1)) +
+          theme(
+            panel.grid.major.x = element_line(color = "grey80", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey80", linewidth = 0.4,
+                                              # linetype = ""
+                                            )
+            )
+        
+        # plotly::ggplotly(plts)
+        }
+      )
+  ) %>%
+    # slice(1:3) %>%
+  pull(plt)
+
+
+```
+What trends are visible?
+
+MR
+- cyano2 has largest variability from 10 - 60% of total chl-a
+  - early autumn tends to be higher then later autumn (Sep - Nov)
+  - maximal usually in Summer (Jun - Aug)
+  - depths are pretty close except spring and summer 2019 
+- cyano4 is close second with 10 - 30% of total chl-a
+  - tends to peak in Autumn 
+- Hapto6 consistently 5 - 20% of total chl-a with peaks in Autumn
+  - mostly around 10% of total chl-a for most seasons
+- hapt8 is usually 7 - 15% of total chl-a
+  - highest in winter 2018 - 2019 and 2020 - 2021 >17% of total chl-a
+- chloro  tend to between 0 - 10% of total chl-a
+  - peaks in winter then decreases towards 0% for the rest of the year
+  - seems like boom and bust cycles
+- crypto never exceed 10% of total chl-a with similar peaks in winter
+  - spring and summer tend to be below 5% of total chl-a
+- pras tends to be between 0 - 15%
+  - some peaks in autumn, but seems to be fairly similar each season around 5%
+- diat1, diat2 and dino all tend to have <5% of total chl-a
+  - diat1 only peak during bloom in winter 2019 at ~7%
+  - diat2 has 3 peaks >=10%  during summer 2018, winter and summer 2019  
+    - seems to be during overall chl-a peaks
+
+7 
+- cyano2 
+  - similar to MR, largest contribution of 20 - 45% of total chl-a
+  - peak in autumn 2017 with high chl-a (0.85) 
+- cyano4 
+  - much lower than MR, with 0 - 10% of total chl-a
+  - typically lower than 5% of total chl-a
+- chloro and crypto
+  - have similar pattern and percents of 5 - 15%
+- hapt8 and pras 
+  - lower than 10% of total chl-a
+- diat1 and diat2
+  - usually max ~20% but not at the same time
+  - diat1 lowest summer 1019 to summer 2020 while diat2 is consistent 5 - 20%
+- dino 
+  - tend to be low 5 - 10% of total chl-a
+  - summer has small peaks
+- hapt6
+  - similar to dino with 5 - 20% of total chl-a
+  - peaks tend to be in spring with lowest in summer
+
+12
+- offshore station
+- cyano2 
+  - typically highest overall with 20 - 55% of total chl-a
+  - lowest in winters with peaks in spring - summer
+  - high chlo-a looks to be inverted
+- cyano4
+  - ranges 5 - 40% of total chl-a
+  - has peaks in autumn with lows during summer
+- diat1, diat2 and dino
+  - practically non existent with <5% of total chl-a
+- hapt6 and hapt8
+  - have similar contributions 0f 5 - 20% of total chl-a
+  - follow similar patterns but hapt6 lags behind hapt8 in terms of peaks
+- pras
+  - mostly 0 - 10% of total chl-a
+  - no consistent pattern
+- chloro 
+  - seems to have lowest in autumn and highest in winter - spring
+
+10
+- nearshore station
+- cyano2 
+  - still highest contributor with 15 - 45% of total chl-a
+  - a bloom seems possible in winter 2019 with ~80% of total chl-a
+  - seems like early season is lower with later season is higher?
+- cyano2
+  - very low compared to the other stations <5% for the most part
+- chloro
+  - between 5 - 10% of total chl-a
+  - two low points between summer and autumn of 2019
+- 
+
+16
+- nearshore station
+
+18
+- offshore station
+
+LK
+
+
+
+WS
+
+### 4.1. Each Station Facet by PFT
+
+
+```{r station, fig.width=40, fig.asp=0.5}
+cmtx_l_pct %>%
+  mutate(
+    names2 = names,
+    names = fct_reorder(
+      names,
+      conc,
+      .fun  = median,
+      .desc = TRUE
+    )
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc)
+  ) %>%
+  nest(.by = station) %>%
+  # slice(1) %>%
+
+  mutate(
+    plt =
+      map2(
+        data,
+        station,
+        \(.x, .y) {    
+            
+        sec <- ggh4x::help_secondary(
+            .x,
+            primary   = c(0, 1), 
+            secondary = total_chl_a,
+            method = "range",
+            name = "Total Chlor a"
+            )
+        
+        .x %>%
+        # mutate(
+        #   names = fct_reorder(
+        #       names, 
+        #       conc, 
+        #       .fun = median, 
+        #       .desc = TRUE)
+        #   ) %>%
+        
+        ggplot(
+         .,
+         aes(
+           x = date_time_utc,
+           y = conc, fill = names
+         )
+       ) +
+        geom_area(alpha = 0.6, linewidth = 1, colour = "black")   +
+        ggnewscale::new_scale_fill() +
+        ggnewscale::new_scale_color() +
+          # geom_vline(aes(xintercept = date_time_utc)) +
+          geom_line(
+            aes(y = sec$proj(total_chl_a)),
+            color = "firebrick1",
+            alpha = 0.5,
+            # linetype = "twodash",
+            na.rm = TRUE
+          ) +
+          geom_point(
+            aes(
+              y = sec$proj(total_chl_a), 
+              color = season, 
+              fill  = season, 
+              shape = season
+              ),
+            # fill = "grey50",
+            alpha = 0.5,
+            size = 5,
+            # shape = 24,
+            na.rm = TRUE
+          ) +
+          # geom_smooth(
+          #   color       = "grey70",
+          #   alpha       = 0.5,
+          #   formula     = y ~ s(x, bs = "tp", k = 10),
+          #   method      = "gam",
+          #   se          = FALSE,
+          #   show.legend = FALSE,
+          #   na.rm       = TRUE
+          # ) +
+          # geom_point(
+          #   aes(fill = names),
+          #   shape = 23,
+          #   size  = 4,
+          #   na.rm = TRUE
+          # ) +
+          # geom_line(
+          #     aes(color = names),
+          #   na.rm = TRUE
+          # ) +
+          # geom_area(
+          #   aes(fill = names),
+          #   alpha = 0.6, linetype = 1, colour = "black")
+          
+          labs(title = .y) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, NA),
+            breaks = seq(0.0, 1, 0.1),
+            minor_breaks = seq(0.05, 1, 0.1),
+            sec.axis = sec
+          ) +
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+          ) +
+             facet_wrap(
+            names ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          theme(
+            panel.grid.major.x = element_line(color = "grey80", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey80", linewidth = 0.4,
+                                              # linetype = ""
+                                            )
+            )
+        }
+      )
+  ) %>%
+    # slice(1) %>%
+  pull(plt) #-> test
+    # save_gg(
+    #     plt = last_plot(), 
+    #     save_location  = here(),
+    #     save_name      = "test",
+    #     overwrite      = T,
+    #     verbose        = TRUE,
+    #     time_stamp_fmt = NULL,
+    #     device         = "jpeg",
+    #     width = 18.27, height = 11.51, dpi = 300
+    # )
+```
+- cyano4 and hapt8 are low nearshore
+- crypto only explode at station 16
+- diat2 lowest off shore
+  - highest near shore (16, 10, 7)
+- dino and diat1
+  - sames as diat2
+ 
+### 4.1. Each PFT Facet by Station
+  
+```{r pft, fig.width=40, fig.asp=0.5}
+cmtx_l_pct %>%
+  mutate(
+    names2 = names,
+    names = fct_reorder(
+      names,
+      conc,
+      .fun  = median,
+      .desc = TRUE
+    )
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc)
+  ) %>%
+  nest(.by = names) %>%
+  mutate(
+    plt =
+      map2(
+        data,
+        names,
+        \(.x, .y) {    
+            
+        sec <- ggh4x::help_secondary(
+            .x,
+            primary   = c(0, 1), 
+            secondary = total_chl_a,
+            method = "range",
+            name = "Total Chlor a"
+            )
+        
+        .x %>%
+        # mutate(
+        #   names = fct_reorder(
+        #       names, 
+        #       conc, 
+        #       .fun = median, 
+        #       .desc = TRUE)
+        #   ) %>%
+        
+        ggplot(
+         .,
+         aes(
+           x = date_time_utc,
+           y = conc, fill = station
+         )
+       ) +
+        geom_area(alpha = 0.6, linewidth = 1, colour = "black")   +
+        ggnewscale::new_scale_fill() +
+        ggnewscale::new_scale_color() +
+          # geom_vline(aes(xintercept = date_time_utc)) +
+          geom_line(
+            aes(y = sec$proj(total_chl_a)),
+            color = "firebrick1",
+            alpha = 0.5,
+            # linetype = "twodash",
+            na.rm = TRUE
+          ) +
+          geom_point(
+            aes(
+              y = sec$proj(total_chl_a), 
+              color = season, 
+              fill  = season, 
+              shape = season
+              ),
+            # fill = "grey50",
+            alpha = 0.5,
+            size = 5,
+            # shape = 24,
+            na.rm = TRUE
+          ) +
+          geom_smooth(
+            color       = "black",
+            # alpha       = 0.5,
+            formula     = y ~ x,
+            method      = "loess",
+            span = 0.3,
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE
+          ) +
+          # geom_smooth(
+          #   color       = "grey70",
+          #   alpha       = 0.5,
+          #   formula     = y ~ s(x, bs = "tp", k = 10),
+          #   method      = "gam",
+          #   se          = FALSE,
+          #   show.legend = FALSE,
+          #   na.rm       = TRUE
+          # ) +
+          # geom_point(
+          #   aes(fill = names),
+          #   shape = 23,
+          #   size  = 4,
+          #   na.rm = TRUE
+          # ) +
+          # geom_line(
+          #     aes(color = names),
+          #   na.rm = TRUE
+          # ) +
+          # geom_area(
+          #   aes(fill = names),
+          #   alpha = 0.6, linetype = 1, colour = "black")
+          
+          labs(title = .y) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, NA),
+            breaks = seq(0.0, 1, 0.1),
+            minor_breaks = seq(0.05, 1, 0.1),
+            sec.axis = sec
+          ) +
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+          ) +
+             facet_wrap(
+            station ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          theme(
+            # panel.grid.major.x = element_line(color = "grey80", linewidth = 0.5),
+            panel.grid.major.x = element_line(color = "black", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey80", linewidth = 0.4,
+                                              # linetype = ""
+                                            )
+            )
+        }
+      )
+  ) %>%
+  pull(plt)
+
+```
+
+```{r}
+cmtx_w %>%
+  filter(
+    .by = c(station),
+    n() > 3,
+    !is.na(total_chl_a)
+  ) %>%
+   ggplot(
+         .,
+         aes(
+           x = date_time_utc,
+           y = total_chl_a, 
+           fill = station
+         )
+       ) +
+        geom_area(alpha = 0.6, linewidth = 1, colour = "black")   +
+        ggnewscale::new_scale_fill() +
+        ggnewscale::new_scale_color() +
+          geom_hline(
+            yintercept = 1,
+            color = "firebrick1",
+            alpha = 0.5,
+            linetype = "dashed",
+            linewidth = 1.5,
+            na.rm = TRUE
+          ) +
+          geom_point(
+            aes(
+              # y = sec$proj(total_chl_a), 
+              color = season, 
+              fill  = season, 
+              shape = season
+              ),
+            # fill = "grey50",
+            alpha = 0.75,
+            size = 5,
+            # shape = 24,
+            na.rm = TRUE
+          ) +
+          geom_smooth(
+            color       = "blue",
+            # alpha       = 0.5,
+            formula     = y ~ x,
+            method      = "loess",
+            span = 0.3,
+            se          = FALSE,
+            show.legend = FALSE,
+            na.rm       = TRUE,
+            linetype = "dashed"
+          ) +
+
+          labs(title = NULL) +
+          scale_y_continuous(
+            expand = c(0, 0),
+            limits = c(0, 2.0),
+            breaks = seq(0.0, 2, 0.25),
+            # minor_breaks = seq(0.05, 1, 0.1),
+            oob = scales::oob_squish
+            # sec.axis = sec
+          ) +
+          scale_x_datetime(
+            date_labels = "%Y",
+            breaks = "1 year",
+          ) +
+             facet_wrap(
+            station ~ .,
+            ncol   = 4,
+            scales = "fixed"
+          ) +
+          theme(
+            # panel.grid.major.x = element_line(color = "grey80", linewidth = 0.5),
+            panel.grid.major.x = element_line(color = "black", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey80", linewidth = 0.4,
+                                              # linetype = ""
+                                            )
+            )
+
+```
+
+
+  
+```{r, fig.height=15}
+cmtx_l %>%
+  mutate(pft_pct = conc/total_chl_a) %>%
+  summarise(
+    .by = c(cruise_id, func_type, names),
+    avg = mean(pft_pct),
+    sd  = sd(pft_pct),
+    dates = mean(date_time_utc)
+  ) %>%
+  ggplot(aes(x = dates, y = avg)) +
+    geom_vline(
+      data = 
+        tibble(
+          x_yr = as_datetime(glue("{c(2016, 2017, 2018, 2019, 2020, 2021)}-01-01")) 
+          ),
+      aes(xintercept = x_yr)
+      ) +
+    geom_line(aes(color = names)) +
+    geom_point(aes(color = names)) +
+    geom_errorbar(aes(ymax = avg + sd, ymin = avg - sd, color = names)) +
+    geom_point(
+      data = mutate(cmtx_l, pft_pct = conc/total_chl_a), 
+      aes(x = date_time_utc, y = pft_pct), 
+      color = "grey70"
+      ) +
+    facet_grid(names ~ .) +
+    scale_x_datetime(date_breaks = "1 year") +
+    ylim(0, 1)
+    
+
+
+```
+
+
+# Plot cyano2 with chla over time
+
+```{r}
+cyano_time <- 
+  cmtx_w_pct %>%
+  mutate(
+    labels = case_when(
+  str_detect(station, "10|16") ~ "Nearshore",
+  .default = "Offshore"
+    )
+  ) %>%
+  ggplot() +
+  geom_point(
+      data = ~ filter(.x, str_detect(station, "10|16|12|18")),
+    aes(x = date_time_utc, 
+        y = cyano2,
+        color = labels
+        )
+  )  +
+  geom_smooth(
+    aes(
+      x = date_time_utc, 
+      y = cyano2),
+    method = "gam",
+    # span = 0.15,
+    se = FALSE
+  ) +
+  geom_smooth(
+    data = ~ filter(.x, str_detect(station, "10|16|12|18")),
+    aes(
+      x = date_time_utc, 
+      y = cyano2,
+      color = labels),
+    method = "gam",
+    # span = 0.2,
+    se = FALSE
+  ) +
+  scale_x_datetime(breaks = "1 year",
+                   ) +
+  theme(
+    panel.grid.major.x = element_line(color = "black")    
+    )
+
+
+tchl_time <- 
+  cmtx_w %>%
+  ggplot() + 
+  geom_point(
+    aes(x = date_time_utc, 
+        y = total_chl_a,
+        color = season
+        )
+  ) +
+  geom_smooth(
+    aes(
+      x = date_time_utc, 
+      y = total_chl_a),
+    method = "loess",
+    span = 0.15,
+    se = FALSE
+  ) +
+  scale_x_datetime(breaks = "1 year")  +
+  coord_cartesian(
+    # ylim = c(NA, 2)
+  ) +
+  theme(
+    panel.grid.major.x = element_line(color = "black")    
+    )
+
+cyano_time /
+tchl_time
+```
+
+
+```{r}
+cmtx_w_pct %>%
+  ggplot() + 
+  geom_point(
+    aes(
+      y = cyano2, 
+      x = total_chl_a,
+      color = season
+        ),
+    # color = "red"
+  ) +
+  coord_cartesian(
+    ylim = c(NA, 1)
+  ) +
+  theme(
+    panel.grid.major.x = element_line(color = "black")    
+    ) +
+  facet_wrap(
+    ~ season
+  )
+  cmtx_w %>%
+  ggplot() + 
+  geom_point(
+    aes(
+      y = cyano2, 
+      x = total_chl_a,
+      color = season
+        ),
+    # color = "red"
+  ) +
+  coord_cartesian(
+    ylim = c(NA, 1)
+  ) +
+  theme(
+    panel.grid.major.x = element_line(color = "black")    
+    ) +
+  facet_wrap(
+    ~ year
+  )
+```
+
+```{r}
+lm(total_chl_a ~ season, data = cmtx_w) %>%
+    summary()
+```
+
