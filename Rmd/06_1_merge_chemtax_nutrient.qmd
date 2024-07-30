@@ -1,0 +1,357 @@
+---
+title: "Merge CHEMTAX and Nutrient Data"
+author: "Sebastian Di Geronimo"
+date: "2024-01-30"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+
+source(here("scripts", "misc_functions.R"))
+```
+
+## 2.2 Load Dataset
+
+### 2.2.1 CHEMTAX Data
+
+Load CHEMTAX data and metadata. Filter data to only include samples collected at
+the surface.
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "06_1_merge_chemtax_nutrient")
+dir_plt_save  <- here("data", "plots", "06_1_merge_chemtax_nutrient")
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    # station = str_replace(station, "9B", "9.5"),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% 
+  print()
+
+```
+### 2.2.2 NOAA Data
+
+#### 2.2.2.1 NOAA `NA` Strings
+
+These are all the variations of text contained in columns that should be 
+numeric. This text will be converted to `NA` when read in using 
+`openxlsx::read.xlsx`.
+
+
+```{r noaa-na-strings}
+noaa_bad <- c(
+  "NA", "Skip too shallow",
+  "97/98", "109/110",
+  "113/114", "115/116",
+  "117/118", "-",
+  " Aboard R/V Savannah", "Lost ",
+  "Lost", "Do Not Use (Discrete Chl samples not usable)",
+  "Broken Vial", "Missing Vial ",
+  "Missed", "Double labeled",
+  "Missing", "RE-CAST NOT SAMPLED",
+  "Missing ", "NOT COLLECTED",
+  "Broken", "Do Not Use (Discrete Chl samples not usable",
+  "Sensor bad", "Missing Tube ",
+  "Bottles never tripped - recast", "Sensor Drift ",
+  "Gain far too high unusable", "Sensor Cut out",
+  "Excluded", "Data lost from Acetone Spill",
+  "77,78", "79,80",
+  "81,82", "Bad analysis",
+  "Acidified prior to Fo", "173/174",
+  "175/176", "177/178","179/180", "182/183","184/185", "186/187","188/189", 
+  "190/191","192/193", "107/108","112/113", "152/153","155/156", "162/163",
+  "165/166", "193/194","128, 129", "131, 132","163, 164", "165, 166","167, 168",
+  "169, 170","171, 172", "175, 176","158/159", "160/161","164/165", "172/173",
+  "174/175", "178/179","180/181", "189/190","7/8", "43/44","51/52", "85/86",
+  "89/90", "135/136","138/139", "153/154","170/171", "69,70","71,72", 
+  "Unusable", "Spilled"
+)
+```
+
+#### 2.2.2.2 Load NOAA 
+
+```{r load-noaa-data}
+noaa_data <-
+  here("data", "raw") %>%
+  dir_ls(regexp = "WSMasterSampleLog") %>%
+  str_subset("~", negate = TRUE)
+
+noaa_dat <-
+  openxlsx::getSheetNames(noaa_data) %>% 
+  str_subset("(?i)all") %>% 
+  openxlsx::read.xlsx(
+    noaa_data, 
+    sheet       = .,
+    detectDates = TRUE,
+    na.strings  = noaa_bad
+  ) %>% 
+  janitor::clean_names(replace = c(janitor:::mu_to_u, "#" = "number")) %>% 
+  rename(
+    "lon" = longitude_decimal,
+    "lat" = latitude_decimal) %>%
+  mutate(
+    .after    = date_gmt,
+    time_gmt  = as.numeric(time_gmt),
+    time_gmt  = time_gmt + 1,
+    time_gmt  = janitor::excel_numeric_to_date(time_gmt, include_time = TRUE),
+    time_gmt  = hms::as_hms(time_gmt),
+    date_time = ymd_hms(paste(date_gmt, time_gmt))
+  ) %>% 
+  mutate(
+    .by = cruise,
+    .after  = time_gmt,
+    lon_lag = dplyr::lead(lon),
+    lat_lag = dplyr::lead(lat),
+    cruise = case_when(
+      and(
+        str_detect(cruise, "WS18120"),
+        between(
+          date_gmt, 
+          as_date("2018-06-01"), 
+          as_date("2018-09-01"))
+        ) ~ "WS18218",
+      str_detect(cruise, "SAV1803") ~ "SV18067",
+      str_detect(cruise, "SAV18173") ~ "SV18173",
+      str_detect(cruise, "WS20231") ~ "WS20230",
+      .default = cruise),
+       # SV18067	= SAV1803			
+       # SV18173   = SAV18173				
+       # WS20230   = WS20231 
+     station2 = station, 
+     station = case_match(
+        station,
+        c("21/LK", "21.5/LK", "21") ~ "LK",
+        .default = station
+      )
+    ) %>% 
+    mutate(
+    .by = c(cruise, station),
+    stn_samp = n(),
+    depth = as.numeric(depth),
+    .before = station) %>%
+    filter(
+      .by = c(cruise, station),
+      min(depth) == depth 
+      & depth < 20
+    ) %>%
+      arrange(-depth) %T>% print()
+
+```
+
+### 2.2.3 Load CTD Data 
+
+```{r ctd-data}
+ctd_dat_summary <- 
+  here("data", "processed", "ctd", "ctd_all.csv") %>%
+  read_csv(show_col_types = FALSE)  %>%
+  mutate(time = ymd_hms(time)) %T>% print()
+```
+
+
+
+## 2.3 Merge Data
+
+```{r merge-chemtax-nutrient}
+cmtx_nutr <- 
+  left_join(
+    cmtx_w,
+    noaa_dat,
+    by = c("cruise_id" = "cruise", "station")
+  ) %T>% print()
+
+env_cmtx <- 
+  cmtx_nutr %>%
+  left_join(
+    ctd_dat_summary,
+    by = join_by(
+      "cruise_id" == "cruise_id",
+      "station" == "station"
+    )
+  ) %>%
+  distinct(sample, .keep_all = TRUE) %T>% print()
+
+# ---- filter PFT-CTD data for joint pairs without missing data
+env_cmtx_filt <-
+  env_cmtx  %>%
+  drop_na(chloro:pras, pressure, temp, par, sal) %>%
+  mutate(group = season) %T>% print()
+
+
+
+# ---- show unmatched PFT-CTD rows
+naniar::vis_miss(cmtx_nutr)
+naniar::vis_miss(env_cmtx)
+naniar::vis_miss(ctd_dat_summary)
+
+filter(env_cmtx, is.na(file)) %>%
+  select(cruise_id, station, date_time_utc) %>%
+  arrange(date_time_utc) %T>% print() %>% 
+  distinct(., cruise_id) %T>% print()
+
+```
+
+```{r save-merged-data}
+# ---- save clean NOAA Nutrient Data ---- #
+save_csv(
+  .data          = noaa_dat,
+  save_location  = dir_data_save,
+  save_name      = "noaa_nutrient_tidy",
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL,
+  utf_8          = FALSE
+)
+  
+# ---- save merged CHEMTAX-Nutrient Data ---- #
+save_csv(
+  .data          = cmtx_nutr,
+  save_location  = dir_data_save,
+  save_name      = "chemtax_nutrient",
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL,
+  utf_8          = FALSE
+)
+
+# ---- save merged CHEMTAX-Nutrient-CTD Data ---- #
+save_csv(
+  .data          = env_cmtx,
+  save_location  = dir_data_save,
+  save_name      = "chemtax_nutrient_ctd",
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = NULL,
+  utf_8          = FALSE
+)
+
+
+```
+
+
+
+## 2.4 Cruise Table
+
+```{r cruise-table} 
+# using cmtx_nutr, create a summary table of the cruises 
+cruise_table <-
+  cmtx_nutr %>% 
+  summarise(
+    .by = cruise_id,
+    sample_count = n(),
+    start_date = min(date_gmt, na.rm = TRUE),
+    end_date = max(date_gmt, na.rm = TRUE),
+  ) %>%
+  arrange(start_date) %>%
+  mutate(
+    .keep = "unused",
+    .before = sample_count,
+    cruise_dates = (
+      paste(
+        format(start_date, "%B %d"), 
+        format(end_date, "%B %d %Y"), 
+        sep = " - "
+      )
+    )
+  ) %T>% 
+  print()
+
+shelf(gt)
+test_table <-
+  gt::gt(cruise_table) %>%
+  
+  # rename columns using gt
+  gt::cols_label(
+    cruise_id = "Cruise ID",
+    sample_count = "Sample Count",
+    cruise_dates = "Cruise Dates"
+  ) %>%
+    
+  # center justify columns
+  gt::tab_style(
+    style = gt::cell_text(
+      font = "serif",
+      align = "center"
+    ),
+    locations = gt::cells_body(
+      columns = c(cruise_id, sample_count, cruise_dates)
+    )
+  ) %T>%
+  print()
+
+  # save gt table 
+  # gt::gtsave(
+  #   test_table,
+  #   "cruise_table.docx",
+  #   here("data", "plots"),
+  #   # width = 6,
+  #   # height = 4,
+  #   # units = "in",
+  #   # dpi = 300
+  # )
+    
+cmtx_nutr %>%
+  count(station, name = "station_count") %>%
+  # removed stations with only one sample
+  filter(station_count > 1) %>% 
+  gt::gt() %>%
+  gt::cols_label(
+    station = "Station",
+    station_count = "Station Count"
+  )
+``` 
