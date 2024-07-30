@@ -1,0 +1,1149 @@
+---
+title: "New ANOVA Testing"
+author: "Sebastian Di Geronimo"
+date: 2024-07-12
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
+librarian::shelf(
+  quiet = TRUE,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  
+  # additional
+  patchwork
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+source(here("scripts", "misc_functions.R"))
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "new_anova_tests")
+dir_plt_save  <- here("data", "plots", "cap_plots")
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w_og <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    # station = str_replace(station, "9B", "9.5"),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %>%
+  mutate(
+    nearoff = 
+      if_else(
+        str_detect(station, "10|16"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) %>%
+  relocate(nearoff, .after = station) %T>% 
+  print()
+```
+
+## 2.2.1 Remove Outliers?
+
+```{r remove-outliers}
+# remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+remove_out <-  2
+if (remove_out == 1) {
+  message("Filtering out outliers!")
+  cmtx_w <-
+    cmtx_w_og %>%
+    filter(
+      total_chl_a <= 1
+    ) %T>% 
+    print()
+  
+  file_suffix <- "_no_out"
+} else {
+  message("Keeping outliers!")
+  cmtx_w <-
+    cmtx_w_og
+  file_suffix <- ""
+}
+```
+
+
+## 2.3 Convert to Long Format
+
+
+Pivot longer by taking PFT columns and pivot to two columns of `phyto` for name
+and `conc` for concentration.
+
+Next, convert to percentage by `conc` / `total_chl_a`
+
+
+```{r convert-long-format}
+# one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # calc percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# extract percent column
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+
+cmtx_w_pct <- 
+  cmtx_l_pct %>%
+  select(-names) %>%
+  pivot_wider(
+    data         = .,
+    names_from   = c(phyto),
+    values_from  = c(percent),
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    ) %>%
+  mutate(nearoff = factor(nearoff))
+```
+
+# 3.x
+
+Year     = factor
+Distance = factor
+Season   = factor
+
+```{r}
+shelf(emmeans, sjPlot)
+  # lmerTest::lmer(
+  #   Richness ~ Type * Distance * (1|Year) * (1|Season), 
+  #   Reefs_SR
+  # )
+
+
+chla_anova <-
+  lmerTest::lmer(
+    total_chl_a ~ nearoff * season *  (1 | year),
+    mutate(cmtx_w, year = factor(year))
+  )
+
+summary(chla_anova)
+
+(chla_anova_means <- 
+  emmeans(
+    chla_anova,
+    ~ nearoff * season
+    )
+)
+
+
+contrast(chla_anova_means, "pairwise")
+
+tab_model(chla_anova)
+```
+
+
+```{r}
+chla_anova <-
+  glm(
+    total_chl_a ~  nearoff + season + year,
+    data = mutate(cmtx_w, year = factor(year)) # %>%
+           # filter(str_detect(station, "10|12|16|18"), total_chl_a < 1)
+    )
+  
+
+summary(chla_anova)
+
+(chla_anova_means <- 
+  emmeans(chla_anova,
+      ~  season)
+)
+pairs(chla_anova_means)
+
+(chla_anova_means <- 
+  emmeans(chla_anova,
+      ~  season | nearoff)
+)
+
+pairs(chla_anova_means)
+
+emmip(ref_grid(chla_anova), nearoff ~ season, style = "factor", CIs = TRUE, type = "response")
+
+
+plot(chla_anova_means) +
+  geom_point(
+    data = filter(cmtx_w, str_detect(station, "10|12|16|18"), total_chl_a < 1),
+    # data = cmtx_w,
+    aes(y = nearoff, x = total_chl_a, group = season),
+    shape = 2
+  ) +
+  coord_flip() +
+  facet_grid(~season)
+```
+
+
+
+
+# 4.0 Q-Q Plot
+
+when skew is:
+- negative = left-skewed
+- positive = right-skewed
+moments::skewness(<vector>, na.rm = TRUE)
+
+when kurtosis is:
+- >3 = more values in tail
+- <=3 = more values in not in tail
+moments::kurtosis(<vector>, na.rm = TRUE)
+
+
+## 4.1 Q-Q Plot All
+
+Absolute:
+- Shapiro-Wilk p-value < 0.05, therefore NOT normal
+- Skewness > 0, right-skewed
+- Kurtosis > 3, more value in tail
+
+Log:
+- Shapiro-Wilk p-value > 0.05, therefore normal
+- Skewness > 0, right-skewed
+- Kurtosis < 3, more value NOT in tail
+
+```{r qq-plot-all}
+{
+# total chlorophyll-a
+cmtx_w %$% 
+  car::qqPlot(
+    total_chl_a, 
+    main = "All",
+    ylab = "Total Chlorophyll-a"
+    )
+
+shapiro.test(cmtx_w$total_chl_a) %>%
+    print()
+
+# skewness test
+moments::skewness(cmtx_w$total_chl_a, na.rm = TRUE) %>%
+  round(., digits = 3) %>%
+  paste("Skewness:", .) %>%
+  message()
+
+# kurtosis
+moments::kurtosis(cmtx_w$total_chl_a, na.rm = TRUE) %>%
+  round(., digits = 3) %>%
+  paste("Kurtosis:", .) %>%
+  message()
+}
+
+{
+# log total chlorophyll-a
+cmtx_w %$% 
+  car::qqPlot(
+    log(total_chl_a + 0.001),, 
+    main = "All",
+    ylab = "log(Total Chlorophyll-a)"
+    )
+
+shapiro.test(log(cmtx_w$total_chl_a + 0.001)) %>%
+    print()
+
+# skewness test
+moments::skewness(log(cmtx_w$total_chl_a + 0.001), na.rm = TRUE) %>%
+  round(., digits = 3) %>%
+  paste("Skewness:", .) %>%
+  message()
+
+# kurtosis
+moments::kurtosis(log(cmtx_w$total_chl_a + 0.001), na.rm = TRUE) %>%
+  round(., digits = 3) %>%
+  paste("Kurtosis:", .) %>%
+  message()
+}
+```
+
+## 4.2 Q-Q Plot Seaonal
+
+Winter:
+- Shapiro-Wilk p-value < 0.05, therefore NOT normal
+- Skewness > 0, right-skewed
+- Kurtosis < 3, more value NOT in tail
+
+Spring:
+- Shapiro-Wilk p-value < 0.05, therefore NOT normal
+- Skewness > 0, right-skewed
+- Kurtosis > 3, more value in tail
+
+Summer:
+- Shapiro-Wilk p-value < 0.05, therefore NOT normal
+- Skewness > 0, right-skewed
+- Kurtosis > 3, more value in tail
+
+Autumn:
+- Shapiro-Wilk p-value < 0.05, therefore NOT normal
+- Skewness > 0, right-skewed
+- Kurtosis > 3, more value in tail
+
+```{r qq-plot-seasonal}
+walk(
+  szn,
+  \(.x) {
+    message("\n-----\n", .x, "\n-----\n\n")
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      car::qqPlot(
+        total_chl_a,
+        main = .x,
+        ylab = "Total Chlorophyll-a"
+      ) %>%
+      print()
+
+    # shaprio-wilk
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      shapiro.test(total_chl_a) %>%
+      print()
+    
+    # skewness test
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      moments::skewness(total_chl_a, na.rm = TRUE) %>%
+      round(., digits = 3) %>%
+      paste("Skewness:", .) %>%
+      message()
+    
+    # kurtosis
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      moments::kurtosis(total_chl_a, na.rm = TRUE) %>%
+      round(., digits = 3) %>%
+      paste("Kurtosis:", .) %>%
+      message()
+  }
+)
+```
+Log:
+
+Winter:
+- Shapiro-Wilk p-value > 0.05, therefore normal
+- Skewness > 0, right-skewed
+- Kurtosis < 3, more value in tail
+
+Spring:
+- Shapiro-Wilk p-value > 0.05, therefore normal
+- Skewness > 0, right-skewed
+- Kurtosis < 3, more value in tail
+
+Summer:
+- Shapiro-Wilk p-value > 0.05, therefore normal
+- Skewness > 0, right-skewed
+- Kurtosis > 3, more value NOT in tail
+
+Autumn:
+- Shapiro-Wilk p-value < 0.05, therefore NOT normal
+- Skewness > 0, right-skewed
+- Kurtosis < 3, more value in tail
+
+```{r qq-plot-seasonal-log}
+walk(
+  szn,
+  \(.x) {
+    message("\n-----\n", .x, "\n-----\n\n")
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      car::qqPlot(
+        log(total_chl_a + 0.001),
+        main = .x,
+        ylab = "log(Total Chlorophyll-a)"
+      ) %>%
+      print()
+    
+    # shaprio-wilk
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      shapiro.test(log(total_chl_a + 0.001)) %>%
+      print()
+    
+    # skewness test
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      moments::skewness(log(total_chl_a + 0.001), na.rm = TRUE) %>%
+      round(., digits = 3) %>%
+      paste("Skewness:", .) %>%
+      message()
+    
+    # kurtosis
+    cmtx_w %>%
+      filter(str_detect(season, .x)) %$%
+      moments::kurtosis(log(total_chl_a + 0.001), na.rm = TRUE) %>%
+      round(., digits = 3) %>%
+      paste("Kurtosis:", .) %>%
+      message()
+  }
+)
+
+
+
+```
+
+# 5.0 CAP
+
+## 5.1 CAP Function
+```{r cap-func}
+shelf(BiodiversityR)
+
+cap_pctvars <- function(cap_out){
+  # A function that takes the output of the CAPdiscrim function and 
+  # produces the percent of among-group variability explained by each
+  # canonical axis.
+  #
+  # Inputs: 
+  # cap_out = 'CAPDiscrim' function list output
+  # 
+  # Output: 
+  # pct_var = A numerical array with dimensions 1 x p, where p is the
+  #           number of canonical axes, corresponding to the percent
+  #           of among-group variability explained by each axis.
+  #         
+  
+  # Extract eigenvalues from manova sublist
+  eig     <- cap_out[["manova"]][["Eigenvalues"]]
+  
+  # Convert eigenvalues to analog of canonical variability
+  vars    <- eig*cap_out$tot*(cap_out$varm/100)/(eig+1)
+  
+  # Calculate percent of variability explained by each axis
+  pct_var <- 100*vars/sum(vars)
+  
+  # Trim columns not corresponding to canonical axes
+  pct_var <- pct_var[1:ncol(cap_out$x)]
+}
+
+
+cap_extraction <- function(
+    .data,
+    .data_sub,
+    cap_dist,
+    scale_fact = 5,
+    ld2_range = c(-1.25, 1.25),
+    ld2_spc_h = c(-1, 1)) {
+  
+  `%!in%` <- Negate(`%in%`)
+
+  # Percent of the total variance explained by the axes used to describe the CAP
+  # model (e.g., 0.15 of the TOTAL VARIANCE)
+  cap_pct_var <-
+    sum(diag(cap_dist$manova$SS$`y[, group]`)) / cap_dist$tot
+
+  # Percent of total variance explained by the CAP model that is explained by EACH
+  # CA. (e.g., 0.12 of the 0.15 of the TOTAL VARIANCE from above)
+  cap_var_expl <-
+    cap_pctvars(cap_dist)
+  # CA-II explains NO between group variance w/ 2 groups
+  if (length(cap_var_expl) < 3) {
+    cap_var_expl[2] <- 0
+  }
+  
+  ## Adds LD2 is not present in the dataframe.
+  if ("LD2" %!in% colnames(cap_dist$x)) {
+    message(paste("Grouping factor < 3, adding Jittered LD2 Column with range", 
+                  ld2_range[1], "to", ld2_range[2], "\n"))
+    cap_dist$x <-
+      as.data.frame(
+        cap_dist$x
+      ) %>%
+      add_column(
+        LD2 = runif(nrow(cap_dist$x), ld2_range[1], ld2_range[2])
+      )
+    ## Adjust LD2 to jittered values if present in the dataframe.
+  } else if ("LD2" %in% colnames(cap_dist$x)) {
+    message("Keep LD2")
+    cap_dist$x <- 
+      as.data.frame(cap_dist$x)
+  } else {
+    message(paste("Grouping factor < 3, modifying Jittered LD2 Column with range", 
+                  ld2_range[1], "to", ld2_range[2], "\n"))
+    cap_dist$x <-
+      as.data.frame(
+        cap_dist$x
+      ) %>%
+      mutate(
+        LD2 = runif(nrow(cap_dist$x), ld2_range[1], ld2_range[2])
+      )
+  }
+
+
+  # Add species scores
+  cap_dist <-
+    add.spec.scores(
+      cap_dist,
+      .data_sub,
+      # Vector scaling factor
+      multi = scale_fact
+    )
+
+
+  cap_site <-
+    as_tibble(cap_dist$x) %>%
+    bind_cols(.data)
+
+  cap_score <-
+    as_tibble(
+      cap_dist$cproj,
+      rownames = "pft"
+    ) 
+  
+  if (length(cap_var_expl) < 3) {
+    message(paste("Grouping factor < 3, adding jittered axis from", 
+                  ld2_spc_h[1], "to", ld2_spc_h[2], "\n"))
+    cap_score <- 
+      cap_score %>%
+      mutate(
+        SpCode = rownames(.),
+        LD1_sign = sign(LD1)
+      ) %>%
+      mutate(
+        # LD2 = sample(seq(-1, 1, length = n())),
+        LD2 = sample(seq(ld2_spc_h[1], ld2_spc_h[2], length = n())),
+        .by = LD1_sign
+      )
+  }
+
+
+  return(
+    list(
+       "full"     = cap_dist,
+       "score"    = cap_score,
+       "site"     = cap_site,
+       "pct_var"  = cap_pct_var,
+       "var_expl" = cap_var_expl
+    )
+  )
+  # ---- end of function cap_extraction ---- #
+}
+
+```
+
+```{r plot-func}
+shelf(shadowtext)
+
+shadowtext::geom_shadowtext()
+plot_template <- function(
+    cap_ext,
+    label_name,
+    axes = c(1, 2),
+    title,
+    .col) {
+    
+  .cap_site  <- cap_ext$site
+  .cap_score <- cap_ext$score
+  pct_var    <- cap_ext$pct_var
+  var_expl   <- cap_ext$var_expl
+
+
+  .cap_site <-
+    .cap_site %>%
+    rename("col_shp" = {{ .col }})
+
+  y_lab <- if_else(
+    length(axes) > 1,
+    paste0(
+      "CA2 (variance explained: ",
+      round(var_expl[2], digits = 1),
+      "%)"
+    ),
+    paste0("Jittered axis")
+  )
+
+
+  ggplot() +
+    theme_classic() +
+    theme(
+      axis.title       = element_text(size = 32 / .pt, face = "bold"),
+      axis.text        = element_text(size = 22 / .pt, face = "bold", 
+                                      family = "serif"),
+      legend.text      = element_text(size = 28 / .pt, face = "bold"),
+      legend.title     = element_text(size = 32 / .pt, face = "bold"),
+      legend.direction = "horizontal",
+      # legend.position  = c(0.5, 1.0),
+      legend.position  = "top",
+      legend.margin    = margin(0, 0, 0, 0, unit = "cm"),
+      plot.title       = element_text(size = 34 / .pt)
+    ) +
+    labs(
+      color = glue("{label_name}: "),
+      shape = glue("{label_name}: "),
+      title =
+        paste0(
+          title,
+          " (",
+          format(round(pct_var, 4) * 100, nsmall = 2),
+          "%)"
+        ),
+      x =
+        paste0(
+          "CA1 (variance explained: ",
+          round(var_expl[1], digits = 1),
+          "%)"
+        ),
+      y = y_lab
+    ) +
+    ggvegan::geom_ordi_axis(
+      lty   = "dashed",
+      color = "darkgray"
+    ) +
+    geom_point(
+      data = .cap_site,
+      aes(
+        x     = LD1,
+        y     = LD2,
+        color = col_shp,
+        shape = col_shp
+      ),
+      size = 10 / .pt,
+      alpha = 0.65
+    ) +
+    stat_ellipse(
+      data = .cap_site,
+      aes(
+        x     = LD1,
+        y     = LD2,
+        group = col_shp,
+        color = col_shp
+      ),
+      linewidth = 3 / .pt,
+      level = 0.90,
+      alpha = 0.65,
+      show.legend = FALSE
+    ) +
+    geom_segment(
+      data = .cap_score,
+      aes(
+        x    = 0,
+        y    = 0,
+        xend = LD1,
+        yend = LD2
+      ),
+      linewidth = 3 / .pt,
+      arrow = arrow(length = unit(0.3, "cm")),
+      color = "black"
+    ) +
+    # geom_text(
+        geom_shadowtext(
+      data = .cap_score,
+      aes(
+        x = LD1,
+        y = LD2,
+        label = pft
+      ),
+      color = "black",
+      vjust = "outward",
+      hjust = "outward",
+      family = "serif",
+      bg.color = "white"
+    )
+
+  # ---- end of function plot_template ---- #
+}
+```
+
+## 5.2 CAP on Seasons
+
+LOOCV:
+  Winter   Spring   Summer   Autumn 
+70.00000 71.69811 67.56757 80.85106 
+
+Overall classification success (m=20) : 72.8813559322034 percent
+Winter (n=40) correct: 70 percent
+Spring (n=53) correct: 71.6981132075472 percent
+Summer (n=37) correct: 67.5675675675676 percent
+Autumn (n=47) correct: 80.8510638297872 percent
+
+```{r rel-cap-season}
+data_filt <- filter(cmtx_w_pct)
+
+data_sub <- select(data_filt, chloro:pras)
+
+dist_mat <- vegdist(data_sub) 
+
+# CAP
+cap_result_szn <-
+  CAPdiscrim(
+    dist_mat ~ season,
+    data         = as.data.frame(data_filt),
+    permutations = 0,
+    mmax         = 99
+  )
+
+# cross validation
+cap_result_szn$percent
+cap_result_szn$percent.level
+
+cap_extract_szn <- cap_extraction(
+  .data        = data_filt,
+  .data_sub    = data_sub,
+  scale_fact   = 5,
+  cap_dist     = cap_result_szn
+) 
+
+(cap_rel_szn_plt <-
+  plot_template(
+    cap_ext    = cap_extract_szn,
+    label_name = "Season",
+    axes       = c(1, 2),
+    title      = "Seasonal",
+    .col       = season
+  ) +
+  scale_color_manual(
+    values = c(
+      "Offshore"  = "blue",
+      "Nearshore" = "red",
+      "Winter"    = "#88CCEE",
+      "Spring"    = "#44AA99",
+      "Summer"    = "#DDCC77",
+      "Autumn"    = "#CC6677"
+    )
+  )
+)
+
+```
+
+LOOCV:
+ Winter   Spring   Summer   Autumn 
+70.00000 69.81132 67.56757 82.97872 
+
+Overall classification success (m=25) : 72.8813559322034 percent
+Winter (n=40) correct: 70 percent
+Spring (n=53) correct: 69.811320754717 percent
+Summer (n=37) correct: 67.5675675675676 percent
+Autumn (n=47) correct: 82.9787234042553 percent
+
+```{r abs-cap-season}
+data_filt <- filter(cmtx_w)
+
+data_sub <- select(data_filt, chloro:pras)
+
+dist_mat <- vegdist(data_sub) 
+
+# CAP
+cap_result_szn <-
+  CAPdiscrim(
+    dist_mat ~ season,
+    data         = as.data.frame(data_filt),
+    permutations = 0,
+    mmax         = 99
+  )
+
+# cross validation
+cap_result_szn$percent
+cap_result_szn$percent.level
+
+cap_extract_szn <- cap_extraction(
+  .data        = data_filt,
+  .data_sub    = data_sub,
+  scale_fact   = 5,
+  cap_dist     = cap_result_szn
+) 
+
+(cap_abs_szn_plt <-
+  plot_template(
+    cap_ext    = cap_extract_szn,
+    label_name = "Season",
+    axes       = c(1, 2),
+    title      = "Seasonal",
+    .col       = season
+  ) +
+  scale_color_manual(
+    values = c(
+      "Offshore"  = "blue",
+      "Nearshore" = "red",
+      "Winter"    = "#88CCEE",
+      "Spring"    = "#44AA99",
+      "Summer"    = "#DDCC77",
+      "Autumn"    = "#CC6677"
+    )
+  )
+)
+```
+
+
+
+## 5.3 CAP on Distance From Shore
+
+LOOCV
+Nearshore  Offshore 
+ 73.80952  93.33333
+ 
+Overall classification success (m=2) : 88.7005649717514 percent
+Nearshore (n=42) correct: 73.8095238095238 percent
+Offshore (n=135) correct: 93.3333333333333 percent
+
+```{r cap-dist}
+data_filt <- filter(cmtx_w_pct)
+
+data_sub <- select(data_filt, chloro:pras)
+
+dist_mat <- vegdist(data_sub) 
+
+# CAP
+cap_result_dist <-
+  CAPdiscrim(
+    dist_mat ~ nearoff,
+    data         = as.data.frame(data_filt),
+    permutations = 0,
+    mmax         = 99
+  )
+
+# cross validation
+cap_result_dist$percent
+cap_result_dist$percent.level
+
+cap_extract_dist <- cap_extraction(
+  .data        = data_filt,
+  .data_sub    = data_sub,
+  scale_fact   = 4,
+  cap_dist     = cap_result_dist,
+  ld2_range    = c(-1.25, 1.25),
+  ld2_spc_h    = c(-1.0, 1.0)
+) 
+
+
+(cap_rel_dist_plt <-
+  plot_template(
+    cap_ext    = cap_extract_dist,
+    # label_name = "Distance from Shore",
+    label_name = NULL,
+    axes       = c(1),
+    title      = "Distance from Shore",
+    .col       = nearoff
+  ) +
+  scale_color_manual(
+    values = c(
+      "Offshore"  = "blue",
+      "Nearshore" = "red",
+      "Winter"    = "#88CCEE",
+      "Spring"    = "#44AA99",
+      "Summer"    = "#DDCC77",
+      "Autumn"    = "#CC6677"
+    )
+  ) +
+  coord_cartesian(xlim = c(NA, 4))
+)
+```
+
+LOOCV
+Offshore Nearshore 
+ 91.11111  78.57143 
+
+Overall classification success (m=2) : 88.135593220339 percent
+Offshore (n=135) correct: 91.1111111111111 percent
+Nearshore (n=42) correct: 78.5714285714286 percent
+
+```{r abs-cap-dist}
+data_filt <- filter(cmtx_w) %>%
+    mutate(nearoff = fct(nearoff))
+
+data_sub <- select(data_filt, chloro:pras)
+
+dist_mat <- vegdist(data_sub)
+
+# CAP
+cap_result_dist <-
+  CAPdiscrim(
+    dist_mat ~ nearoff,
+    data         = as.data.frame(data_filt),
+    permutations = 0,
+    mmax         = 99
+  )
+
+# cross validation
+cap_result_dist$percent
+cap_result_dist$percent.level
+
+cap_extract_dist <- cap_extraction(
+  .data        = data_filt,
+  .data_sub    = data_sub,
+  scale_fact   = 4,
+  cap_dist     = cap_result_dist,
+  ld2_range    = c(-1.25, 1.25),
+  ld2_spc_h    = c(-1.0, 1.0)
+) 
+
+(cap_abs_dist_plt <-
+  plot_template(
+    cap_ext    = cap_extract_dist,
+    # label_name = "Distance from Shore",
+    label_name = NULL,
+    axes       = c(1),
+    title      = "Distance from Shore",
+    .col       = nearoff
+  ) +
+  scale_color_manual(
+    values = c(
+      "Offshore"  = "blue",
+      "Nearshore" = "red",
+      "Winter"    = "#88CCEE",
+      "Spring"    = "#44AA99",
+      "Summer"    = "#DDCC77",
+      "Autumn"    = "#CC6677"
+    )
+  )
+)
+
+```
+
+## 5.5 Save Plots
+
+```{r}
+
+
+( 
+ cap_relative <- 
+  cap_rel_szn_plt/cap_rel_dist_plt +
+  plot_annotation(
+    # title      = "Composition and abundance",
+    tag_levels = "a",
+    tag_suffix = ")"
+  ) +
+  plot_layout(
+    # guides = "collect",
+    # Adjusts the relative height of each plot such that more vertical space is
+    # provided for the trait plot for the spread of the labels
+    # heights = (c(1,1.5))
+  ) &
+  theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      # plot.tag.position = c(0.1, 0.9),
+      plot.margin = margin(b = 1, t = 2, l = 2, r = 20),
+    plot.tag.position = c(0.02,0.985),
+    plot.tag          = element_text(size = 32/.pt, face = "bold"),
+    plot.title        = element_text(size = 32/.pt, face = "bold"),
+    # legend.position   = "bottom"
+  )
+)
+
+( 
+cap_absolute <- 
+  cap_abs_szn_plt/cap_abs_dist_plt +
+  plot_annotation(
+    # title      = "Composition and abundance",
+    tag_levels = "a",
+    tag_suffix = ")"
+  ) +
+  plot_layout(
+    # guides = "collect",
+    # Adjusts the relative height of each plot such that more vertical space is
+    # provided for the trait plot for the spread of the labels
+    # heights = (c(1,1.5))
+  ) &
+  theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      # plot.tag.position = c(0.1, 0.9),
+      plot.margin = margin(b = 1, t = 2, l = 2, r = 20),
+    plot.tag.position = c(0.02,0.985),
+    plot.tag          = element_text(size = 32/.pt, face = "bold"),
+    plot.title        = element_text(size = 32/.pt, face = "bold"),
+    # legend.position   = "bottom"
+  )
+)
+
+# shelf(camcorder)
+# camcorder::gg_record(
+#   dir    = here::here("data", "cam_test", "cap_analysis"),
+#   device         = "png",
+#   height         = 70,
+#   width          = 90 * 0.5,
+#   dpi            = 600,
+#   units          = "mm",
+#   bg             = "white"
+# )
+
+# shell.exec(here::here("data", "cam_test", "cap_analysis"))
+# gg_stop_recording()
+
+# gg_resize_film(width = 170, height = 170,  dpi = 600, units = "mm")
+
+# ---- save season and station ---- #
+save_gg(
+  plt            = cap_relative,
+  save_location  = here(dir_plt_save),
+  save_name      = glue("cap_relative", file_suffix),
+  verbose        = TRUE,
+  # overwrite      = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 170,
+  height         = 170,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+
+save_gg(
+  plt            = cap_absolute,
+  save_location  = here(dir_plt_save),
+  save_name      = glue("cap_absolute", file_suffix),
+  verbose        = TRUE,
+  # overwrite      = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 170,
+  height         = 170,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+```
+
+
+
+```{r}
+cmtx_w %>%
+    # filter(str_detect(station, "10|12|16|18")) %>%
+summarise(
+          med = median(total_chl_a, na.rm = TRUE),
+          mean = mean(total_chl_a, na.rm = TRUE),
+          sd = sd(total_chl_a, na.rm = TRUE),
+          max = max(total_chl_a, na.rm = TRUE),
+          iqr = quantile(total_chl_a, probs = 0.75, na.rm = TRUE),
+          .by = season
+          )
+
+cmtx_w %>%
+  count(
+    station
+  )
+cmtx_w %>%
+  count(
+    station,
+    season
+  )
+cmtx_w %>%
+    filter(str_detect(station, "10|12|16|18")) %>%
+    
+  count(
+    
+    nearoff
+  )
+  
+```
+
+## 5.4 CAP Separate Distance and Season
+
+```{r cap-off-season}
+data_filt <- filter(cmtx_w_pct, str_detect(nearoff, "Off"))
+
+data_sub <- select(data_filt, chloro:pras)
+
+dist_mat <- vegdist(data_sub) 
+
+# CAP
+cap_dist2 <-
+  CAPdiscrim(
+    dist_mat ~ season,
+    data         = as.data.frame(data_filt),
+    permutations = 0,
+    mmax         = 99
+  )
+
+cap_extract <- cap_extraction(
+  .data        = data_filt,
+  .data_sub    = data_sub,
+  scale_fact   = 5,
+  cap_dist = cap_dist2
+) 
+
+
+plot_template(
+    cap_ext    = cap_extract,
+    label_name = "Season",
+    axes       = c(1, 2),
+    title      = "Offshore Seasonal",
+    .col       = season
+)
+
+```
+
+
+```{r cap-near-season}
+data_filt <- filter(cmtx_w_pct, str_detect(nearoff, "Near"))
+
+data_sub <- select(data_filt, chloro:pras)
+
+dist_mat <- vegdist(data_sub) 
+
+# CAP
+cap_dist2 <-
+  CAPdiscrim(
+    dist_mat ~ season,
+    data         = as.data.frame(data_filt),
+    permutations = 0,
+    mmax         = 99
+  )
+
+cap_extract <- cap_extraction(
+  .data        = data_filt,
+  .data_sub    = data_sub,
+  scale_fact   = 5,
+  cap_dist = cap_dist2
+) 
+
+
+plot_template(
+    cap_ext    = cap_extract,
+    label_name = "Season",
+    axes       = c(1, 2),
+    title      = "Nearshore Seasonal",
+    .col       = season
+)
+
+```
+
