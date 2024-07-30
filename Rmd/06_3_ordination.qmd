@@ -1,0 +1,1114 @@
+---
+title: "Ordination Plots"
+author: "Sebastian Di Geronimo"
+date: "2024-02-20"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+This document create nMDS plots for the Florida Keys stations.
+
+Create 4 plots:
+- *seasonal* and *nearshore* vs *offshore* for:
+  - all stations
+  - filtered stations 10, 12, 16, 18
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    vegan, 
+    gavinsimpson/ggvegan, 
+    patchwork,
+    prismatic
+    # fawda123/ggord, 
+    # jfq3/ggordiplots,
+    # GGally, 
+    # cowplot, 
+    # ggfortify, 
+    # ape,
+    # ecodist # not sure if needed
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+source(here("scripts", "misc_functions.R"))
+
+# color palette
+tol_muted <-
+  c(
+    "#88CCEE",
+    "#44AA99",
+    "#DDCC77",
+    "#882255",
+    "#AA4499",
+    "#BBBBBB",
+    "#FFAABB",
+    "#117733",
+    "#332288",
+    "#999933",
+    "#CC6677"
+  )
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "06_3_ordination")
+dir_plt_save  <- here("data", "plots", "06_3_ordination")
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %T>% 
+  print()
+
+```
+
+## 2.2.1 Remove Outliers?
+
+```{r remove-outliers}
+remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+if (remove_out == 1) {
+  cmtx_w <-
+    cmtx_w %>%
+    filter(
+      total_chl_a <= 1
+    ) %T>% 
+    print()
+  
+  file_suffix <- "_no_out"
+} else {
+  file_suffix <- ""
+}
+```
+
+## 2.3 Convert to Long Format
+
+```{r convert-long-format}
+# ---- convert to long format ---- #
+# i.e. one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # add percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# ---- convert to percent ---- #
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+
+cmtx_w_pct <- 
+  cmtx_l_pct %>%
+  select(-names) %>%
+  pivot_wider(
+    data         = .,
+    # id_cols      = c(), # *optional* vector of unaffected columns,
+    names_from   = c(phyto), # category column(s) to pivot wide
+    values_from  = c(percent), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    )
+```
+
+# ---- 3.0 nMDS ----
+
+
+## 3.1 nMDS Calculation
+
+Run nMDS:
+1. All stations
+
+2. 2x transects 
+  - show near/offshore differences
+  - stations 10, 12, 16, 18 
+
+
+```{r nmds-type}
+set.seed(1355453)
+
+nmds_type <- c("abs", "rel")
+
+dat_nmds <- 
+  switch(
+    nmds_type[2],
+    abs = cmtx_w,
+    rel = cmtx_w_pct
+  ) %T>% print()
+
+dist_nmds <- 
+  switch(
+    nmds_type[2],
+    abs = "euclidean",
+    rel = "bray"
+  ) %T>% print()
+```
+
+
+```{r nmds-calc}
+nmds <-
+  dat_nmds %>%
+  # cmtx_w %>%
+  # cmtx_w_pct %>%
+  select(chloro:last_col()) %>%
+  # add(., 0.0001) %>%
+  # log(.) %>%
+  metaMDS(., distance = dist_nmds, try = 100, trymax = 100) %T>%
+  # metaMDS(., distance = "bray", try = 100, trymax = 100) %T>%
+  print()
+
+# Call:
+# metaMDS(comm = ., distance = "bray") 
+# 
+# global Multidimensional Scaling using monoMDS
+# 
+# Data:     . 
+# Distance: bray 
+# 
+# Dimensions: 2 
+# Stress:     0.130862 
+# Stress type 1, weak ties
+# Best solution was repeated 17 times in 20 tries
+# The best solution was from try 4 (random start)
+# Scaling: centring, PC rotation, halfchange scaling 
+# Species: expanded scores based on ‘.’ 
+
+# extract NMDS scores (x and y coordinates) for sites
+data_scores <-
+  dat_nmds %>%
+  # cmtx_w %>%
+  # cmtx_w_pct %>%
+  bind_cols(scores(nmds)$sites) %>%
+  mutate(
+    labels = 
+      if_else(
+        str_detect(station, "10|16|7"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) %T>%
+  print()
+
+
+# near/offshore pairs
+set.seed(1355453)
+nmds_filt <- 
+  dat_nmds %>%
+  # cmtx_w %>%
+  # cmtx_w_pct %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  select(chloro:last_col()) %>%
+  metaMDS(., distance = dist_nmds, try = 100, trymax = 100) %T>%
+  print()
+
+# Call:
+# metaMDS(comm = ., distance = "jaccard") 
+# 
+# global Multidimensional Scaling using monoMDS
+# 
+# Data:     . 
+# Distance: jaccard 
+# 
+# Dimensions: 2 
+# Stress:     0.1248301 
+# Stress type 1, weak ties
+# Best solution was repeated 15 times in 20 tries
+# The best solution was from try 6 (random start)
+# Scaling: centring, PC rotation, halfchange scaling 
+# Species: expanded scores based on ‘.’
+
+# extract NMDS scores (x and y coordinates) for sites
+data_scores_filt <-
+  dat_nmds %>%
+  # cmtx_w %>%
+  # cmtx_w_pct %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  bind_cols(scores(nmds_filt)$sites)  %>%
+  mutate(
+    labels = 
+      if_else(
+        str_detect(station, "10|16|7"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) %T>%
+  print()
+
+```
+
+
+## 3.2 nMDS Plot
+
+```{r base-plt-function}
+nmds_plt_func <- function(.x) {
+  
+  ordiggplot(.x) +
+
+  geom_ordi_axis(
+    lty       = "dashed",
+    color     = "black",
+    linewidth = 0.2
+  ) +
+  
+  # scale options
+  scale_shape_manual(values = c(15:18)) +
+  scale_color_manual(values = tol_muted) +
+  scale_x_continuous(limits = c(-1.25, NA)) +
+  # scale_x_continuous(limits = c(-2.5, NA)) +
+  # labels
+  labs(
+    shape = "Season",
+    color = "Season"
+  ) +  
+    
+  # theme
+  theme_bw(base_family = "serif") +
+  theme(
+    # overall
+    text = element_text(family = "serif", size = 6, color = "black"),
+    line = element_line(color = "black", linewidth = 0.2),
+    rect = element_rect(color = "black", linewidth = 0.2),
+    
+    # axis
+    axis.text.y  = element_text(
+      colour = "black",
+      size   = 5,
+      face   = "bold"
+    ),
+    axis.text.x  = element_text(
+      colour = "black",
+      face   = "bold",
+      size   = 5
+    ),
+    axis.title.y = element_text(
+      face   = "bold",
+      size   = 5,
+      colour = "black"
+    ),
+    axis.title.x = element_text(
+      face   = "bold",
+      size   = 5,
+      colour = "black"
+    ),
+    
+    # legend
+    legend.text  = element_text(
+      size   = 3,
+      face   = "bold",
+      colour = "black"
+    ),
+    legend.byrow = TRUE,
+    legend.position      = "top",
+    legend.justification = "left",
+    legend.title         = element_text(
+      size   = 5,
+      colour = "black",
+      face   = "bold"
+    ),
+    legend.margin    = margin(b = -10),
+    legend.key.size  = unit(2, "mm"),
+    
+    # panel
+    panel.background = element_rect(color = "white"),
+    panel.border     = element_rect(
+      colour    = "black",
+      fill      = NA,
+      linewidth = 0.2
+    )
+  )
+}
+```
+
+### 3.2.1 All Station Plots
+
+```{r extract-nmds-info}
+# data_centroid_season <- 
+#   data_scores %>%
+#   select(NMDS1, NMDS2, season) %>%
+#   summarise(
+#     .by = season,
+#     NMDS1_mean = mean(NMDS1),
+#     NMDS2_mean = mean(NMDS2)
+#   ) %T>% 
+#   print()
+# 
+# data_centroid_dist <- 
+#   data_scores %>%
+#   select(NMDS1, NMDS2, labels) %>%
+#   summarise(
+#     .by = labels,
+#     NMDS1_mean = mean(NMDS1),
+#     NMDS2_mean = mean(NMDS2)
+#   ) %T>% 
+#   print()
+```
+
+
+```{r nmds}
+# shelf(camcorder)
+# camcorder::gg_record(
+#     dir    = here::here("data", "cam_test", "nmds_season_station"),
+#     device = "png",
+#     width  = 90,
+#     height = 90 * 0.5625,
+#     dpi    = 600,
+#     units  = "mm"
+# )
+
+# shell.exec(here::here("data", "cam_test", "nmds_filt_season_station"))
+# gg_stop_recording()
+
+# gg_resize_film(width = 80, height = 90)
+
+# season only
+nmds_season <-
+  nmds_plt_func(nmds) +
+  stat_ellipse(
+    data = data_scores,
+    aes(x = NMDS1, y = NMDS2, color = season, shape = season),
+    level     = 0.95,
+    linetype  = 2,
+    geom      = "polygon",
+    linewidth = 0.25,
+    alpha     = 0.01,
+    show.legend = FALSE,
+    inherit.aes = FALSE
+    ) +
+  geom_point(
+    data = data_scores,
+    aes(x = NMDS1, y = NMDS2, color = season, shape = season),
+    size  = 0.5,
+    alpha = 0.5,
+    inherit.aes = FALSE
+  ) +
+  # geom_point(
+  #   data = data_centroid_season,
+  #   aes(
+  #     x     = NMDS1_mean, 
+  #     y     = NMDS2_mean, 
+  #     fill  = season, 
+  #     color = after_scale(clr_darken(fill))
+  #     ),
+  #   shape = 8,
+  #   size  = 2,
+  #   alpha = 1,
+  #   inherit.aes = FALSE,
+  #   show.legend = FALSE
+  # ) +
+  labs(color = "Season", fill = "Season") +
+  scale_fill_manual(values = tol_muted[1:4]) +
+  geom_ordi_arrow(
+    "species", 
+    linewidth = 0.2,
+    text.params = list(
+        size = 1, color = "black",
+        fontface = "bold")
+    ) +
+  guides(
+    fill  = guide_legend(nrow = 2, byrow = TRUE),
+    shape = guide_legend(nrow = 2, byrow = TRUE)
+  ) +
+  theme(
+    legend.key.spacing.y = unit(0.1, "mm"),
+    legend.key.size      = unit(1, "mm"),
+    plot.margin          = margin(b = 10)
+    )
+
+nmds_season
+
+# station only
+nmds_station <- 
+  nmds_plt_func(nmds) +
+  stat_ellipse(
+    data = data_scores,
+    aes(x = NMDS1, y = NMDS2, color = labels, shape = labels),
+    level     = 0.95,
+    linetype  = 2,
+    geom      = "polygon",
+    linewidth = 0.25,
+    alpha     = 0.01,
+    show.legend = FALSE,
+    inherit.aes = FALSE
+  ) +
+  geom_point(
+    data = data_scores,
+    aes(x = NMDS1, y = NMDS2, color = labels, shape = labels),
+    size  = 0.5,
+    alpha = 0.75,
+    inherit.aes = FALSE
+  ) + 
+  # geom_point(
+  #   data = data_centroid_dist,
+  #   aes(
+  #     x     = NMDS1_mean, 
+  #     y     = NMDS2_mean, 
+  #     fill  = labels, 
+  #     color = after_scale(clr_darken(fill))
+  #     ),
+  #   shape = 8,
+  #   size  = 2,
+  #   alpha = 1,
+  #   inherit.aes = FALSE,
+  #   show.legend = FALSE
+  # ) +
+  labs(
+    shape = "Station",
+    color = "Station",
+    fill  = "Station"
+   ) +
+  scale_fill_manual(values = tol_muted[1:2]) +
+  geom_ordi_arrow(
+    "species", 
+    linewidth   = 0.2,
+    text.params = list(
+      size     = 1, 
+      color    = "black",
+      fontface = "bold")
+      )
+
+nmds_station
+
+# both season and station
+nmds_season_station <- 
+  (nmds_season / nmds_station) + 
+  plot_annotation(
+    tag_levels = "A",
+    tag_prefix = "(",
+    tag_suffix = ")") &
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.tag.position = c(0.1, 0.9),
+    plot.margin = margin(b = 1)
+    )
+
+nmds_season_station
+
+
+```
+
+
+Save plots
+
+
+```{r save-all-plot}
+ovrwrt <- FALSE
+# ovrwrt <- TRUE
+
+nmds_loc <- here(dir_plt_save, "nmds_all") 
+
+# ---- save season and station ---- #
+save_gg(
+  plt            = nmds_season_station,
+  save_location  = here(nmds_loc, str_remove(file_suffix, "^_")),
+  save_name      = glue("nmds_all_both_station_season", file_suffix),
+  verbose        = TRUE,
+  overwrite      = ovrwrt,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 90 * 0.5,
+  height         = 70,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+
+
+# ---- save season and station separately ---- #
+save_gg(
+  plt            = nmds_station,
+  save_location  = here(nmds_loc, str_remove(file_suffix, "^_")),
+  save_name      = glue("nmds_all_station", file_suffix),
+  verbose        = TRUE,
+  overwrite      = ovrwrt,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 80,
+  height         = 90 * 0.5,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+
+save_gg(
+  plt            = nmds_season,
+  save_location  = here(nmds_loc, str_remove(file_suffix, "^_")),
+  save_name      = glue("nmds_all_season", file_suffix),
+  verbose        = TRUE,
+  overwrite      = ovrwrt,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 80,
+  height         = 90 * 0.5,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+
+rm(nmds_loc)
+```
+
+### 3.2.2 Near/Offshore Station Plots
+
+```{r extract-nmds-info}
+# data_centroid_season <- 
+#   data_scores_filt %>%
+#   select(NMDS1, NMDS2, season) %>%
+#   summarise(
+#     .by = season,
+#     NMDS1_mean = mean(NMDS1),
+#     NMDS2_mean = mean(NMDS2)
+#   ) %T>% 
+#   print()
+# 
+# data_centroid_dist <- 
+#   data_scores_filt %>%
+#   select(NMDS1, NMDS2, labels) %>%
+#   summarise(
+#     .by = labels,
+#     NMDS1_mean = mean(NMDS1),
+#     NMDS2_mean = mean(NMDS2)
+#   ) %T>% 
+#   print()
+```
+
+```{r filt-nmds}
+# season only
+nmds_season <- 
+  nmds_plt_func(nmds_filt) +
+  stat_ellipse(
+    data = data_scores_filt,
+    aes(x = NMDS1, y = NMDS2, color = season, shape = season),
+    level     = 0.95,
+    linetype  = 2,
+    geom      = "polygon",
+    linewidth = 0.25,
+    alpha     = 0.01,
+    show.legend = FALSE,
+    inherit.aes = FALSE
+  ) +
+  geom_point(
+    data = data_scores_filt,
+    aes(x = NMDS1, y = NMDS2, color = season, shape = season),
+    size  = 0.5,
+    alpha = 0.75,
+    inherit.aes = FALSE
+  ) +
+  # geom_point(
+  #   data = data_centroid_season,
+  #   aes(
+  #     x     = NMDS1_mean, 
+  #     y     = NMDS2_mean, 
+  #     fill  = season, 
+  #     color = after_scale(clr_darken(fill))
+  #     ),
+  #   shape = 8,
+  #   size  = 2,
+  #   alpha = 1,
+  #   inherit.aes = FALSE,
+  #   show.legend = FALSE
+  # ) +
+  labs(color = "Season", fill = "Season") +
+  scale_fill_manual(values = tol_muted[1:4]) +
+  geom_ordi_arrow(
+    "species", 
+    linewidth   = 0.2,
+    text.params = list(
+      size     = 1, 
+      color    = "black",
+      fontface = "bold")
+     ) +
+  guides(
+     fill  = guide_legend(nrow = 2, byrow = TRUE),
+     shape = guide_legend(nrow = 2, byrow = TRUE)
+  ) +
+  theme(
+    legend.key.spacing.y = unit(0.1, "mm"),
+    legend.key.size      = unit(1, "mm"),
+    plot.margin          = margin(b = 10)
+    )
+
+
+nmds_season
+
+# station only
+nmds_station <- 
+  nmds_plt_func(nmds_filt) +
+  stat_ellipse(
+    data = data_scores_filt,
+    aes(x = NMDS1, y = NMDS2, color = labels, shape = labels),
+    level     = 0.95,
+    linetype  = 2,
+    geom      = "polygon",
+    linewidth = 0.25,
+    alpha     = 0.01,
+    show.legend = FALSE,
+    inherit.aes = FALSE
+  ) +
+  geom_point(
+    data = data_scores_filt, 
+    aes(x = NMDS1, y = NMDS2, color = labels, shape = labels),
+    size  = 0.5,
+    alpha = 0.75,
+    inherit.aes = FALSE
+  ) + 
+  # geom_point(
+  #   data = data_centroid_dist,
+  #   aes(
+  #     x     = NMDS1_mean, 
+  #     y     = NMDS2_mean, 
+  #     fill  = labels, 
+  #     color = after_scale(clr_darken(fill))
+  #     ),
+  #   shape = 8,
+  #   size  = 2,
+  #   alpha = 1,
+  #   inherit.aes = FALSE,
+  #   show.legend = FALSE
+  # ) +
+  labs(
+    shape = "Station",
+    color = "Station"
+   ) +
+  scale_fill_manual(values = tol_muted[1:2]) +
+  geom_ordi_arrow(
+    "species", 
+    linewidth   = 0.2,
+    text.params = list(
+      size     = 1, 
+      color    = "black",
+      fontface = "bold")
+    )
+
+nmds_station
+
+# shelf(camcorder)
+# camcorder::gg_record(
+#     dir    = here::here("data", "cam_test", "nmds_filt_season_station"),
+#     device = "png",
+#     width  = 90 * 0.54,
+# #     height = 90 * 0.5,
+#     height = 70,
+#     dpi    = 600,
+#     units  = "mm"
+# )
+
+# shell.exec(here::here("data", "cam_test", "nmds_filt_season_station"))
+# gg_stop_recording()
+
+# gg_resize_film(width = 90 * 0.5, height = 70)
+# gg_resize_film(width = 90 * 0.5, height = 70, dpi = 600, units = "mm")
+
+# both 
+nmds_season_station <-
+  (nmds_season / nmds_station) +
+  plot_annotation(
+    tag_levels = "A",
+    tag_prefix = "(",
+    tag_suffix = ")") &
+    theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      plot.tag.position = c(0.1, 0.9),
+      plot.margin = margin(b = 1)
+      )
+
+nmds_season_station
+```
+
+
+Save plots
+
+
+```{r save-filt-nmds}
+ovrwrt <- FALSE
+# ovrwrt <- TRUE
+
+nmds_loc_filt <- here(dir_plt_save, "filt") 
+
+# ---- save season and station ---- #
+save_gg(
+  plt            = nmds_season_station,
+  save_location  = here(nmds_loc_filt, str_remove(file_suffix, "^_")),
+  save_name      = glue("nmds_filt_both_station_season", file_suffix),
+  verbose        = TRUE,
+  overwrite      = ovrwrt,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 90 * 0.5,
+  height         = 70,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+
+# ---- save season and station separately ---- #
+save_gg(
+  plt            = nmds_station,
+  save_location  = here(nmds_loc_filt, str_remove(file_suffix, "^_")),
+  save_name      = glue("nmds_filt_station", file_suffix),
+  verbose        = TRUE,
+  overwrite      = ovrwrt,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 80,
+  height         = 90 * 0.5,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+
+save_gg(
+  plt            = nmds_season,
+  save_location  = here(nmds_loc_filt, str_remove(file_suffix, "^_")),
+  save_name      = glue("nmds_filt_season", file_suffix),
+  verbose        = TRUE,
+  overwrite      = ovrwrt,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 80,
+  height         = 90 * 0.5,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+)
+
+rm(nmds_loc_filt)
+```
+
+
+# ---- 4.0 ANOSIM ----
+
+```{r lib}
+shelf(indicspecies)
+```
+## 4.1 ANOSIM Calc
+
+```{r anosim}
+temp <- 
+cmtx_w_pct %>%
+  mutate(
+    .before = total_chl_a,
+    labels  = 
+      if_else(
+        str_detect(station, "10|16|7"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) 
+
+# seasons
+## absolute
+anosim(
+  select(cmtx_w, chloro:last_col()),
+  cmtx_w$season,
+  distance     = "bray",
+  permutations = 999
+)
+
+## relative
+anosim(
+  select(cmtx_w_pct, chloro:last_col()),
+  cmtx_w$season,
+  distance     = "bray",
+  permutations = 999
+)
+
+# near vs off
+## absolute
+anosim(
+  select(cmtx_w, chloro:last_col()),
+  temp$labels,
+  distance     = "bray",
+  permutations = 999
+)
+
+## relative
+anosim(
+  select(cmtx_w_pct, chloro:last_col()),
+  temp$labels,
+  distance     = "bray",
+  permutations = 999
+)
+
+
+```
+
+## 4.3 Similarity Percent
+
+```{r simper}
+vegan::simper(
+  select(cmtx_w_pct, chloro:last_col()),
+  temp$labels
+) %>%
+  summary(digits = 3)
+
+vegan::simper(
+  select(cmtx_w_pct, chloro:last_col()),
+  cmtx_w_pct$season
+) %>%
+  summary(digits = 3)
+
+```
+
+
+## 4.2 Indicator Species Analysis
+
+<https://emf-creaf.github.io/indicspecies/articles/IndicatorSpeciesAnalysis.html>
+
+NOTES on using `multipatt`:
+- the `.g` suffix is a correction for unequal grouped samples
+- Indicator values calculated using `func = "IndVal"` or `func = "IndVal.g"`
+  - used for predictive values of species as indicators of the conditions 
+  - can display in summary Components 'A' and 'B' using 
+    `summary(indval, indvalcomp = TRUE)`
+  - 'A' = probability of site/sample belonging to target site group
+    - aka specificity/positive predictive value
+    - I think it means if 'A' is high for a specific species in group x, there 
+      is a higher probability that if you see that specie within a sample, it is 
+      more likely to be within in group 'x'
+      ex: if 'A' is 1.0 for species 'x' in 'Group 1', then if species 'x' is 
+          observed, it is a 100% probability to be in 'Group 1' based on the 
+          input data. Maybe this extends to if include a new site, if this 
+          specie is observed, you can say this site is probably in 'Group 1'
+          
+    
+  - 'B' = probability of finding species in sites belonging to the site group
+    - aka fidelity/sensitivity
+    - I think it means that if 'B' is high for a specific species in a group, 
+      then if you picked a specific group, high 'B' values would be the species 
+      more likely to be observed
+      ex: if 'B' is 1.0, then if you wanted to target group 2, the species with
+          1.0 would be 100% to be seen in that group. This might be useful when
+          trying to target specific species, you can go to the groups with high
+          'B' values
+
+  - Also, if 'B' is low and 'A' is high, then it means species x is a good 
+    indicator for group 1, but you may not always see that species in group 1 
+    but it was only seen in group 1. So if you observe it, it definitely in 
+    group 1, but if you sampled all group 1, you may not see it, and you won't 
+    see it in any other group
+  - if high 'B' and low 'A', species x will indicate group 2 because it 
+    definitely appears in all group 2, but it may also appear in other groups
+
+- correlation indice using `func = "r"` or `func = "r.g"` 
+  - represents Pearson's *phi coefficient of association*, to determine 
+    ecological preferences of species among a set of alternative site groups
+  - measures the correlation between two binary vectors
+  - uses presence-absence
+  - can use negative values and represents an avoidance of environmental 
+    condition
+
+### 4.2.1 IndVal: Absolute Season
+
+```{r abs-season}
+# Indicator Value
+# multipatt(
+#   select(cmtx_w, chloro:last_col()),
+#   cmtx_w$season,
+#   func = "IndVal",
+#   control = how(nperm = 999)
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w, chloro:last_col()),
+  cmtx_w$season,
+  func    = "IndVal.g",
+  control = how(nperm = 999)
+) %>%
+  summary()
+
+# Pearson Coefficient Association
+# multipatt(
+#   select(cmtx_w, chloro:last_col()),
+#   cmtx_w$season,
+#   func = "r",
+#   control = how(nperm = 999)
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w, chloro:last_col()),
+  cmtx_w$season,
+  func    = "r.g",
+  control = how(nperm = 999)
+) %>%
+  summary()
+```
+
+### 4.2.2 IndVal: Absolute Nearshore/Offshore
+
+```{r abs-nearoff}
+# Indicator Value
+# multipatt(
+#   select(cmtx_w, chloro:last_col()),
+#   temp$labels,
+#   func = "IndVal",
+#   control = how(nperm = 999),
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w, chloro:last_col()),
+  temp$labels,
+  func    = "IndVal.g",
+  control = how(nperm = 999)
+) %>%
+  summary()
+
+# Pearson Coefficient Association
+# multipatt(
+#   select(cmtx_w, chloro:last_col()),
+#   temp$labels,
+#   func = "r",
+#   control = how(nperm = 999)
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w, chloro:last_col()),
+  temp$labels,
+  func    = "r.g",
+  control = how(nperm = 999)
+) %>%
+  summary()
+```
+
+
+### 4.2.1 IndVal: Relative Season
+
+```{r rel-season}
+# Indicator Value
+# multipatt(
+#   select(cmtx_w_pct, chloro:last_col()),
+#   cmtx_w$season,
+#   func = "IndVal",
+#   control = how(nperm = 999)
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w_pct, chloro:last_col()),
+  cmtx_w$season,
+  func    = "IndVal.g",
+  control = how(nperm = 999)
+) %>%
+  summary()
+
+# Pearson Coefficient Association
+# multipatt(
+#   select(cmtx_w_pct, chloro:last_col()),
+#   cmtx_w$season,
+#   func = "r",
+#   control = how(nperm = 999)
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w_pct, chloro:last_col()),
+  cmtx_w$season,
+  func    = "r.g",
+  control = how(nperm = 999)
+) %>%
+  summary(alpha = 1)
+```
+
+
+### 4.2.4 IndVal: Relative Nearshore/Offshore 
+
+```{r rel-nearoff}
+# Indicator Value
+# multipatt(
+#   select(cmtx_w_pct, chloro:last_col()),
+#   temp$labels,
+#   func = "IndVal",
+#   control = how(nperm = 999)
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w_pct, chloro:last_col()),
+  temp$labels,
+  func    = "IndVal.g",
+  control = how(nperm = 999)
+) %>%
+  summary()
+
+# Pearson Coefficient Association
+# multipatt(
+#   select(cmtx_w_pct, chloro:last_col()),
+#   temp$labels,
+#   func = "r",
+#   control = how(nperm = 999)
+# ) %>%
+#   summary()
+
+multipatt(
+  select(cmtx_w_pct, chloro:last_col()),
+  temp$labels,
+  func    = "r.g",
+  control = how(nperm = 999)
+) %>%
+  summary(alpha = 1)
+
+```
+
+
+
+
+
