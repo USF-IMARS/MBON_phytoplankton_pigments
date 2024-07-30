@@ -1,0 +1,278 @@
+---
+title: "Total Chlorophyll-a vs PFT Contributions"
+author: "Sebastian Di Geronimo"
+date: "2024-04-09"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+    install.packages("librarian")
+
+librarian::shelf(
+    quiet = TRUE,
+    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "05_2_tchl_vs_pft")
+dir_plt_save  <- here("data", "plots", "05_2_tchl_vs_pft")
+
+# ---- set season names and order ---- #
+szn <- c("Winter", "Spring", "Summer", "Autumn")
+
+# ---- phytoplankton full names ---- #
+phyto_name <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "phyto_names.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% 
+  print()
+
+# ---- load chemtax data in wide format ---- #
+cmtx_w <-
+  here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
+  read_csv(show_col_types = FALSE) %>%
+  # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
+  filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
+  mutate(
+    season = fct(season, levels = szn),
+    # station = str_replace(station, "9B", "9.5"),
+    station = fct_reorder(station, lon)
+  ) %>% 
+  select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
+    
+  # add PFT concentrations to get total chlorophyll-a
+  rowwise() %>%
+  mutate(
+    total_chl_a = sum(c_across(chloro:pras)),
+    .before = chloro
+  ) %>%
+  ungroup() %>%
+  filter(
+    .by = c(station, cruise_id),
+    depth == min(depth)
+    & depth < 20
+  ) %>%
+  mutate(
+    nearoff = 
+      if_else(
+        str_detect(station, "10|16"), 
+        "Nearshore", 
+        "Offshore"
+        )
+    ) %>%
+  relocate(nearoff, .after = station) %T>% 
+  print()
+```
+## 2.2.1 Remove Outliers?
+
+```{r remove-outliers}
+remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+if (remove_out == 1) {
+  cmtx_w <-
+    cmtx_w %>%
+    filter(
+      total_chl_a <= 1
+    ) %T>% 
+    print()
+  
+  file_suffix <- "_no_out"
+} else {
+  file_suffix <- ""
+}
+```
+
+
+## 2.3 Convert to Long Format
+
+
+Pivot longer by taking PFT columns and pivot to two columns of `phyto` for name
+and `conc` for concentration.
+
+Next, convert to percentage by `conc` / `total_chl_a`
+
+
+```{r convert-long-format}
+# one column for all PFT and one for concentrations
+cmtx_l <-
+  cmtx_w %>%
+  pivot_longer(
+    cols      = chloro:pras,
+    names_to  = "phyto",
+    values_to = "conc"
+  ) %>%
+  left_join(phyto_name, by = c("phyto" = "shrt")) %>%
+  
+  # calc percent
+  mutate(percent = conc/total_chl_a) %T>% 
+  print()
+
+# extract percent column
+cmtx_l_pct <-
+  cmtx_l %>%
+  select(-conc) %T>% 
+  print()
+```
+
+
+# 3.0 Plot
+
+
+
+## 3.1 Plot Total Chlorophyll-a vs PFT Contribution
+
+```{r plt-percent-tchl}
+
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~season)
+
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~names)
+
+cmtx_l %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~season)
+
+cmtx_l %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~names)
+
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+cmtx_l %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+cmtx_l %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = percent, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+# cmtx_l %>%
+#   filter(total_chl_a < 4 
+#          & str_detect(nearoff, "Near")
+#          & str_detect(season, "Autu")
+#          ) %>%
+#   ggplot(aes(x = total_chl_a, y = percent, color = names)) +
+#   geom_point() +
+#   theme_bw() +
+#   facet_wrap(names~season, scales = "free_y", ncol = NULL) +
+#   theme(
+#     # legend.position = "none"
+#   )
+
+
+```
+
+
+## 3.1 Plot Total Chlorophyll-a vs PFT Concentration
+```{r plt-conc-tchl}
+
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~season)
+
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~names)
+
+cmtx_l %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~season)
+
+cmtx_l  %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~names)
+
+
+# near and off 
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+cmtx_l %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+cmtx_l %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = names)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+cmtx_l  %>%
+  filter(total_chl_a < 4) %>%
+  ggplot(aes(x = total_chl_a, y = conc, color = season)) +
+  geom_point() +
+  theme_bw() +
+  facet_wrap(~nearoff)
+
+
+```
+
