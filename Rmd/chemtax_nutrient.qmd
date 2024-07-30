@@ -104,12 +104,12 @@ noaa_bad <- c(
   "77,78", "79,80",
   "81,82", "Bad analysis",
   "Acidified prior to Fo", "173/174",
-  "175/176", "177/178","179/180", "182/183","184/185", "186/187","188/189", 
+  "175/176", "177/178","179/180", "182/183","184/185", "186/187","188/189",
   "190/191","192/193", "107/108","112/113", "152/153","155/156", "162/163",
   "165/166", "193/194","128, 129", "131, 132","163, 164", "165, 166","167, 168",
   "169, 170","171, 172", "175, 176","158/159", "160/161","164/165", "172/173",
   "174/175", "178/179","180/181", "189/190","7/8", "43/44","51/52", "85/86",
-  "89/90", "135/136","138/139", "153/154","170/171", "69,70","71,72", 
+  "89/90", "135/136","138/139", "153/154","170/171", "69,70","71,72",
   "Unusable", "Spilled"
 )
 ```
@@ -123,15 +123,15 @@ noaa_data <-
   str_subset("~", negate = TRUE)
 
 noaa_dat <-
-  openxlsx::getSheetNames(noaa_data) %>% 
-  str_subset("(?i)all") %>% 
+  openxlsx::getSheetNames(noaa_data) %>%
+  str_subset("(?i)all") %>%
   openxlsx::read.xlsx(
-    noaa_data, 
+    noaa_data,
     sheet       = .,
     detectDates = TRUE,
     na.strings  = noaa_bad
-  ) %>% 
-  janitor::clean_names(replace = c(janitor:::mu_to_u, "#" = "number")) %>% 
+  ) %>%
+  janitor::clean_names(replace = c(janitor:::mu_to_u, "#" = "number")) %>%
   rename(
     "lon" = longitude_decimal,
     "lat" = latitude_decimal) %>%
@@ -142,7 +142,7 @@ noaa_dat <-
     time_gmt  = janitor::excel_numeric_to_date(time_gmt, include_time = TRUE),
     time_gmt  = hms::as_hms(time_gmt),
     date_time = ymd_hms(paste(date_gmt, time_gmt))
-  ) %>% 
+  ) %>%
   mutate(
     .by = cruise,
     .after  = time_gmt,
@@ -152,24 +152,24 @@ noaa_dat <-
       and(
         str_detect(cruise, "WS18120"),
         between(
-          date_gmt, 
-          as_date("2018-06-01"), 
+          date_gmt,
+          as_date("2018-06-01"),
           as_date("2018-09-01"))
         ) ~ "WS18218",
       str_detect(cruise, "SAV1803") ~ "SV18067",
       str_detect(cruise, "SAV18173") ~ "SV18173",
       str_detect(cruise, "WS20231") ~ "WS20230",
       .default = cruise),
-       # SV18067	= SAV1803			
-       # SV18173   = SAV18173				
-       # WS20230   = WS20231 
-     station2 = station, 
+       # SV18067	= SAV1803
+       # SV18173   = SAV18173
+       # WS20230   = WS20231
+     station2 = station,
      station = case_match(
         station,
         c("21/LK", "21.5/LK", "21") ~ "LK",
         .default = station
       )
-    ) %>% 
+    ) %>%
     mutate(
     .by = c(cruise, station),
     stn_samp = n(),
@@ -177,7 +177,7 @@ noaa_dat <-
     .before = station) %>%
     filter(
       .by = c(cruise, station),
-      min(depth) == depth 
+      min(depth) == depth
       & depth < 20
     ) %>%
       arrange(-depth) %T>% print()
@@ -187,86 +187,86 @@ noaa_dat <-
 ## 2.3 Merge Data
 
 ```{r merge-chemtax-nutrient}
-cmtx_nutr <- 
+cmtx_nutr <-
   left_join(
     cmtx_dat,
     noaa_dat,
     by = c("cruise_id" = "cruise", "station")
-  ) %T>% print() 
- 
+  ) %T>% print()
+
 naniar::vis_miss(cmtx_nutr)
 ```
 
 ## 2.4 Cruise Table
 
 ```{r cruise-table} 
-# using cmtx_nutr, create a summary table of the cruises 
-cruise_table <-
-  cmtx_nutr %>% 
-  summarise(
-    .by = cruise_id,
-    sample_count = n(),
-    start_date = min(date_gmt, na.rm = TRUE),
-    end_date = max(date_gmt, na.rm = TRUE),
-  ) %>%
-  arrange(start_date) %>%
-  mutate(
-    .keep = "unused",
-    .before = sample_count,
-    cruise_dates = (
-      paste(
-        format(start_date, "%B %d"), 
-        format(end_date, "%B %d %Y"), 
-        sep = " - "
-      )
-    )
-  ) %T>% 
-  print()
-
-shelf(gt)
-test_table <-
-  gt::gt(cruise_table) %>%
-  
-  # rename columns using gt
-  gt::cols_label(
-    cruise_id = "Cruise ID",
-    sample_count = "Sample Count",
-    cruise_dates = "Cruise Dates"
-  ) %>%
-    
-  # center justify columns
-  gt::tab_style(
-    style = gt::cell_text(
-      font = "serif",
-      align = "center"
-    ),
-    locations = gt::cells_body(
-      columns = c(cruise_id, sample_count, cruise_dates)
-    )
-  ) %T>%
-  print()
-
-  # save gt table 
-  # gt::gtsave(
-  #   test_table,
-  #   "cruise_table.docx",
-  #   here("data", "plots"),
-  #   # width = 6,
-  #   # height = 4,
-  #   # units = "in",
-  #   # dpi = 300
-  # )
-    
-cmtx_nutr %>%
-  count(station, name = "station_count") %>%
-  # removed stations with only one sample
-  filter(station_count > 1) %$% sum(station_count)
-    %>% 
-  gt::gt() %>%
-  gt::cols_label(
-    station = "Station",
-    station_count = "Station Count"
-  )
+# # using cmtx_nutr, create a summary table of the cruises 
+# cruise_table <-
+#   cmtx_nutr %>% 
+#   summarise(
+#     .by = cruise_id,
+#     sample_count = n(),
+#     start_date = min(date_gmt, na.rm = TRUE),
+#     end_date = max(date_gmt, na.rm = TRUE),
+#   ) %>%
+#   arrange(start_date) %>%
+#   mutate(
+#     .keep = "unused",
+#     .before = sample_count,
+#     cruise_dates = (
+#       paste(
+#         format(start_date, "%B %d"), 
+#         format(end_date, "%B %d %Y"), 
+#         sep = " - "
+#       )
+#     )
+#   ) %T>% 
+#   print()
+# 
+# shelf(gt)
+# test_table <-
+#   gt::gt(cruise_table) %>%
+#   
+#   # rename columns using gt
+#   gt::cols_label(
+#     cruise_id = "Cruise ID",
+#     sample_count = "Sample Count",
+#     cruise_dates = "Cruise Dates"
+#   ) %>%
+#     
+#   # center justify columns
+#   gt::tab_style(
+#     style = gt::cell_text(
+#       font = "serif",
+#       align = "center"
+#     ),
+#     locations = gt::cells_body(
+#       columns = c(cruise_id, sample_count, cruise_dates)
+#     )
+#   ) %T>%
+#   print()
+# 
+#   # save gt table 
+#   # gt::gtsave(
+#   #   test_table,
+#   #   "cruise_table.docx",
+#   #   here("data", "plots"),
+#   #   # width = 6,
+#   #   # height = 4,
+#   #   # units = "in",
+#   #   # dpi = 300
+#   # )
+#     
+# cmtx_nutr %>%
+#   count(station, name = "station_count") %>%
+#   # removed stations with only one sample
+#   filter(station_count > 1) %$% sum(station_count)
+#     %>% 
+#   gt::gt() %>%
+#   gt::cols_label(
+#     station = "Station",
+#     station_count = "Station Count"
+#   )
 ``` 
 
 
@@ -277,131 +277,131 @@ cmtx_nutr %>%
 ## 3.1 Plot: PFT vs Environmental Variables
 
 ```{r plt-pft-env, fig.width=25, fig.asp=0.5}
-cmtx_nutr %>%
-  select(
-    season, station, lon = lon.x, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
-    -nutrients_tube_number
-  ) %>%
-  filter(
-    not(
-        cyano2 > 2 
-      | chloro > 0.4
-      | crypto > 0.2
-      | diat1 > 0.6
-      | diat2 > 0.3
-      )
-  ) %>%
-  pivot_longer(
-    data      = .,
-    cols      = c(chloro:pras),
-    names_to  = "pft",
-    values_to = "conc",
-  ) %>%
-  nest(.by = c(pft)) %>%
-  # nest(.by = c(season, pft)) %>%
-  mutate(
-    plt = map2(
-      pft,
-      data,
-      (\(.x, .y) {
-        .y %>%
-          pivot_longer(
-            data      = .,
-            cols      = c(temperature:si_u_m),  
-            names_to  = "env_param",
-            values_to = "value", 
-            ) %>%
-          mutate(station = fct_reorder(station, lon)) %>%
-         # ggplot(aes(x = conc, y = value, color = season)) +
-         ggplot(aes(x = conc, y = value, color = season)) +
-         # geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
-         # geom_vline(xintercept = 0, color = "grey50", linetype = "dashed") +
-         geom_point(na.rm = TRUE) +
-              
-              
-         # linear model
-         # geom_smooth(
-         #     method = "lm", se = FALSE, na.rm = TRUE, formula = "y ~ x",
-         #     color = "grey50", linetype = "dashed"
-         #     ) +
-         # geom_smooth(method = "lm", se = FALSE, na.rm = TRUE, formula = "y ~ x") +
-         
-         scale_x_continuous(breaks = scales::pretty_breaks()) +
-         labs(title = .x) +
-         theme_bw() +
-         # facet_wrap(~env_param, ncol = 5, scales = "free") +
-         facet_grid(env_param ~ station, scales = "free") +
-         theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
-
-      })
-    )
-  ) %>%
-  pull(plt)
+# cmtx_nutr %>%
+#   select(
+#     season, station, lon = lon.x, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
+#     -nutrients_tube_number
+#   ) %>%
+#   filter(
+#     not(
+#         cyano2 > 2 
+#       | chloro > 0.4
+#       | crypto > 0.2
+#       | diat1 > 0.6
+#       | diat2 > 0.3
+#       )
+#   ) %>%
+#   pivot_longer(
+#     data      = .,
+#     cols      = c(chloro:pras),
+#     names_to  = "pft",
+#     values_to = "conc",
+#   ) %>%
+#   nest(.by = c(pft)) %>%
+#   # nest(.by = c(season, pft)) %>%
+#   mutate(
+#     plt = map2(
+#       pft,
+#       data,
+#       (\(.x, .y) {
+#         .y %>%
+#           pivot_longer(
+#             data      = .,
+#             cols      = c(temperature:si_u_m),  
+#             names_to  = "env_param",
+#             values_to = "value", 
+#             ) %>%
+#           mutate(station = fct_reorder(station, lon)) %>%
+#          # ggplot(aes(x = conc, y = value, color = season)) +
+#          ggplot(aes(x = conc, y = value, color = season)) +
+#          # geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
+#          # geom_vline(xintercept = 0, color = "grey50", linetype = "dashed") +
+#          geom_point(na.rm = TRUE) +
+#               
+#               
+#          # linear model
+#          # geom_smooth(
+#          #     method = "lm", se = FALSE, na.rm = TRUE, formula = "y ~ x",
+#          #     color = "grey50", linetype = "dashed"
+#          #     ) +
+#          # geom_smooth(method = "lm", se = FALSE, na.rm = TRUE, formula = "y ~ x") +
+#          
+#          scale_x_continuous(breaks = scales::pretty_breaks()) +
+#          labs(title = .x) +
+#          theme_bw() +
+#          # facet_wrap(~env_param, ncol = 5, scales = "free") +
+#          facet_grid(env_param ~ station, scales = "free") +
+#          theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
+# 
+#       })
+#     )
+#   ) %>%
+#   pull(plt)
 ```
 
 ```{r, fig.width=20, fig.asp=0.8}
-cmtx_nutr %>%
-  select(
-    station, season, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
-    -nutrients_tube_number
-  ) %>%
-  rowwise() %>%
-  mutate(
-    .before = chloro,
-    sums    = sum(c_across(chloro:pras), na.rm = TRUE)
-  ) %>%
- ungroup() %>%
- mutate(
-   .after = sums,
-   across(chloro:pras, \(x) (x / sums))
-   ) %>%
-  filter(
-    not(
-        cyano2 > 2 
-      | chloro > 0.4
-      | crypto > 0.2
-      | diat1 > 0.6
-      | diat2 > 0.3)
-    # & !str_detect(station, "24|21.5|3|9.5|9B")
-  ) %>%
-  pivot_longer(
-    data      = .,
-    cols      = c(chloro:pras),
-    names_to  = "pft",
-    values_to = "conc",
-  ) %>%
-  nest(.by = c(pft)) %>%
-    # slice(1) %>%
-  # nest(.by = c(season, pft)) %>%
-  mutate(
-    plt = map2(
-      pft,
-      data,
-      (\(.x, .y) {
-        .y %>%
-          pivot_longer(
-            data      = .,
-            cols      = c(temperature:si_u_m),
-            names_to  = "env_param", 
-            values_to = "value",
-            ) %>%
-         ggplot(aes(y = conc, x = value, color = season)) +
-         # geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
-         # geom_vline(xintercept = 0, color = "grey50", linetype = "dashed") +
-         geom_point(na.rm = TRUE) +
-         scale_y_continuous(breaks = scales::pretty_breaks(),
-                            labels = scales::label_percent(0.01)) +
-         labs(title = .x) +
-         facet_wrap(~env_param, ncol = 4, scales = "free") +
-         # facet_wrap(env_param ~ station, ncol = 8, scales = "free") +
-         theme_bw() +
-         theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
-
-      })
-    )
-  ) %>%
-  pull(plt)
- 
+# cmtx_nutr %>%
+#   select(
+#     station, season, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
+#     -nutrients_tube_number
+#   ) %>%
+#   rowwise() %>%
+#   mutate(
+#     .before = chloro,
+#     sums    = sum(c_across(chloro:pras), na.rm = TRUE)
+#   ) %>%
+#  ungroup() %>%
+#  mutate(
+#    .after = sums,
+#    across(chloro:pras, \(x) (x / sums))
+#    ) %>%
+#   filter(
+#     not(
+#         cyano2 > 2 
+#       | chloro > 0.4
+#       | crypto > 0.2
+#       | diat1 > 0.6
+#       | diat2 > 0.3)
+#     # & !str_detect(station, "24|21.5|3|9.5|9B")
+#   ) %>%
+#   pivot_longer(
+#     data      = .,
+#     cols      = c(chloro:pras),
+#     names_to  = "pft",
+#     values_to = "conc",
+#   ) %>%
+#   nest(.by = c(pft)) %>%
+#     # slice(1) %>%
+#   # nest(.by = c(season, pft)) %>%
+#   mutate(
+#     plt = map2(
+#       pft,
+#       data,
+#       (\(.x, .y) {
+#         .y %>%
+#           pivot_longer(
+#             data      = .,
+#             cols      = c(temperature:si_u_m),
+#             names_to  = "env_param", 
+#             values_to = "value",
+#             ) %>%
+#          ggplot(aes(y = conc, x = value, color = season)) +
+#          # geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
+#          # geom_vline(xintercept = 0, color = "grey50", linetype = "dashed") +
+#          geom_point(na.rm = TRUE) +
+#          scale_y_continuous(breaks = scales::pretty_breaks(),
+#                             labels = scales::label_percent(0.01)) +
+#          labs(title = .x) +
+#          facet_wrap(~env_param, ncol = 4, scales = "free") +
+#          # facet_wrap(env_param ~ station, ncol = 8, scales = "free") +
+#          theme_bw() +
+#          theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
+# 
+#       })
+#     )
+#   ) %>%
+#   pull(plt)
+#  
 ```
 
 ## 3. Plot: Environmental Variables vs Time
@@ -409,96 +409,119 @@ cmtx_nutr %>%
 Add LOESS smoother
 
 ```{r plt-env-time, fig.width=20, fig.asp=0.5}
-plt_nut_time <- 
-  cmtx_nutr %>%
-  select(
-    date_time_utc, season, station, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
-    -nutrients_tube_number
-  ) %>%
-  pivot_longer(
-    data      = .,
-    cols      = temperature:last_col(),     # columns to pivot long,
-    names_to  = "env",  # desired name for category column
-    values_to = "value", # desired name for value column
-    ) %>%
-    
-  # filter(
-  #     .by = "env",
-  #     value < quantile(value, 0.95, na.rm = TRUE)
-  #     ) %>%
-    
-  ggplot(aes(x = date_time_utc, y = value, color = season)) +
-  geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
-  geom_point(na.rm = TRUE) +
-  # geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
-  #             na.rm = TRUE, se = FALSE) +
-  theme_bw() +
-  theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
-
-
-plt_nut_time +
-  facet_grid(env ~ station, scales = "free") 
-plt_nut_time +
-  facet_wrap(~ env, ncol = 4, scales = "free") +
-  geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
-              na.rm = TRUE, se = FALSE) 
-
-plt_nut_time <- 
-  cmtx_nutr %>%
-  select(
-    date_time_utc, season, station, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
-    -nutrients_tube_number
-  ) %>%
-  pivot_longer(
-    data      = .,
-    cols      = temperature:last_col(),     # columns to pivot long,
-    names_to  = "env",  # desired name for category column
-    values_to = "value", # desired name for value column
-    ) %>%
-    
-  filter(
-      .by = "env",
-      value < quantile(value, 0.95, na.rm = TRUE)
-      ) %>%
-    
-  ggplot(aes(x = date_time_utc, y = value, color = season)) +
-  # geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
-  geom_point(na.rm = TRUE) +
-  # geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
-  #             na.rm = TRUE, se = FALSE) +
-  theme_bw() +
-  theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
-
-
-plt_nut_time +
-  facet_grid(env ~ station, scales = "free") 
-plt_nut_time +
-  facet_wrap(~ env, ncol = 4, scales = "free") +
-  geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
-              na.rm = TRUE, se = FALSE) 
+# plt_nut_time <- 
+#   cmtx_nutr %>%
+#   select(
+#     date_time_utc, season, station, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
+#     -nutrients_tube_number
+#   ) %>%
+#   pivot_longer(
+#     data      = .,
+#     cols      = temperature:last_col(),     # columns to pivot long,
+#     names_to  = "env",  # desired name for category column
+#     values_to = "value", # desired name for value column
+#     ) %>%
+#     
+#   # filter(
+#   #     .by = "env",
+#   #     value < quantile(value, 0.95, na.rm = TRUE)
+#   #     ) %>%
+#     
+#   ggplot(aes(x = date_time_utc, y = value, color = season)) +
+#   geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
+#   geom_point(na.rm = TRUE) +
+#   # geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
+#   #             na.rm = TRUE, se = FALSE) +
+#   theme_bw() +
+#   theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
+# 
+# 
+# plt_nut_time +
+#   facet_grid(env ~ station, scales = "free") 
+# plt_nut_time +
+#   facet_wrap(~ env, ncol = 4, scales = "free") +
+#   geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
+#               na.rm = TRUE, se = FALSE) 
+# 
+# plt_nut_time <- 
+#   cmtx_nutr %>%
+#   select(
+#     date_time_utc, season, station, chloro:pras, temperature, salinity, avg_chl_a_ug_l:si_u_m,
+#     -nutrients_tube_number
+#   ) %>%
+#   pivot_longer(
+#     data      = .,
+#     cols      = temperature:last_col(),     # columns to pivot long,
+#     names_to  = "env",  # desired name for category column
+#     values_to = "value", # desired name for value column
+#     ) %>%
+#     
+#   filter(
+#       .by = "env",
+#       value < quantile(value, 0.95, na.rm = TRUE)
+#       ) %>%
+#     
+#   ggplot(aes(x = date_time_utc, y = value, color = season)) +
+#   # geom_hline(yintercept = 0, color = "grey50", linetype = "dashed") +
+#   geom_point(na.rm = TRUE) +
+#   # geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
+#   #             na.rm = TRUE, se = FALSE) +
+#   theme_bw() +
+#   theme(panel.grid.major.x = element_line(color = "grey50", linetype = "dashed"))
+# 
+# 
+# plt_nut_time +
+#   facet_grid(env ~ station, scales = "free") 
+# plt_nut_time +
+#   facet_wrap(~ env, ncol = 4, scales = "free") +
+#   geom_smooth(color = "gray50", formula = "y ~ x", method = "loess", span = 0.15,
+#               na.rm = TRUE, se = FALSE) 
 ```
 
 ```{r}
+cmtx_nutr %>%
+  mutate(
+    nearoff = 
+       if_else(
+         str_detect(station, "10|16"), 
+          "Nearshore", 
+          "Offshore"
+        )
+  ) %>%
+  filter(str_detect(nearoff, "Nearshore")) 
+```
+
+
+```{r cca-plot}
 shelf(vegan, ggord, ggordiplots)
 env_cmtx_filt <- 
   cmtx_nutr %>%
+  mutate(
+    nearoff = 
+       if_else(
+         str_detect(station, "10|16"), 
+          "Nearshore", 
+          "Offshore"
+        )
+  ) %>%
+  # filter(str_detect(nearoff, "Nearshore")) %>%
+  # filter(str_detect(nearoff, "Offshore")) %>%
   select(
     date_time_utc, season, station, chloro:pras, temperature, salinity, 
     avg_chl_a_ug_l:si_u_m,
     -nutrients_tube_number
   ) %>%
-    drop_na(
-      )
+  drop_na()
 
 
-ernv_scale <- 
-    select(env_cmtx_filt, (contains("pras") + 1):last_col()) %>%
-    mutate(across(everything(), ~ scale(.x)))
+env_scale <- 
+  select(env_cmtx_filt, (contains("pras") + 1):last_col()) %>%
+  mutate(across(everything(), ~ scale(.x)))
 
 cmtx_cca <- 
   cca(
     select(env_cmtx_filt, chloro:pras) ~ ., 
-    data      = ernv_scale, 
+    data      = env_scale, 
     na.action = na.omit
     )
  
@@ -551,7 +574,7 @@ gg_ordiplot(
 
 ```
 
-```{r}
+```{r correlation-plot}
 corrplot::corrplot(
   cor(
     select(env_cmtx_filt, chloro:pras) %>% 
@@ -621,194 +644,153 @@ count(env_cmtx_filt, year(date_time_utc))
 
 ## nMDS
 ```{r nmds}
-shelf(vegan)
-set.seed(1355453)
-nmds <- 
-  cmtx_dat %>%
-  select(chloro:last_col()) %>%
-  # metaMDS(., distance = "bray") %T>%
-  metaMDS(., distance = "jaccard") %T>%
-  print()
-# Call:
-# metaMDS(comm = ., distance = "bray") 
+# shelf(vegan)
+# set.seed(1355453)
+# nmds <- 
+#   cmtx_dat %>%
+#   select(chloro:last_col()) %>%
+#   # metaMDS(., distance = "bray") %T>%
+#   metaMDS(., distance = "jaccard") %T>%
+#   print()
+# # Call:
+# # metaMDS(comm = ., distance = "bray") 
+# # 
+# # global Multidimensional Scaling using monoMDS
+# # 
+# # Data:     . 
+# # Distance: bray 
+# # 
+# # Dimensions: 2 
+# # Stress:     0.130862 
+# # Stress type 1, weak ties
+# # Best solution was repeated 17 times in 20 tries
+# # The best solution was from try 4 (random start)
+# # Scaling: centring, PC rotation, halfchange scaling 
+# # Species: expanded scores based on ‘.’ 
 # 
-# global Multidimensional Scaling using monoMDS
+# # extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
+# data_scores <-
+#   cmtx_dat %>%
+#   bind_cols(scores(nmds)$sites) %T>%
+#   print()
 # 
-# Data:     . 
-# Distance: bray 
 # 
-# Dimensions: 2 
-# Stress:     0.130862 
-# Stress type 1, weak ties
-# Best solution was repeated 17 times in 20 tries
-# The best solution was from try 4 (random start)
-# Scaling: centring, PC rotation, halfchange scaling 
-# Species: expanded scores based on ‘.’ 
-
-# extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
-data_scores <-
-  cmtx_dat %>%
-  bind_cols(scores(nmds)$sites) %T>%
-  print()
-
-
-# filter for near-off pairs
-set.seed(1355453)
-nmds_filt <- 
-  cmtx_dat %>%
-  filter(str_detect(station, "10|12|16|18")) %>%
-  select(chloro:last_col()) %>%
-  metaMDS(., distance = "jaccard") %T>%
-  print()
-
-
-# extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
-data_scores_filt <-
-  cmtx_dat %>%
-  filter(str_detect(station, "10|12|16|18")) %>%
-  bind_cols(scores(nmds_filt)$sites)  %>%
-  mutate(labels = case_when(
-      str_detect(station, "10|16") ~ "Nearshore",
-      str_detect(station, "12|18") ~ "Offshore"
-  )) %T>%
-  print()
+# # filter for near-off pairs
+# set.seed(1355453)
+# nmds_filt <- 
+#   cmtx_dat %>%
+#   filter(str_detect(station, "10|12|16|18")) %>%
+#   select(chloro:last_col()) %>%
+#   metaMDS(., distance = "jaccard") %T>%
+#   print()
+# 
+# 
+# # extract NMDS scores (x and y coordinates) for sites from newer versions of vegan package
+# data_scores_filt <-
+#   cmtx_dat %>%
+#   filter(str_detect(station, "10|12|16|18")) %>%
+#   bind_cols(scores(nmds_filt)$sites)  %>%
+#   mutate(labels = case_when(
+#       str_detect(station, "10|16") ~ "Nearshore",
+#       str_detect(station, "12|18") ~ "Offshore"
+#   )) %T>%
+#   print()
 ```
-```{r}
 
-```
 
 ## nMDS Plot
 ```{r nmds-plt, fig.width=25, fig.height=15}
-tol_muted <- c(
-  "#88CCEE", "#44AA99", "#117733", "#332288", "#DDCC77", "#999933",
-  "#CC6677", "#882255", "#AA4499", "#BBBBBB", "#FFAABB"
-)
-
-plt_nmds <-
-  # data_scores %>%
-  data_scores_filt %>%
-  ggplot(aes(x = NMDS1, y = NMDS2)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
-  geom_point(
-    size = 4, aes(color = season, shape = labels),
-    alpha = 0.75
-  ) +
-
-  # labels
-  labs(
-    # x     = names(data_scores)[1],
-    # color = "Seascape Class",
-    # y     = names(data_scores)[2],
-    # shape = "Season"
-  ) +
-
-  scale_shape_manual(
-    values = c(15, 17)
-    ) +
-
-  labs(
-    shape = "Station",
-    color = "Season",
-    subtitle = paste0("Stress: ", round(nmds$stress, 2))
-    
-  ) +
-    
-  # theme
-  ggthemes::theme_tufte() +
-  theme(
-    axis.text.y = element_text(
-      colour = "black",
-      size   = 12,
-      face   = "bold"
-    ),
-    axis.text.x = element_text(
-      colour = "black",
-      face   = "bold",
-      size   = 12
-    ),
-    legend.text = element_text(
-      size   = 12,
-      face   = "bold",
-      colour = "black"
-    ),
-    legend.position  = "right",
-    axis.title.y     = element_text(face = "bold", size = 14),
-    axis.title.x     = element_text(
-      face   = "bold",
-      size   = 14,
-      colour = "black"
-    ),
-    legend.title     = element_text(
-      size   = 14,
-      colour = "black",
-      face   = "bold"
-    ),
-    panel.background = element_blank(),
-    panel.border     = element_rect(
-      colour = "black",
-      fill = NA,
-      linewidth = 1.2
-    ),
-    legend.key = element_blank()
-  )
-
-plt_nmds
-
-# ---- save plot
-save_gg(
-  plt            = plt_nmds,
-  save_location  = dir_plt_save,
-  save_name      = "station_season_nmds",
-  verbose        = TRUE,
-  # overwrite      = FALSE,
-  overwrite      = TRUE,
-  time_stamp_fmt = "%Y%m%d_%H%M%S",
-  device         = "jpeg",
-  height         = 8,
-  width          = 14,
-  dpi            = 600,
-  units          = "in",
-  bg             = "white"
-)
+# tol_muted <- c(
+#   "#88CCEE", "#44AA99", "#117733", "#332288", "#DDCC77", "#999933",
+#   "#CC6677", "#882255", "#AA4499", "#BBBBBB", "#FFAABB"
+# )
+# 
+# plt_nmds <-
+#   # data_scores %>%
+#   data_scores_filt %>%
+#   ggplot(aes(x = NMDS1, y = NMDS2)) +
+#   geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
+#   geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+#   geom_point(
+#     size = 4, aes(color = season, shape = labels),
+#     alpha = 0.75
+#   ) +
+# 
+#   scale_shape_manual(
+#     values = c(15, 17)
+#     ) +
+# 
+#   # labels
+#   labs(
+#     shape = "Station",
+#     color = "Season",
+#     subtitle = paste0("Stress: ", round(nmds$stress, 2))
+#     
+#   ) +
+#     
+#   # theme
+#   ggthemes::theme_tufte() +
+#   theme(
+#     axis.text.y = element_text(
+#       colour = "black",
+#       size   = 12,
+#       face   = "bold"
+#     ),
+#     axis.text.x = element_text(
+#       colour = "black",
+#       face   = "bold",
+#       size   = 12
+#     ),
+#     legend.text = element_text(
+#       size   = 12,
+#       face   = "bold",
+#       colour = "black"
+#     ),
+#     legend.position  = "right",
+#     axis.title.y     = element_text(face = "bold", size = 14),
+#     axis.title.x     = element_text(
+#       face   = "bold",
+#       size   = 14,
+#       colour = "black"
+#     ),
+#     legend.title     = element_text(
+#       size   = 14,
+#       colour = "black",
+#       face   = "bold"
+#     ),
+#     panel.background = element_blank(),
+#     panel.border     = element_rect(
+#       colour = "black",
+#       fill = NA,
+#       linewidth = 1.2
+#     ),
+#     legend.key = element_blank()
+#   )
+# 
+# plt_nmds
+# 
+# # ---- save plot
+# save_gg(
+#   plt            = plt_nmds,
+#   save_location  = dir_plt_save,
+#   save_name      = "station_season_nmds",
+#   verbose        = TRUE,
+#   overwrite      = FALSE,
+#   # overwrite      = TRUE,
+#   time_stamp_fmt = "%Y%m%d_%H%M%S",
+#   device         = "jpeg",
+#   height         = 8,
+#   width          = 14,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+# )
 
 ```
 
 
 
 
-```{r, fig.height=15}
-cmtx_l %>%
-  mutate(pft_pct = conc/total_chl_a) %>%
-  summarise(
-    .by = c(cruise_id, func_type, names),
-    avg = mean(pft_pct),
-    sd  = sd(pft_pct),
-    dates = mean(date_time_utc)
-  ) %>%
-  ggplot(aes(x = dates, y = avg)) +
-    geom_vline(
-      data = 
-        tibble(
-          x_yr = as_datetime(glue("{c(2016, 2017, 2018, 2019, 2020, 2021)}-01-01")) 
-          ),
-      aes(xintercept = x_yr)
-      ) +
-    geom_line(aes(color = names)) +
-    geom_point(aes(color = names)) +
-    geom_errorbar(aes(ymax = avg + sd, ymin = avg - sd, color = names)) +
-    geom_point(
-      data = mutate(cmtx_l, pft_pct = conc/total_chl_a), 
-      aes(x = date_time_utc, y = pft_pct), 
-      color = "grey70"
-      ) +
-    facet_grid(names ~ .) +
-    scale_x_datetime(date_breaks = "1 year") +
-    ylim(0, 1)
-    
-
-
-```
 
 
 
