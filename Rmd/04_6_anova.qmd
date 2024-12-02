@@ -62,6 +62,16 @@ phyto_name <-
 cmtx_w_og <-
   here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
+  mutate(
+      .after = cluster_code,
+      across(
+          chloro:pras,
+          ~ if_else(
+          str_detect(sample, "WS20278-32"), 
+          .x / 10,
+            .x)
+      )
+  ) %>%
   filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
   # filter(str_detect(station, "10|12|16|18")) %>%
   mutate(
@@ -114,6 +124,7 @@ if (remove_out == 1) {
   cmtx_w <- cmtx_w_og
   file_suffix <- ""
 }
+
 ```
 
 
