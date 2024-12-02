@@ -66,8 +66,19 @@ phyto_name <-
 
 # ---- load chemtax data in wide format ---- #
 cmtx_nutr <-
-  here("data", "processed", "06_1_merge_chemtax_nutrient", "chemtax_nutrient.csv") %>%
+  here("data", "processed", "06_1_merge_chemtax_nutrient", 
+       "chemtax_nutrient.csv") %>%
   read_csv(show_col_types = FALSE) %>%
+  mutate(
+      .after = total_chl_a,
+      across(
+          total_chl_a:pras,
+          ~ if_else(
+          str_detect(sample, "WS20278-32"), 
+          .x / 10,
+            .x)
+      )
+  ) %>%
   mutate(
     season  = fct(season, levels = szn),
     station = fct_reorder(station, lon.x),
@@ -81,9 +92,17 @@ cmtx_nutr <-
     across(
       phyto_name$shrt[1:10], 
       list(pct = \(.x) .x / total_chl_a)
-      )
+      ),
+  ) %>%
+  mutate(
+      .after = total_chl_a,
+      total_chl_a = if_else(
+          str_detect(sample, "WS20278-32"), 
+          round(total_chl_a / 10, 3),
+            total_chl_a)
   ) %T>% 
   print()
+
 
 ```
 ### Min Time for Each Cruise
@@ -229,7 +248,21 @@ dat_summary <-
           stat_summ
         )
       ),
-
+    
+    
+    # by year
+    avg_year =
+      chmx_nut_long %>%
+      mutate(year = year(date_time_utc)) %>%
+      summarise(
+        .by = c(name, year),
+        across(
+          value,
+          stat_summ
+        )
+      ) %>%
+      arrange(name, year),
+    
     # by cruise
     avg_cruise =
       chmx_nut_long %>%
@@ -301,7 +334,8 @@ dat_summary
 if (!file_exists(here(dir_data_save, "summarized_parameter.xlsx"))) {
   writexl::write_xlsx(
     x = dat_summary,
-    path = here(dir_data_save, "summarized_parameter.xlsx")
+    path = here(dir_data_save, "summarized_parameter_rev.xlsx"),
+    
   )
 
   shell.exec(dir_data_save)
@@ -309,89 +343,81 @@ if (!file_exists(here(dir_data_save, "summarized_parameter.xlsx"))) {
 ```
 
 ```{r}
-cmtx_sel_var %>%
-  select(station, season, dist, c(chloro:pras_pct)) %>%
+cmtx_long <-
+  cmtx_sel_var %>%
+  select(station, season, dist, date_time_utc, c(chloro:pras_pct)) %>%
+  mutate(
+    year = year(date_time_utc %m+% months(1)),
+    .after = date_time_utc
+  ) %>%
   pivot_longer(
     data      = .,
-    # cols      = c(chloro:pras_pct, temperature:nit_pho_ratio), 
-    cols      = c(chloro:pras_pct), 
-    names_to  = "name", 
-    values_to = "value", 
-  ) %T>% 
-  print() %>%
+    cols      = c(chloro:pras_pct),
+    names_to  = "name",
+    values_to = "value",
+  ) %T>%
+  print()
+
+# station x dist
+cmtx_long %>%
   summarise(
-        .by = c(station, name, dist),
-        across(
-          value,
-          stat_summ
-        )
-      ) %>%
-      arrange(name, dist) %T>% 
+    .by = c(station, name, dist),
+    across(
+      value,
+      stat_summ
+    )
+  ) %>%
+  arrange(name, dist) %T>%
   print() %>%
   filter(str_detect(station, "10|12|16|18|7"))
 
-cmtx_sel_var %>%
-  select(station, season, dist, c(chloro:pras_pct)) %>%
-  pivot_longer(
-    data      = .,
-    # cols      = c(chloro:pras_pct, temperature:nit_pho_ratio), 
-    cols      = c(chloro:pras_pct), 
-    names_to  = "name", 
-    values_to = "value", 
-  ) %>% 
-  # print() %>%
+
+# station x season x dist
+cmtx_long %>%
   summarise(
-        .by = c(station, name, season, dist),
-        across(
-          value,
-          stat_summ
-        )
-      ) %>%
-      arrange(name, dist, station, season) %T>% 
+    .by = c(station, name, season, dist),
+    across(
+      value,
+      stat_summ
+    )
+  ) %>%
+  arrange(name, dist, station, season) %T>%
   print() %>%
   filter(str_detect(station, "10|12|16|18|7"))
 
-cmtx_sel_var %>%
-  select(station, season, dist, date_time_utc, c(chloro:pras_pct)) %>%
-  mutate(year = year(date_time_utc %m+% months(1)),
-         .after = date_time_utc) %>%
-  pivot_longer(
-    data      = .,
-    # cols      = c(chloro:pras_pct, temperature:nit_pho_ratio), 
-    cols      = c(chloro:pras_pct), 
-    names_to  = "name", 
-    values_to = "value", 
-  ) %>% 
-  # print() %>%
+# year x season
+cmtx_long %>%
   summarise(
-        .by = c(name, year, season),
-        across(
-          value,
-          stat_summ
-        )
-      ) %>%
-      arrange(name, season, year) 
+    .by = c(name, year, season),
+    across(
+      value,
+      stat_summ
+    )
+  ) %>%
+  arrange(name, season, year)
 
-cmtx_sel_var %>%
-  select(station, season, dist, date_time_utc, c(chloro:pras_pct)) %>%
-  mutate(year = year(date_time_utc %m+% months(1)),
-         .after = date_time_utc) %>%
-  pivot_longer(
-    data      = .,
-    # cols      = c(chloro:pras_pct, temperature:nit_pho_ratio), 
-    cols      = c(chloro:pras_pct), 
-    names_to  = "name", 
-    values_to = "value", 
-  ) %>% 
-  # print() %>%
+# year x season x dist
+cmtx_long %>%
   summarise(
-        .by = c(name, year, season, dist),
-        across(
-          value,
-          stat_summ
-        )
-      ) %>%
-      arrange(name, season, dist, year)
+    .by = c(name, year, season, dist),
+    across(
+      value,
+      stat_summ
+    )
+  ) %>%
+  arrange(name, season, dist, year)
+
+
+# season
+cmtx_long %>%
+  summarise(
+    .by = c(name, season),
+    across(
+      value,
+      stat_summ
+    )
+  ) %>%
+  arrange(name, season)
 ```
 
 
@@ -540,6 +566,138 @@ cmtx_nutr_plt <-
 
 
 # ----- Start HERE if NEEDED -----
+```{r}
+station_name <- "10"
+
+phyto_plt <- 
+cmtx_nutr %>%
+  select(1:pras) %>%
+  pivot_longer(chloro:pras) %>%
+  filter(str_detect(station, station_name)) %>%
+  ggplot(aes(x = date_time_utc, y = value, fill = name)) +
+   geom_area(color = "black", linewidth = 0.1) +
+   labs(
+     x = NULL,
+     y = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+     fill = NULL,
+     title = glue("Station: {station_name}")
+   ) +
+  scale_x_datetime(
+    breaks = "1 year", 
+    date_labels = "%Y",
+    expand = expansion()
+    ) +
+  scale_y_continuous(expand = expansion(add = c(0, 0.5))) +
+   theme_bw() +
+   theme(
+     axis.text          = element_text(color = "black"),
+     axis.title.y       = ggtext::element_markdown(),
+     strip.background   = element_rect(fill = "white"),
+     panel.grid.major.y = element_blank(),
+     panel.grid.minor.y = element_blank()
+   )
+phyto_plt
+
+phyto_plt <- 
+  cmtx_nutr %>%
+  select(1:pras, chloro_pct:pras_pct) %>%
+  pivot_longer(chloro_pct:pras_pct) %>%
+  filter(str_detect(station, station_name)) %>%
+  ggplot(aes(x = date_time_utc, y = value, fill = name)) +
+   geom_area(color = "black", linewidth = 0.1) +
+   labs(
+     x = NULL,
+     y = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+     fill = NULL,
+     title = glue("Station: {station_name}")
+   ) +
+  scale_x_datetime(
+    breaks = "1 year", 
+    date_labels = "%Y",
+    expand = expansion()
+    ) +
+  scale_y_continuous(expand = expansion(add = c(0, 0))) +
+   theme_bw() +
+   theme(
+     axis.text          = element_text(color = "black"),
+     axis.title.y       = ggtext::element_markdown(),
+     strip.background   = element_rect(fill = "white"),
+     panel.grid.major.y = element_blank(),
+     panel.grid.minor.y = element_blank()
+   )
+phyto_plt
+```
+
+
+```{r}
+nutrient_plt <- 
+cmtx_nutr %>%
+  filter(str_detect(station, station_name)) %>%
+  pivot_longer(c(no3_u_m, nh4_u_m, no2_u_m, po4_u_m, no3_no2_u_m, si_u_m)) %>%
+  mutate(
+    nut_label = case_match(
+      name,
+      "no3_u_m" ~ "Nitrate", 
+      "nh4_u_m" ~ "Ammonia", 
+      "no2_u_m" ~ "Nitrite", 
+      "po4_u_m" ~ "Phosphate", 
+      "no3_no2_u_m" ~ "Nitrite +\n Nitrate", 
+      "si_u_m" ~ "Silicate"
+    )
+  ) %>%
+    
+  filter(str_detect(name, "no|nh")) %>%
+  ggplot(aes(x = date_time_utc, y = value, group = name)) +
+   geom_line(na.rm = TRUE) +
+   geom_point(na.rm = TRUE) +
+   labs(
+     x = NULL,
+     y = "Concentration (\u03BCM)",
+     title = glue("Station: {station_name}")
+   ) +
+  guides(guide_color = "none") +
+  scale_x_datetime(
+    breaks = "1 year", 
+    date_labels = "%Y",
+    expand = expansion()
+    ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0))) +
+  facet_wrap(
+    ~nut_label, ncol = 1, scales = "free",
+    strip.position = "right") +
+  theme_bw() +
+   theme(
+     axis.text          = element_text(color = "black"),
+     axis.title.y       = ggtext::element_markdown(),
+     strip.background   = element_rect(fill = "white"),
+     panel.grid.major.y = element_blank(),
+     panel.grid.minor.y = element_blank()
+   )
+  
+nutrient_plt
+```
+```{r, fig.height=10}
+phyto_plt /
+nutrient_plt
+
+# shelf(camcorder)
+# camcorder::gg_record(
+#   dir    = here::here("data", "cam_test", "stetson_pres"),
+#   device         = "png",
+#   height         = 90 * 0.5625,
+#   width          = 90,
+#   dpi            = 600,
+#   units          = "mm",
+#   bg             = "white"
+# )
+
+# shell.exec(here::here("data", "cam_test", "stetson_pres"))
+# camcorder::gg_stop_recording()
+
+camcorder::gg_resize_film(width = 180, height = 90,  dpi = 600, units = "mm")
+
+```
+
 
 ## Monthly Average PFT
 
@@ -714,12 +872,13 @@ cmtx_nutr_plt$plt[[23]] +
 ```
 
 # Stack Across Months
+
 ```{r, fig.height=15}
 # function used to set all date to same year
-  same_year <- function(x, .year = 2000) {
-    year(x) <- .year
-    x
-  }
+same_year <- function(x, .year = 2000) {
+  year(x) <- .year
+  x
+}
 
 dat_month_stk <- 
   cmtx_nutr_plt_l %>%
@@ -786,7 +945,7 @@ dat_month_stk <-
 ```
 
 
-```{r, fig.height=15}
+```{r pft-pct-month, fig.height=15}
 dat_month_stk  %>%
   slice(c(11:20)) %>%
   pull(plt_stk)
@@ -805,15 +964,15 @@ imap(
 )
 ```
 
-```{r, fig.height=15}
+```{r pft-abs-month, fig.height=15}
 dat_month_stk  %>%
   slice(c(1:10)) %>%
   pull(plt_stk)
 
 ```
 
-```{r, fig.height=15}
-
+```{r env-month, fig.height=15}
+# temp
 dat_month_stk  %>%
   slice(-c(1:20)) %>%
   slice(1:2) %>%
@@ -821,6 +980,7 @@ dat_month_stk  %>%
   .[[1]] +
   scale_y_continuous(limits = c(NA, NA))
 
+# sal
 dat_month_stk  %>%
   slice(-c(1:20)) %>%
   slice(1:2) %>%
@@ -828,6 +988,7 @@ dat_month_stk  %>%
   .[[2]] +
   scale_y_continuous(limits = c(NA, NA))
 
+# total chla 
 dat_month_stk  %>%
   slice(-c(1:20)) %>%
   slice(3) %>%
@@ -906,6 +1067,236 @@ nutr_pca_plt_bi
 nutr_pca_plt_ind
 plotly::ggplotly(nutr_pca_plt_ind)
 ```
+
+```{r}
+
+sec_axis <- 
+    ggh4x::help_secondary(
+    cmtx_nutr,
+    c(0, 1),
+    temperature,
+    name = "Temperature (°C)"
+)
+
+cmtx_nutr %>%
+    arrange(date_time_utc) %>%
+  ggplot(aes(date_time_utc)) +
+  geom_line(aes(y = total_chl_a, color = station)) +
+  geom_point(aes(y = total_chl_a, color = station),
+             shape = 17) +
+  geom_line(aes(y = sec_axis$proj(temperature), group = station),
+            linetype = "dashed", color = "grey30") +
+  geom_point(aes(y = sec_axis$proj(temperature), color = station),
+           shape = 18) +
+    scale_y_continuous(sec.axis = sec_axis) +
+    coord_cartesian(ylim = c(0,1), clip = "on") +
+  facet_wrap(~ station, ncol = 2) +
+  labs(x = NULL,
+       y = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+       ) +
+    guides(color = "none") +
+   theme_bw() +
+    theme(
+        axis.text = element_text(color = "black"),
+        axis.title.y = ggtext::element_markdown(),
+        strip.background = element_rect(fill = "white"),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()
+    )
+
+# shelf(camcorder)
+# camcorder::gg_record(
+#   dir    = here::here("data", "cam_test", "pft_temp_stn"),
+#   device         = "png",
+#   height         = 170,
+#   width          = 170,
+#   dpi            = 600,
+#   units          = "mm",
+#   bg             = "white"
+# )
+
+# shell.exec(here::here("data", "cam_test", "pft_temp_stn"))
+# camcorder::gg_stop_recording()
+
+# camcorder::gg_resize_film(width = 90, height = 90 * 0.5625,  dpi = 600, units = "mm")
+
+```
+
+```{r}
+cmtx_nutr %>%
+    arrange(date_time_utc) %>%
+    filter(total_chl_a < 1) %>%
+    
+  ggplot(aes(x = temperature, y = pras_pct)) +
+    geom_smooth(se = FALSE, color = "black", linetype = "dashed",
+                method = "gam") +
+    geom_smooth(aes(color = dist), se = FALSE) +
+  # geom_line(aes(y = total_chl_a, color = station)) +
+  geom_point(aes(color = dist), shape = 17) +
+  # geom_line(aes(y = sec_axis$proj(temperature), group = station),
+  #           linetype = "dashed", color = "grey30") +
+  # geom_point(aes(y = sec_axis$proj(temperature), color = station),
+  #          shape = 18) +
+    scale_y_continuous(labels = scales::label_percent(1)) +
+    # coord_cartesian(ylim = c(0,1), clip = "on") +
+  # facet_wrap(~ station, ncol = 2) +
+  labs(x = NULL,
+       # y = "Concentration (mg m<sup>-3</sup>)",
+       y = "Relative Abundance (%)",
+       ) +
+    guides(color = "none") +
+   theme_bw() +
+    theme(
+        axis.text = element_text(color = "black"),
+        axis.title.y = ggtext::element_markdown(),
+        strip.background = element_rect(fill = "white"),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()
+    )
+```
+
+
+# ---- Correlation ----
+
+```{r correlate}
+cmtx_nutr %>%
+  select(temperature, salinity, chloro_pct:pras_pct) %>%
+  corrr::correlate() %>%
+  mutate(
+    across(
+      is.numeric, 
+      \(.x) round(.x, 2)
+      )
+    ) %>%
+    corrr::focus(temperature, salinity) %>%
+    arrange(temperature)
+
+
+cmtx_nutr %>%
+  select(dist, temperature, salinity, chloro_pct:pras_pct) %>%
+  nest(.by = dist) %$% 
+  map2(data,
+       dist,
+      \(.x, .y) .x %>%
+  corrr::correlate() %>%
+  corrr::focus(temperature, salinity)  %>%
+  arrange(temperature) %>%
+  mutate(
+    .before = 1,
+    dist = .y,
+    across(
+      is.numeric, 
+      \(.x) round(.x, 2)
+      )
+    )
+      ) %>%
+        
+    list_c() %T>%
+    {
+      arrange(., salinity) %>%
+      print()
+        
+    } %>%
+     
+    arrange(temperature) 
+
+cmtx_nutr %>%
+  select(temperature, salinity, chloro_pct:pras_pct) %>%
+    # as.matrix() %>%
+    correlation::correlation() %>%
+    correlation::cor_smooth()
+
+cor_fun <- function(df) cor.test(df$value_pft, df$value_env, method = "pearson") %>% broom::tidy()
+```
+
+
+```{r correlate-signifc}
+cmtx_nutr %>%
+  select(temperature, salinity, chloro_pct:pras_pct) %>%
+   pivot_longer(
+     data      = .,
+     cols      = -c(temperature, salinity),     # columns to pivot long,
+     names_to  = "name_pft",  # desired name for category column
+     values_to = "value_pft", # desired name for value column
+     ) %>%
+   pivot_longer(
+     data      = .,
+     cols      = c(temperature, salinity),     # columns to pivot long,
+     names_to  = "name_env",  # desired name for category column
+     values_to = "value_env", # desired name for value column
+     ) %>%
+       
+  nest(.by = c(name_pft, name_env)) %>%
+  mutate(model = map(data, cor_fun)) %>%
+  # slice(1) %>%
+  unnest(model)  %T>% 
+  print() %>%
+  select(-c(statistic, data, parameter:last_col())) %>%
+  pivot_wider(
+    data         = .,
+    id_cols      = c(name_pft), # *optional* vector of unaffected columns,
+    names_from   = c(name_env), # category column(s) to pivot wide
+    values_from  = c(estimate, p.value), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    ) %>%
+    mutate(
+      across(
+        contains("p_value"),
+        \(.x) scales::pvalue(.x, 0.05)
+      ),
+      across(
+        contains("estimate"),
+        \(.x) round(.x, 2)
+      )
+    ) %>%
+    relocate(contains("temp"), .after = name_pft)
+
+cmtx_nutr %>%
+  select(dist, temperature, salinity, chloro_pct:pras_pct) %>%
+   pivot_longer(
+     data      = .,
+     cols      = -c(dist, temperature, salinity),     # columns to pivot long,
+     names_to  = "name_pft",  # desired name for category column
+     values_to = "value_pft", # desired name for value column
+     ) %>%
+   pivot_longer(
+     data      = .,
+     cols      = c(temperature, salinity),     # columns to pivot long,
+     names_to  = "name_env",  # desired name for category column
+     values_to = "value_env", # desired name for value column
+     ) %>%
+       
+  nest(.by = c(dist, name_pft, name_env)) %>%
+  mutate(model = map(data, cor_fun)) %>%
+  # slice(1) %>%
+  unnest(model) %T>% 
+  print() %>%
+  select(-c(statistic, data, parameter:last_col())) %>%
+  pivot_wider(
+    data         = .,
+    id_cols      = c(dist, name_pft), # *optional* vector of unaffected columns,
+    names_from   = c(name_env), # category column(s) to pivot wide
+    values_from  = c(estimate, p.value), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    ) %>%
+    mutate(
+      across(
+        contains("p_value"),
+        \(.x) scales::pvalue(.x, 0.05)
+      ),
+      across(
+        contains("estimate"),
+        \(.x) round(.x, 2)
+      )
+    ) %>%
+    relocate(contains("temp"), .after = name_pft)
+
+
+```
+
+
 
 # Plot PFT vs Envrionmental Parameters
 
