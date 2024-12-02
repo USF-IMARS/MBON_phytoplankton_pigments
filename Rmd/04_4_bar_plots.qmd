@@ -56,7 +56,7 @@ phyto_name <-
   print()
 
 # ---- load chemtax data in wide format ---- #
-cmtx_w <-
+cmtx_w_og <-
   here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
   filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
@@ -77,24 +77,42 @@ cmtx_w <-
     .by = c(station, cruise_id),
     depth == min(depth)
     & depth < 20
+  ) %>%
+  mutate(
+      .after = total_chl_a,
+      across(
+          total_chl_a:pras,
+          ~ if_else(
+          str_detect(sample, "WS20278-32"), 
+          .x / 10,
+            .x)
+      )
   ) %T>% 
   print()
 
+# color palette
+tol_muted <- c(khroma::color("muted", names = FALSE)(9), "#BBBBBB")
 ```
 ## 2.2.1 Remove Outliers?
 
 ```{r remove-outliers}
-remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+# remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+remove_out <- 2
 
 if (remove_out == 1) {
+  message("Removing Outliers!")
   cmtx_w <-
-    cmtx_w %>%
+    cmtx_w_og %>%
     filter(
       total_chl_a <= 1
     )
   
   file_suffix <- "_no_out"
 } else {
+  message("Keeping Outliers!")
+  cmtx_w <-
+    cmtx_w_og
   file_suffix <- ""
 }
 ```
@@ -121,6 +139,15 @@ cmtx_l <-
   ) %>%
   left_join(phyto_name, by = c("phyto" = "shrt")) %>%
   
+  # mutate(
+  #   value1 = if_else(
+  #     str_detect(sample, "WS20278-32"),
+  #     conc / 10,
+  #     NA
+  #   ),
+  #   .after = conc
+  # )
+    
   # calc percent
   mutate(percent = conc/total_chl_a) %T>% 
   print()
@@ -263,8 +290,6 @@ cmtx_l_pct %>%
 
 ### 3.3.1 Stacked Bar Chart
 ```{r plt-fracs, fig.width=20, fig.height=10}
-tol_muted <- c(khroma::color("muted", names = FALSE)(9), "#BBBBBB")
-
 new_dat <- 
   summarise(
     cmtx_w, 
@@ -459,8 +484,6 @@ save_gg(
 Figure 6
 
 ```{r chemtax-stacked-bar}
-tol_muted <- c(khroma::color("muted", names = FALSE)(9), "#BBBBBB")
-
 new_dat <- 
   cmtx_w  %>%
   mutate(
@@ -469,13 +492,21 @@ new_dat <-
   mutate(
     season = fct_reorder(season1, as.numeric(season))
   ) %>%
+    # remove ---- #
+   mutate(
+    nearoff = case_when(
+        str_detect(station, "^16|^10|^7") ~ 1,
+        .default = 2
+        ),
+    station = fct_reorder2(station, lon, nearoff)
+  )  %>% # remove here ---- #
   summarise(
     .by = c(season, station), 
     chl_avg = mean(total_chl_a), 
     chl_sd  = sd(total_chl_a),
     chl_se  = chl_sd / sqrt(n())
-    )  %T>% 
-  print()
+    ) %T>% 
+  print() 
 
 sec_axe <- 
   new_dat %>%
@@ -486,7 +517,7 @@ sec_axe <-
 
 
 # CHEMTAX stacked bar graph
-cmtx_stck_bar_szn_stn <- 
+cmtx_stck_bar_szn_stn <-
   cmtx_l %>%
   filter(!is.na(conc)) %>%
   mutate(
@@ -494,15 +525,36 @@ cmtx_stck_bar_szn_stn <-
     season1 = glue("{season} (N = {n()/10})")
     ) %>%
   mutate(
-    season = fct_reorder(season1, as.numeric(season))
+    season = fct_reorder(season1, as.numeric(season)),
+    # remove ---- #
+    nearoff = case_when(
+        str_detect(station, "^16|^10|^7") ~ 1,
+        .default = 2
+        ),
+    station = fct_reorder2(station, lon, nearoff) # remove here ---- #
   ) %>%
   summarise(
   .by = c(station, season, phyto, names),
   conc = mean(conc)
   ) %>%
   mutate(
-    names = fct_reorder(names, conc, .desc = FALSE)
-  ) %T>% 
+    # names = fct_reorder(names, conc, .desc = FALSE),
+    names = fct(
+        names, 
+        levels = c(
+          "Dinoflagellate",
+          "Prasinophyte", 
+          "Diatom 1",
+          "Cryptophyte",
+          "Chlorophyte",
+          "Haptophyte 8",
+          "Diatom 2",        
+          "Haptophyte 6",
+          "Cyanobacteria 4",
+          "Cyanobacteria 2"
+          )
+        ),
+  ) %T>%
   print() %>%
   ggplot(
     aes(
@@ -511,6 +563,7 @@ cmtx_stck_bar_szn_stn <-
       fill  = names
     )
   ) +
+  geom_vline(xintercept = 5.5, linetype = "dashed", color = "grey") +
   geom_bar(
     color     = "black",
     position  = "fill",
@@ -519,17 +572,18 @@ cmtx_stck_bar_szn_stn <-
     linewidth = 0.1,
     width = 0.6
   ) +
-  geom_rect(
-    data = tibble(
-      station = c("16", "10", "7"), 
-      x  = c(2.6, 4.6, 6.6), 
-      x2 = c(3.4, 5.4, 7.4)), 
-    aes(xmin = x, xmax = x2, ymin = 0.005, ymax = 0.995),
-    fill        = NA,
-    color       = "red",
-    linewidth   = 0.4,
-    inherit.aes = FALSE
-    ) +
+  # comment ---- #
+  # geom_rect(
+  #   data = tibble(
+  #     station = c("16", "10", "7"), 
+  #     x  = c(2.6, 4.6, 6.6), 
+  #     x2 = c(3.4, 5.4, 7.4)), 
+  #   aes(xmin = x, xmax = x2, ymin = 0.005, ymax = 0.995),
+  #   fill        = NA,
+  #   color       = "red",
+  #   linewidth   = 0.4,
+  #   inherit.aes = FALSE
+  #   ) + # uncomment here ---- #
   geom_linerange(
     data = new_dat,
     aes(
@@ -539,9 +593,9 @@ cmtx_stck_bar_szn_stn <-
       
       # ymin = sec_axe$proj(chl_avg) - sec_axe$proj(chl_se), # standard error
       # ymax = sec_axe$proj(chl_avg) + sec_axe$proj(chl_se)),  # standard error
-  ),
+    ),
     inherit.aes = FALSE,
-  linewidth = 0.2
+    linewidth = 0.2
   ) +
   geom_point(
     data = new_dat,
@@ -567,7 +621,7 @@ cmtx_stck_bar_szn_stn <-
   ) +
   scale_fill_manual(values = tol_muted) +
   coord_cartesian(clip = "off") +
-  facet_wrap(~ season) +
+  facet_wrap(~ season, nrow = 2) +
     
   # theme
   theme_bw() +
@@ -587,7 +641,8 @@ cmtx_stck_bar_szn_stn <-
     legend.key.size    = unit(2, "mm"),
     # legend.box.spacing = unit(2, "mm"),
     legend.box.margin  = margin(t = -11, b = -5),
-    strip.text.x       = element_text(size = 4, margin = margin(t = 2, b = 2)),
+    strip.text.x       = element_text(size = 6, face = "bold", margin = margin(t = 2, b = 2)), # remove later
+    # strip.text.x       = element_text(size = 4, margin = margin(t = 2, b = 2)),
     strip.background   = element_rect(fill = "white", colour = "black"),
     
   )
@@ -608,12 +663,16 @@ save_gg(
   save_location  = here(dir_plt_save, "season_station"),
   save_name      = glue("pft_bar_percent_season", file_suffix),
   verbose        = TRUE,
-  # overwrite      = TRUE,
+  overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
-  # height         = 90 * 0.5625,
+  # 90 x 90 for figure
   height         = 90,
   width          = 90,
+  # height         = 90 * 0.5625,
+  # 45 x 180 for presentation
+  # height         = 45,
+  # width          = 180,
   dpi            = 600,
   units          = "mm",
   bg             = "white"
@@ -644,7 +703,7 @@ gt_pft <-
     id_cols      = c(names, phyto), 
     names_from   = c(season1), 
     values_from  = c(percent_lbls)
-    )  %>%
+    ) %>%
           
   # ---- gt table for PFT average +/- std dev per season
   gt(
@@ -702,6 +761,109 @@ if (FALSE) {
 }
 ```
 
+```{r}
+shelf(gt)
+gt_pft_nearoff <-
+# cmtx_l_pct %>%
+  cmtx_l_pct %>%
+      select(station, date_time_utc, total_chl_a:last_col()) %>%
+  mutate(
+      nearoff = case_when(
+        str_detect(station, "^16|^10|^7") ~ "Nearshore",
+        .default = "Offshore"
+        )
+  ) %>%
+  summarise(
+    .by = c(names, phyto, nearoff),
+    across(
+      .cols  = percent,
+      .fns   = list(
+          avg = \(x) { mean(x, na.rm = TRUE) },
+          sd  = \(x) { sd(x, na.rm = TRUE) },
+          se  = \(x) { sd(x, na.rm = TRUE) / sqrt(n()) },
+          num = ~ n()
+          ),
+      .names = "{.col}_{.fn}"
+    )
+  ) %>%
+  mutate(
+    names = fct_reorder(names, percent_avg, .fun = mean, .desc = TRUE),
+    percent_avg = scales::label_percent(accuracy  = 0.01)(percent_avg),
+    percent_sd  = scales::label_percent(accuracy  = 0.01)(percent_sd),
+    percent_se  = scales::label_percent(accuracy  = 0.01)(percent_se),
+    # season1 = glue("{nearoff} (N = {percent_num})"),
+    # season1 = fct_reorder(season1, as.numeric(season))
+  ) %>%
+ arrange(nearoff) %T>% print() %>%
+  mutate(
+    # names = fct_reorder(names, percent_avg, .fun = mean, .desc = TRUE),
+    percent_avg = str_remove(percent_avg, "%"),
+    # percent_lbls = glue("{percent_avg} \u00B1 {percent_se}")
+    percent_lbls = glue("{percent_avg} \u00B1 {percent_sd}")
+  )  %>%
+  arrange(names) %>%
+  pivot_wider(
+    data         = .,
+    id_cols      = c(names, phyto), 
+    names_from   = c(nearoff), 
+    values_from  = c(percent_lbls)
+    ) %>%
+          
+  # ---- gt table for PFT average +/- std dev per season
+  gt(
+    data          = .,
+    groupname_col = "names"
+  ) %>%
+  cols_hide(phyto) %>%
+  tab_options(
+    table_body.hlines.width      = 0,
+    table_body.vlines.width      = 0,
+    stub.border.width            = 0,
+    row_group.as_column          = TRUE,
+    row_group.padding.horizontal = 20,
+    row_group.padding            = 200,
+    stub_row_group.font.weight   = "bold",
+    stub_row_group.border.width  = 0,
+    row_group.border.top.width   = px(5)
+  ) %>%
+  cols_align("center") %>%
+  tab_style(
+    cell_text(
+      v_align = "middle",
+      align   = "center"
+    ),
+    locations = cells_row_groups()
+  ) %>%
+  tab_spanner(
+    # label   = "Average % \u00B1 S.E.",
+    label   = "Average % \u00B1 S.D.",
+    columns = everything()) %>%
+  opt_table_font("serif")
+
+gt_pft_nearoff
+
+# ---- save tables as html and docx
+if (FALSE) {
+  file_expr(
+    loc            = here(dir_plt_save, "table"),
+    file_base      = glue("pft_fraction_near_off", file_suffix),
+    exts           = c("html", "docx"),
+    time_stamp_fmt = "%Y%m%d_%H%M%S"
+  ) %$%
+  eval(file_expr) %>%
+  walk(
+    .,
+    \(file_n) {
+      gtsave(
+        gt_pft_nearoff,
+        filename = file_n
+      )
+    }
+  )
+
+ 
+}
+```
 
 
 
@@ -753,7 +915,8 @@ add_season_year <-
 
 ```{r chemtax-stacked-bar-year-season}
 # CHEMTAX stacked bar graph with ratio to chlor-a, organized by station
-cmtx_l %>%
+cmtx_l_pct %>%
+  rename("conc" = percent) %>%
   add_season_year %T>%
   print() %>%
   # mutate(station = fct_reorder(station, lon, .na_rm = FALSE)) %>%
@@ -840,7 +1003,11 @@ cmtx_l %>%
   ) +
   scale_fill_manual(values  = tol_muted) +
   scale_color_manual(values = tol_muted) +
-  scale_y_continuous(expand = c(0, 0)) +
+  scale_y_continuous(
+    expand = c(0, 0), 
+    # limits = c(0, 1),
+    breaks = seq(0, 4, 0.25)
+    ) +
   facet_wrap(~season_year, ncol = 4, drop = FALSE) +
 
   # theme
@@ -850,6 +1017,8 @@ cmtx_l %>%
     legend.direction = "horizontal"
   )
 
+.Last.value %>%
+ plotly::ggplotly()
 
 # ---- save plot
 save_gg(
