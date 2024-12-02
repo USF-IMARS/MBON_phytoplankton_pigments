@@ -45,8 +45,10 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional
-    ggthemes, ggtext,
-    ggstatsplot
+    ggthemes, 
+    ggtext,
+    ggstatsplot,
+    patchwork
 )
 
 conflicts_prefer(
@@ -61,7 +63,35 @@ source(here("scripts", "misc_functions.R"))
 
 # set ggplot theme
 theme_set(theme_calc(base_size = 12, base_family = "serif"))
+
+# skip some plotting chunks
+skip <- TRUE
 ```
+
+```{r hurricane-dates}
+hurricane_dates <-
+  tribble(
+    ~date, ~name,
+    # "2015-08-30", "Erika", ##
+    # "2016-10-12", "Nicole", ##
+    # "2017-07-31", "Emily", ##
+    "2017-09-10", "Irma",
+    # "2017-10-29", "Philippe", ##
+    "2018-09-03", "Gordon",
+    # "2019-09-01", "Dorian", ##
+    # "2020-05-25", "Bertha", ##
+    "2020-08-02", "Isaias",
+    # "2020-08-26", "Laura", ##
+    "2020-09-11", "Sally",
+    "2020-11-09", "Eta",
+  ) %>%
+  mutate(
+    date = ymd(date),
+    nearoff = "Nearshore"
+  ) %T>%
+  print()
+```
+
 
 ## 2.2 Load Dataset
 
@@ -112,16 +142,16 @@ pig_dat_og %>%
     & !str_detect(station, "60|21.5|24|^3$|9.5|9B")
   ) %>%
   summarise(
-    chl_avg = mean(tot_chl_a, na.rm = TRUE),
-    chl_med = median(tot_chl_a, na.rm = TRUE),
-    chl_sd = sd(tot_chl_a, na.rm = TRUE),
-    chl_sd2 = sd(tot_chl_a, na.rm = TRUE) * 2,
-    chl_lwr = mean(tot_chl_a, na.rm = TRUE) - sd(tot_chl_a, na.rm = TRUE),
-    chl_upr = mean(tot_chl_a, na.rm = TRUE) + sd(tot_chl_a, na.rm = TRUE),
-    chl_25 = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
-    chl_75 = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE),
-    chl_5 = quantile(tot_chl_a, probs = 0.05, na.rm = TRUE),
-    chl_95 = quantile(tot_chl_a, probs = 0.95, na.rm = TRUE),
+    chl_avg  = mean(tot_chl_a, na.rm = TRUE),
+    chl_med  = median(tot_chl_a, na.rm = TRUE),
+    chl_sd   = sd(tot_chl_a, na.rm = TRUE),
+    chl_sd2  = sd(tot_chl_a, na.rm = TRUE) * 2,
+    chl_lwr  = mean(tot_chl_a, na.rm = TRUE) - sd(tot_chl_a, na.rm = TRUE),
+    chl_upr  = mean(tot_chl_a, na.rm = TRUE) + sd(tot_chl_a, na.rm = TRUE),
+    chl_25   = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
+    chl_75   = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE),
+    chl_5    = quantile(tot_chl_a, probs = 0.05, na.rm = TRUE),
+    chl_95   = quantile(tot_chl_a, probs = 0.95, na.rm = TRUE),
     chl_ci95 = 1.96*(sd(tot_chl_a)/(sqrt(length(tot_chl_a))))
   )
 
@@ -134,9 +164,9 @@ pig_dat_og %>%
     .by = season,
     chl_avg = mean(tot_chl_a, na.rm = TRUE),
     chl_med = median(tot_chl_a, na.rm = TRUE),
-    chl_sd = sd(tot_chl_a, na.rm = TRUE),
-    chl_25 = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
-    chl_75 = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
+    chl_sd  = sd(tot_chl_a, na.rm = TRUE),
+    chl_25  = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
+    chl_75  = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
   )
 
 pig_dat_og %>%
@@ -149,9 +179,9 @@ pig_dat_og %>%
     .by = season,
     chl_avg = mean(tot_chl_a, na.rm = TRUE),
     chl_med = median(tot_chl_a, na.rm = TRUE),
-    chl_sd = sd(tot_chl_a, na.rm = TRUE),
-    chl_25 = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
-    chl_75 = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
+    chl_sd  = sd(tot_chl_a, na.rm = TRUE),
+    chl_25  = quantile(tot_chl_a, probs = 0.25, na.rm = TRUE),
+    chl_75  = quantile(tot_chl_a, probs = 0.75, na.rm = TRUE)
   )
 
 pig_dat_og %>%
@@ -240,6 +270,35 @@ if (remove_out == 1) {
   pig_dat <- pig_dat_og
   file_suffix <- ""
 }
+
+
+pig_dat_keys <-
+  pig_dat %>%
+  # reframe(
+  #   .by = c(cruise_id, date_time_utc, station, depth),
+  #   pick(1:lat),
+  #   across(
+  #     tot_chl_a:last_col(),
+  #     \(x) mean(x, na.rm = TRUE)
+  #   )
+  # ) %>%
+  mutate(station = str_replace(station, "9B", "9.5")) %>%
+  filter(
+    str_detect(name_of_water_body, "Keys") &
+      !str_detect(station, "60|21.5|24|^3$|9.5|9B")
+  ) %T>%
+  print() %>%
+  # select(cruise_id, date_time_utc, station, depth, season, tot_chl_a) %>%
+  distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE)  %>%
+  mutate(
+    .after = station,
+    nearoff =
+      if_else(
+        str_detect(station, "10|16|7"),
+        "Nearshore",
+        "Offshore"
+      )
+  )
 ```
 
 
@@ -250,6 +309,7 @@ if (remove_out == 1) {
 Chlorophyll-a plotted as a time series separated by region
 
 ```{r concentration-vs-time, fig.height=15, fig.asp=0.5}
+if (!skip) {
 # ---- over all water bodies ---- # 
 pig_dat %>%
   ggplot(
@@ -357,6 +417,7 @@ pig_dat %>%
   geom_violin(fill = NA) +
   geom_jitter(shape = 21, width = 0.2) +
   scale_y_continuous(breaks = c(seq(0, 1, 0.1), 1:4))
+}
 ```
 
 ## 3.2 Scatter: Pigment Concentration vs Total Chlorophyll-a 
@@ -364,6 +425,7 @@ pig_dat %>%
 All pigments vs chlor-a by season and region
 
 ```{r scatter-plot-pigment-tchlor-a, fig.height=7, fig.width=10}
+if (!skip) {
 plt_pigment_vs_chlor <-
   pig_dat %>%
   pivot_longer(
@@ -526,7 +588,7 @@ plt_pigment_vs_chlor %$%
     }
   )
 
-
+}
 ```
 
 
@@ -536,6 +598,7 @@ plt_pigment_vs_chlor %$%
 
 
 ```{r time-of-day}
+if (!skip) {
 pig_dat %>%
   pivot_longer(
     data      = .,
@@ -628,6 +691,8 @@ pig_dat %>%
     )
   ) %>%
   pull(plt_tod_stn)
+    
+}
 ```
 
 
@@ -639,6 +704,7 @@ The histograms are separated by year, season and region.
 The violin plots are separated by season and region
 
 ```{r hist-viol, fig.height=9.7, fig.width=30}
+if (!skip) {
 plt_pig_hist_viola <-
   pig_dat %>%
   pivot_longer(
@@ -717,6 +783,7 @@ plt_pig_hist_viola %>%
          .f = ~ print(.x))  %>% 
     walk(.x = .$viol,
          .f = ~ print(.x)) 
+}
 ```
 
 
@@ -724,33 +791,33 @@ plt_pig_hist_viola %>%
 
 
 ```{r data-filter}
-pig_dat_keys <-
-  pig_dat %>%
-  # reframe(
-  #   .by = c(cruise_id, date_time_utc, station, depth),
-  #   pick(1:lat),
-  #   across(
-  #     tot_chl_a:last_col(),
-  #     \(x) mean(x, na.rm = TRUE)
-  #   )
-  # ) %>%
-  mutate(station = str_replace(station, "9B", "9.5")) %>%
-  filter(
-    str_detect(name_of_water_body, "Keys") &
-      !str_detect(station, "60|21.5|24|^3$|9.5|9B")
-  ) %T>%
-  print() %>%
-  # select(cruise_id, date_time_utc, station, depth, season, tot_chl_a) %>%
-  distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE)  %>%
-  mutate(
-    .after = station,
-    nearoff =
-      if_else(
-        str_detect(station, "10|16|7"),
-        "Nearshore",
-        "Offshore"
-      )
-  )
+# pig_dat_keys <-
+#   pig_dat %>%
+#   # reframe(
+#   #   .by = c(cruise_id, date_time_utc, station, depth),
+#   #   pick(1:lat),
+#   #   across(
+#   #     tot_chl_a:last_col(),
+#   #     \(x) mean(x, na.rm = TRUE)
+#   #   )
+#   # ) %>%
+#   mutate(station = str_replace(station, "9B", "9.5")) %>%
+#   filter(
+#     str_detect(name_of_water_body, "Keys") &
+#       !str_detect(station, "60|21.5|24|^3$|9.5|9B")
+#   ) %T>%
+#   print() %>%
+#   # select(cruise_id, date_time_utc, station, depth, season, tot_chl_a) %>%
+#   distinct(cruise_id, date_time_utc, station, depth, .keep_all = TRUE)  %>%
+#   mutate(
+#     .after = station,
+#     nearoff =
+#       if_else(
+#         str_detect(station, "10|16|7"),
+#         "Nearshore",
+#         "Offshore"
+#       )
+#   )
 
 pig_dat_keys
 pig_dat_keys %>%
@@ -798,7 +865,84 @@ contrast(chla_anova_means, "pairwise")
 tab_model(chla_anova)
 ```
 
+```{r}
+# shelf(emmeans, sjPlot)
 
+chla_anova <-
+  lmerTest::lmer(
+    tot_chl_a ~ nearoff *  (1 | year),
+    mutate(pig_dat_keys, year = factor(year)) %>%
+    filter(season == "Autumn")
+  )
+
+summary(chla_anova)
+
+(chla_anova_means <- 
+  emmeans(
+    chla_anova,
+    ~ nearoff 
+    )
+)
+
+
+contrast(chla_anova_means, "pairwise")
+
+
+tab_model(chla_anova)
+
+
+shelf(glmmTMB)
+
+chla_glmm <- glmmTMB::glmmTMB(
+    tot_chl_a ~ nearoff * (1 | year) * season,
+    data = mutate(pig_dat_keys, year = factor(year))
+    )
+
+summary(chla_glmm)
+tab_model(chla_glmm)
+emmeans(
+  chla_glmm,
+  ~ nearoff
+)
+emmeans(
+  chla_glmm,
+  ~ season
+)
+emmeans(
+  chla_glmm,
+  ~ nearoff + season
+)
+
+chla_glmm <- glmmTMB::glmmTMB(
+    tot_chl_a ~ nearoff * season,
+    data = mutate(pig_dat_keys, year = factor(year))
+    )
+
+summary(chla_glmm)
+tab_model(chla_glmm)
+emmeans(
+  chla_glmm,
+  ~ nearoff
+)
+emmeans(
+  chla_glmm,
+  ~ season
+)
+emmeans(
+  chla_glmm,
+  ~ nearoff + season
+)
+
+glmmTMB::glmmTMB(
+    tot_chl_a ~ nearoff * month ,
+    data = mutate(pig_dat_keys, 
+                  year = factor(year),
+                  )
+    ) %>%
+    summary()
+
+mutate(pig_dat_keys,  date_time_utc = as_date(date_time_utc))
+```
 
 ## 4.1 Between Stations
 
@@ -884,7 +1028,7 @@ pig_dat_keys %>%
 remove_out <- 1
 if (remove_out == 1) {
   message("Filtering out outliers!")
-  pig_dat <-
+  pig_dat_out <-
     pig_dat_og %>%
     filter(
       tot_chl_a <= 1
@@ -898,7 +1042,7 @@ if (remove_out == 1) {
 }
 
 pig_dat_keys_out <-
-  pig_dat %>%
+  pig_dat_out %>%
   # reframe(
   #   .by = c(cruise_id, date_time_utc, station, depth),
   #   pick(1:lat),
@@ -1226,6 +1370,31 @@ pig_dat %>%
   count(station)
 ```
 
+
+Used to check differences in Total Chlorophyll-a between Seasons
+
+```{r keys-season-histogram}
+pig_dat_keys %>%
+  filter(!str_detect(station, "^24$")  
+         & depth < 6) %>%
+  ggplot(aes(tot_chl_a)) +
+  geom_histogram(binwidth = 0.02) +
+  facet_wrap(~ season, ncol = 1) +
+  scale_x_log10()
+
+pig_dat_keys %>%
+  filter(
+    str_detect(station, "10|12|16|18")   
+    # !str_detect(station, "^24$")  
+    & depth < 6) %>%
+  ggplot(aes(tot_chl_a)) +
+  geom_histogram(binwidth = 0.02) +
+  scale_x_log10() +
+  labs(x = NULL, y = NULL) +
+  facet_grid(nearoff ~ season) 
+```
+
+
 # 5.0 Boxplot: Total Chlorophyll-a vs Season
 
 Box plots per region and season for chlor-a
@@ -1278,8 +1447,9 @@ chl_a_box <-
               y = tot_chl_a
             )
           ) +
+          stat_boxplot(geom = "errorbar", linewidth = 0.2, width = 0.1) +
           geom_boxplot(
-            aes(fill = season),
+            # aes(fill = season),
             outlier.shape = NA, 
             linewidth     = 0.2,
             color = "black",
@@ -1300,13 +1470,15 @@ chl_a_box <-
           stat_summary(
             color = "#CC0000",
             alpha = 0.5,
-            # fun.data   = mean_sdl, # std dev * 2
-            # fun.args = list(mult = 1),
+            fun.data   = mean_sdl, # std dev * 2
+            fun.args = list(mult = 1),
             # fun.data   = mean_sdl, # std dev * 2
             # fun.data   = mean_cl_normal, # lower and upper Gaussian confidence limits 
-            fun.data   = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
-            geom  = "linerange",
+            # fun.data   = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
+            # geom  = "linerange",
+            geom  = "errorbar",
             linewidth = 0.5,
+            width = 0.1,
             # size  = 0.5,
             na.rm = TRUE
           ) +
@@ -1397,6 +1569,19 @@ pig_dat_keys %>%
     ) %>%
   arrange(season)
 
+pig_dat_keys %>%
+  summarise(
+    .by = c(season, nearoff),
+    num = n(),
+    mean = mean(tot_chl_a),
+    sd = sd(tot_chl_a),
+    se = sd(tot_chl_a)/(sqrt(n())),
+    ci95 = sd(tot_chl_a)/(sqrt(n())) * 1.96,
+    lwr = mean(tot_chl_a) - sd(tot_chl_a),
+    hi = mean(tot_chl_a) + sd(tot_chl_a),
+    med = median(tot_chl_a, na.rm = TRUE),
+    ) %>%
+  arrange(season)
 ```
 ## 5.2 Save: Chlorophyll-a Plots
 
@@ -1459,7 +1644,7 @@ chl_a_box  %>%
 
 Figure 3
 
-```{r chla-nearoff}
+```{r old-chla-nearoff}
 # chl_a_box <-
 #   pig_dat %>%
 #   filter(str_detect(station, "10|12|16|18")  
@@ -1646,7 +1831,7 @@ pig_dat %>%
 ```
 
 
-```{r}
+```{r season-labels}
 # labels for x axis with number of samples
 # szn_labels_nearoff <-
 #   pig_dat_keys %>%
@@ -1664,8 +1849,161 @@ szn_labels <-
 
 ```
 
+```{r stats-nearoff}
+pig_dat_keys %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  summarise(
+    .by = c(season, nearoff),
+    num = n(),
+    mean = mean(tot_chl_a),
+    sd = sd(tot_chl_a),
+    se = sd(tot_chl_a)/(sqrt(n())),
+    ci95 = sd(tot_chl_a)/(sqrt(n())) * 1.96,
+    lwr = mean(tot_chl_a) - sd(tot_chl_a),
+    hi = mean(tot_chl_a) + sd(tot_chl_a),
+    med = median(tot_chl_a, na.rm = TRUE),
+    ) %>%
+  arrange(season)
 
-```{r}
+
+
+##%######################################################%##
+#                                                          #
+####               Near/Offshore Boxplot                ####
+#                                                          #
+##%######################################################%##
+#' Near/Offshore Boxplot
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param .x Dataframe
+#' @param .y Season Name
+#' @param rm_out If outliers removed, 1 or 2
+#'
+#' @return Boxplot of Nearshore and Offshore
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#'
+#' @author Sebastian Di Geronimo (October 28, 2024)
+#'
+boxplot_near_off <- function(.x, .y, rm_out) {
+  # ylims <- c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE) + 0.5)
+  ylims <- c(0, 0.8)
+
+  szn_labels_nearoff <-
+    .x %>%
+    count(nearoff) %>%
+    mutate(labels = glue("{nearoff}\n(N = {n})"))
+
+  plt <-
+    .x %>%
+    ggplot(
+      aes(
+        x = nearoff,
+        y = tot_chl_a,
+        fill = nearoff
+      )
+    ) +
+    stat_boxplot(geom = "errorbar", linewidth = 0.2, width = 0.1) +
+    geom_boxplot(
+      aes(fill = nearoff),
+      outlier.shape = NA,
+      linewidth = 0.2,
+      color = "black",
+      na.rm = TRUE,
+      alpha = 1,
+      key_glyph = draw_key_rect
+    ) +
+    stat_summary(
+      color = "#CC0000",
+      alpha = 0.5,
+      fun.data = mean_sdl, # std dev * 2
+      fun.args = list(mult = 1),
+      # fun.data    = mean_cl_normal, # lower and upper Gaussian confidence limits
+      # fun.data    = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
+      # geom        = "linerange",
+      geom = "errorbar",
+      linewidth = 0.5,
+      width = 0.1,
+      size = 0.5,
+      na.rm = TRUE,
+      show.legend = FALSE,
+      position = position_dodge2(0.75, preserve = "single"),
+    ) +
+    stat_summary(
+      color = "#CC0000",
+      fun = mean,
+      geom = "point",
+      shape = 20,
+      size = 2,
+      na.rm = TRUE,
+      position = position_dodge2(0.75, preserve = "single"),
+      show.legend = FALSE,
+    ) +
+    labs(
+      title = NULL,
+      x     = NULL,
+      y     = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+      fill  = NULL
+    ) +
+    facet_wrap(~labels, strip.position = "bottom") +
+    scale_x_discrete(labels = szn_labels_nearoff$labels) +
+    scale_y_continuous(
+      breaks = scales::breaks_pretty(n = 4),
+      expand = expansion(add = c(0, 0.013)),
+      # limits = c(0, 1.5),
+      # oob = scales::squish
+    ) +
+    scale_fill_manual(values = c("#88CCEE", "#882255")) +
+    coord_cartesian(y = ylims, clip = "on") +
+    theme_classic(base_family = "serif") +
+    theme(
+      text = element_text(size = 6),
+      line = element_line(color = "black", linewidth = 0.2),
+      rect = element_rect(color = "black", linewidth = 0.2),
+      axis.title.y = element_markdown(),
+      axis.title.x = element_markdown(),
+      axis.text.x = element_text(color = "black"),
+      axis.text.y = element_text(color = "black"),
+      axis.ticks.x = element_blank(),
+      plot.background = element_rect(color = "white"),
+      legend.position = c(0.8, 0.9),
+      legend.text = element_text(size = 5),
+      legend.key.size = unit(2.5, "mm"),
+      legend.margin = margin(0.5, 0.5, 0.5, 0.5),
+      legend.background = element_rect(color = "black"),
+      strip.background = element_blank(),
+      strip.placement = "outside",
+      panel.spacing = unit(0, "lines"),
+      panel.grid.major.y = element_line(color = "black")
+    )
+
+  # if (.env$remove_out == 2 &
+  print(rm_out)
+  if (rm_out == 2 &
+    str_detect(.y, "Winter")
+  ) {
+    plt <-
+      plt +
+      geom_point(
+        data = tibble(
+          season    = c("Winter", "Winter"),
+          tot_chl_a = c(0.79, NA),
+          nearoff   = c("Nearshore", "Offshore")
+        ),
+        color = "#CC0000",
+        size = 2,
+        position = position_dodge2(0.75, preserve = "single"),
+        show.legend = FALSE,
+        na.rm = TRUE
+      )
+  }
+
+  return(plt)
+}
+```
+
+```{r chla-nearoff}
 pig_keys_plt <-
   pig_dat_keys %>%
   select(-c(tot_chl_b:last_col())) %>%
@@ -1678,154 +2016,143 @@ pig_keys_plt <-
     plt = map2(
       .x = data,
       .y = season,
-      \(.x, .y) {
-        # ylims <- c(0, quantile(.x[["tot_chl_a"]], 0.99, na.rm = TRUE) + 0.5)
-        ylims <- c(0, 0.8)
-
-        szn_labels_nearoff <-
-          .x %>%
-          count(nearoff) %>%
-          mutate(labels = glue("{nearoff}\n(N = {n})"))
-        
-        plt <-
-          .x %>%
-          ggplot(
-            aes(
-              x = nearoff,
-              y = tot_chl_a,
-              fill = nearoff
-            )
-          ) +
-          geom_boxplot(
-            aes(fill = nearoff),
-            outlier.shape = NA,
-            linewidth = 0.2,
-            color = "black",
-            na.rm = TRUE,
-            alpha = 1,
-            key_glyph = draw_key_rect
-          ) +
-          stat_summary(
-            color       = "#CC0000",
-            alpha       = 0.5,
-            fun.data    = mean_sdl, # std dev * 2
-            fun.args    = list(mult = 1),
-            # fun.data    = mean_cl_normal, # lower and upper Gaussian confidence limits
-            # fun.data    = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
-            geom        = "linerange",
-            linewidth   = 0.5,
-            size        = 0.5,
-            na.rm       = TRUE,
-            show.legend = FALSE,
-            position    = position_dodge2(0.75, preserve = "single"),
-          ) +
-          stat_summary(
-            color = "#CC0000",
-            fun = mean,
-            geom = "point",
-            shape = 20,
-            size = 2,
-            na.rm = TRUE,
-            position = position_dodge2(0.75, preserve = "single"),
-            show.legend = FALSE,
-          ) +
-          labs(
-            title = NULL,
-            x     = NULL,
-            y     = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
-            fill  = NULL
-          ) +
-          facet_wrap(~labels, strip.position = "bottom") +
-          scale_x_discrete(labels = szn_labels_nearoff$labels) +
-          scale_y_continuous(
-            breaks = scales::breaks_pretty(n = 4),
-            expand = expansion(add = c(0, 0.009)),
-            # limits = c(0, 1.5),
-            # oob = scales::squish
-          ) +
-          scale_fill_manual(values = c("#88CCEE", "#882255")) +
-          coord_cartesian(y = ylims, clip = "on") +
-          theme_classic(base_family = "serif") +
-          theme(
-            text = element_text(size = 6),
-            line = element_line(color = "black", linewidth = 0.2),
-            rect = element_rect(color = "black", linewidth = 0.2),
-            axis.title.y       = element_markdown(),
-            axis.title.x       = element_markdown(),
-            axis.text.x        = element_text(color = "black"),
-            axis.text.y        = element_text(color = "black"),
-            axis.ticks.x       = element_blank(),
-            plot.background    = element_rect(color = "white"),
-            legend.position    = c(0.8, 0.9),
-            legend.text        = element_text(size = 5),
-            legend.key.size    = unit(2.5, "mm"),
-            legend.margin      = margin(0.5, 0.5, 0.5, 0.5),
-            legend.background  = element_rect(color = "black"),
-            strip.background   = element_blank(),
-            strip.placement    = "outside",
-            panel.spacing      = unit(0, "lines"),
-            panel.grid.major.y = element_line(color = "black")
-          )
-
-        if (.env$remove_out == 2 &
-          str_detect(.y, "Winter")
-        ) {
-          plt <-
-            plt +
-            geom_point(
-              data = tibble(
-                season    = c("Winter", "Winter"),
-                tot_chl_a = c(0.79, NA),
-                nearoff   = c("Nearshore", "Offshore")
-              ),
-              color = "#CC0000",
-              size = 2,
-              position = position_dodge2(0.75, preserve = "single"),
-              show.legend = FALSE,
-              na.rm = TRUE
-            )
-        }
-
-        return(plt)
-      }
+      boxplot_near_off,
+      rm_out = remove_out
     )
   )
 
 pull(pig_keys_plt, plt)[[1]]
 ```
 
+```{r nearoff-total}
+boxplot_total <- 
+  pig_dat_keys %>%
+  select(-c(tot_chl_b:last_col())) %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  mutate(
+    .by = nearoff,
+    label = glue("{nearoff}\n(N = {n()})")
+      ) %>%
+  mutate(labels = glue("Total (N = {n()})")) %>%
+  ggplot(
+      aes(
+        # x = nearoff,
+        x = label,
+        y = tot_chl_a,
+        fill = nearoff
+      )
+    ) +
+    stat_boxplot(geom = "errorbar", linewidth = 0.2, width = 0.1) +
+    geom_boxplot(
+      aes(fill = nearoff),
+      outlier.shape = NA,
+      linewidth = 0.2,
+      color = "black",
+      na.rm = TRUE,
+      alpha = 1,
+      key_glyph = draw_key_rect
+    ) +
+stat_summary(
+      color = "#CC0000",
+      alpha = 0.5,
+      fun.data = mean_sdl, # std dev * 2
+      fun.args = list(mult = 1),
+      # fun.data    = mean_cl_normal, # lower and upper Gaussian confidence limits
+      # fun.data    = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
+      # geom        = "linerange",
+      geom = "errorbar",
+      linewidth = 0.5,
+      width = 0.1,
+      size = 0.5,
+      na.rm = TRUE,
+      show.legend = FALSE,
+      position = position_dodge2(0.75, preserve = "single"),
+    ) +
+    stat_summary(
+      color = "#CC0000",
+      fun = mean,
+      geom = "point",
+      shape = 20,
+      size = 2,
+      na.rm = TRUE,
+      position = position_dodge2(0.75, preserve = "single"),
+      show.legend = FALSE,
+    ) +
+    labs(
+      title = NULL,
+      x     = NULL,
+      y     = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+      fill  = NULL
+    ) +
+    facet_wrap(~labels, strip.position = "bottom") +
+    # scale_x_discrete(labels = szn_labels_nearoff$labels) +
+    # scale_x_discrete(labels =  label) +
+    scale_y_continuous(
+      breaks = scales::breaks_pretty(n = 4),
+      expand = expansion(add = c(0, 0.013)),
+      # limits = c(0, 1.5),
+      # oob = scales::squish
+    ) +
+    scale_fill_manual(values = c("#88CCEE", "#882255")) +
+    coord_cartesian(y = c(0, 0.8), clip = "on") +
+    theme_classic(base_family = "serif") +
+    theme(
+      text = element_text(size = 6),
+      line = element_line(color = "black", linewidth = 0.2),
+      rect = element_rect(color = "black", linewidth = 0.2),
+      axis.title.y = element_markdown(),
+      axis.title.x = element_markdown(),
+      axis.text.x = element_text(color = "black"),
+      axis.text.y = element_text(color = "black"),
+      axis.ticks.x = element_blank(),
+      plot.background = element_rect(color = "white"),
+      legend.position = c(0.8, 0.9),
+      legend.text = element_text(size = 5),
+      legend.key.size = unit(2.5, "mm"),
+      legend.margin = margin(0.5, 0.5, 0.5, 0.5),
+      legend.background = element_rect(color = "black"),
+      strip.background = element_blank(),
+      strip.placement = "outside",
+      panel.spacing = unit(0, "lines"),
+      panel.grid.major.y = element_line(color = "black")
+    )
 
-```{r}
-shelf(patchwork)
+boxplot_total
+```
 
-plt <- 
+
+```{r save-nearoff-boxplot}
+nearoff_plt <-
   (   
-    pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
-    pull(pig_keys_plt, plt)[[2]] + theme(legend.position = "none") |
-    pull(pig_keys_plt, plt)[[3]] + theme(legend.position = "inside",
-                                         legend.position.inside = c(0.6, 0.9)) |
-    pull(pig_keys_plt, plt)[[4]] + theme(legend.position = "none")
+  pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
+  pull(pig_keys_plt, plt)[[2]] 
+  + theme(legend.position = "inside", legend.position.inside = c(0.6, 0.9)) |
+  pull(pig_keys_plt, plt)[[3]] + theme(legend.position = "none") |
+  pull(pig_keys_plt, plt)[[4]] + theme(legend.position = "none") |
+  # overall total
+  boxplot_total + theme(legend.position = "none")
   ) +
  plot_layout(
     # ncol = 2,
-    guides = "keep",
+    # guides = "keep",
     axes = "collect"
              )  &
   theme(
     panel.spacing    = unit(0, "lines"),
-    plot.margin = margin(t = 5),
+    plot.margin      = margin(t = 5),
+    plot.background  = element_blank()
     
   )
 
-plt
+nearoff_plt
  
 # ---- save plot
 save_gg(
-  plt            = plt, # edit if want specific plot
+  plt            = nearoff_plt, # edit if want specific plot
   save_location  = here(dir_plt_save, "chla_nearoff_box", str_remove(file_suffix, "^_")),
   save_name      = "chla_nearoff",
   verbose        = TRUE,
-  overwrite      = TRUE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
   width          = 90,
@@ -1838,33 +2165,17 @@ save_gg(
 
 ## 5.4 Time Series Stations Tchla
 
-```{r}
-hurricane_dates <-
-  tribble(
-    ~date, ~name,
-    # "2015-08-30", "Erika", ## 
-    
-    # "2016-10-12", "Nicole", ##
-    
-    # "2017-07-31", "Emily", ##
-    "2017-09-10", "Irma",
-    # "2017-10-29", "Philippe", ##
-    
-    "2018-09-03", "Gordon", 
-    
-    # "2019-09-01", "Dorian", ##
-    
-    # "2020-05-25", "Bertha", ##
-    "2020-08-02", "Isaias",
-    # "2020-08-26", "Laura", ##
-    "2020-09-11", "Sally",
-    "2020-11-09", "Eta", 
-    
-  ) %>%
-  mutate(date = ymd(date),
-         nearoff = "Nearshore") %T>% 
-  print()
-
+```{r timeseries-chla}
+# shelf(camcorder)
+# camcorder::gg_record(
+#   dir    = here::here("data", "cam_test", "ts_station"),
+#   device         = "png",
+#   height         = 170,
+#   width          = 170,
+#   dpi            = 600,
+#   units          = "mm",
+#   bg             = "white"
+# )
 
 # function used to set all date to same year
   same_year <- function(x, .year = 2000) {
@@ -1872,7 +2183,7 @@ hurricane_dates <-
     x
   }
 
-# dat_month_stk <- 
+dat_month_stk <-
   pig_dat_keys %>%
   select(-c(tot_chl_b:last_col())) %>%
   # filter(str_detect(nearoff, "Nearshore")) %>%
@@ -1891,97 +2202,109 @@ hurricane_dates <-
     year2 = as.character(year),
     year_cat = paste(year2, nearoff),
     date2 = map(
-        .x = date,
-        .f = same_year
-      )
-    )  %>% 
-  unnest(date2)  %>%
+      .x = date,
+      .f = same_year
+    )
+  ) %>%
+  unnest(date2) %>%
   arrange(date) %T>%
   print() %>%
       
-  ggplot(aes(x = date, y = tot_chl_a, color = station, shape = station)
-                 ) +
-          # geom_errorbar(
-          #   aes(ymin = value_avg - value_sd,
-          #       ymax = value_avg + value_sd)
-          # ) +
-          geom_point() +
-          geom_path() +
-          scale_x_date(date_labels = "%Y",
-              date_breaks = "1 year") +
-          scale_y_continuous(
-            # limits = c(-0.005, NA),
-            expand = expansion(add = c(0, 0.1))
-            ) +
-          labs(
-            x = NULL,
-            y = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
-              # title = .y,
-            color = "Station",
-            shape = "Station",
-            
-          ) +
-          facet_wrap(
-            ~nearoff,
-            ncol = 1, 
-            scales = "free_y") +
-          theme_bw() +
-          theme(
-            axis.text = element_text(color = "black"),
-            legend.position = "top",
-            axis.title.y       = element_markdown(size = 10),
-            axis.title.x       = element_markdown(),
-            legend.key.spacing =  unit(1, "mm"),
-            legend.key.size = unit(3, "mm"),
-            legend.title = element_text(size = 8, face = "bold"),
-            legend.text = element_text(size = 6),
-            strip.background = element_rect(fill = "white"),
-            
-            panel.grid.major.x = element_line(linetype = "dashed", 
-                                              color = "grey30",
-                                              linewidth = 0.2),
-            legend.margin = margin() 
-            # plot.margin = margin()
-          )  +
-      geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
-        # geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
-      # ggrepel::geom_text_repel(  
-      geom_text(
-          data = hurricane_dates,
-          aes(
-            x     = date,
-            y     = 4,
-            label = name,
-            ),
-          angle = 90,
-          vjust = -0.5,
-          hjust = 1.0,
-          inherit.aes = FALSE,
-          size = 2
-        )
+  # ---- start plot ---- #
+  ggplot(
+    aes(
+      x     = date,
+      y     = tot_chl_a,
+      color = station,
+      # shape = station
+    )
+  ) +
+  geom_path(key_glyph = draw_key_point) +
+  geom_point(
+    shape = 21, 
+    fill = "white",
+    show.legend = FALSE
+    ) +
+     
+  #  ---- hurricane red lines ---- #
+  geom_vline(
+    xintercept = hurricane_dates$date, 
+    color      = "red", 
+    linetype   = "dashed"
+    ) +
+  # geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  # ggrepel::geom_text_repel(
   
-  # # shelf(camcorder)
-  # camcorder::gg_record(
-  #   dir    = here::here("data", "cam_test", "ts_station"),
-  #   device         = "png",
-  #   height         = 170,
-  #   width          = 170,
-  #   dpi            = 600,
-  #   units          = "mm",
-  #   bg             = "white"
-  # )
-  # 
-  # shell.exec(here::here("data", "cam_test", ""))
-  # camcorder::gg_stop_recording()
-  
-  # camcorder::gg_resize_film(width = 170, height = 170,  dpi = 600, units = "mm")
-  
+  #  ---- hurricane names ---- #
+  # geom_text(
+  geom_label(
+    data = hurricane_dates,
+    aes(
+      x     = date,
+      y     = c(4, 4, 4, 3 , 3.7),
+      label = name,
+    ),
+    angle = 90,
+    vjust = -0.2,
+    hjust = 1.0,
+    size  = 4,
+    inherit.aes = FALSE,
+  ) +
+  #  ---- end hurricane names ---- #
 
+  labs(
+    x = NULL,
+    y = "Chlorophyll-a Concentration (mg m<sup>-3</sup>)",
+    color = "Station",
+    shape = "Station",
+  ) +
+  scale_x_date(
+    date_labels = "%Y",
+    date_breaks = "1 year"
+  ) +
+  scale_y_continuous(
+    limits = c(-0.005, NA),
+    expand = expansion(add = c(0, 0.1))
+  ) +
+  facet_wrap(
+    ~nearoff,
+    ncol   = 1,
+    scales = "free_y"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text          = element_text(color = "black"),
+    axis.title.y       = element_markdown(size = 10),
+    axis.title.x       = element_markdown(),
+    
+    legend.position    = "inside",
+    legend.position.inside = c(0.06, 0.85),
+    legend.key.size    = unit(4, "mm"),
+    legend.title       = element_text(size = 8, face = "bold"),
+    legend.text        = element_text(size = 6),
+    legend.background  = element_rect(
+      color = "black",
+      linewidth = 0.2
+    ),
+    
+    strip.background   = element_rect(fill = "white"),
+    strip.text = element_text(face = "bold"),
+    
+    panel.grid.major.x = element_line(
+      linetype  = "dashed",
+      color     = "grey30",
+      linewidth = 0.2
+    ),
+
+  )
+
+egg::tag_facet(dat_month_stk)
+
+# shell.exec(here::here("data", "cam_test", "ts_station"))
+# camcorder::gg_stop_recording()
+
+# camcorder::gg_resize_film(width = 170, height = 170,  dpi = 600, units = "mm")
 ```
-
-
-
-
 
 
 
