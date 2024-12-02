@@ -25,7 +25,8 @@ librarian::shelf(
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
-  patchwork
+  patchwork,
+  vegan
 )
 
 conflicts_prefer(
@@ -475,7 +476,7 @@ cap_extraction <- function(
     scale_fact = 5,
     ld2_range = c(-1.25, 1.25),
     ld2_spc_h = c(-1, 1)) {
-  
+
   `%!in%` <- Negate(`%in%`)
 
   # Percent of the total variance explained by the axes used to describe the CAP
@@ -826,12 +827,29 @@ Overall classification success (m=2) : 88.7005649717514 percent
 Nearshore (n=42) correct: 73.8095238095238 percent
 Offshore (n=135) correct: 93.3333333333333 percent
 
+
+```{r}
+data_filt %>%
+  select(chloro:pras) %>%
+  vegdist(
+    .,
+    method = "bray"
+  ) %>%
+  betadisper(
+    group = select(data_filt, nearoff)[["nearoff"]]
+  ) %T>% print() %>%
+     TukeyHSD()
+```
+
+
 ```{r cap-dist}
-data_filt <- filter(cmtx_w_pct)
+data_filt <- filter(cmtx_w_pct,
+                    # str_detect(station, "10|12|16|18")
+                    )
 
 data_sub <- select(data_filt, chloro:pras)
 
-dist_mat <- vegdist(data_sub) 
+dist_mat <- vegdist(data_sub)
 
 # CAP
 cap_result_dist <-
@@ -859,7 +877,6 @@ cap_extract_dist <- cap_extraction(
 (cap_rel_dist_plt <-
   plot_template(
     cap_ext    = cap_extract_dist,
-    # label_name = "Distance from Shore",
     label_name = NULL,
     axes       = c(1),
     title      = "Distance from Shore",
