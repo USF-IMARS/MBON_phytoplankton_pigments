@@ -32,7 +32,7 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional 
-    cowplot, metR, sf,
+    cowplot, metR, sf, shadowtext,
     # TODO: need to move away from raster and rgdal for terra
     fields, rgdal, ncdf4, raster 
 )
@@ -153,6 +153,19 @@ map_obj <-
 base_map <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
 
 ```
+```{r}
+shelf(seascapeR)
+
+ply_fknms <-
+  get_url_ply(
+    sanctuary = "fknms",
+    dir_ply = here("data", "map", "sanctuary")
+  )
+
+
+```
+
+
 
 # 3.0 ---- Plot Mapped Station ----
 
@@ -166,24 +179,49 @@ lat_lon_dat <-
   pig_dat %>%
   filter(
       name_of_water_body == "Florida Keys"
-      & !str_detect(station, "21.5|9B|24")) %>%
-  select(station, lat, lon) %>% 
-  distinct(station, lat, lon)
+      & !str_detect(station, "21.5|9B|24|^3$")) %>%
+  select(station, lat, lon) %>%
+  distinct(station, lat, lon) %>% 
+  mutate(
+    colors = 
+      if_else(
+        str_detect(station, "10|16|7|^3"),
+        "Nearshore",
+        "Offshore"
+        )
+    ) 
 
 
 stn_map <-
   base_map +
+  geom_sf(data = ply_fknms, fill = NA, color = "red") +
+  
+  annotate(
+    geom        = "shadowtext",
+    x           = c(-80.52, -81.1, -81.85, -81.95),
+    y           = c(24.84, 24.61, 24.455, 24.49),
+    label       = c(100, 50, 25, 10),
+    size        = 7,
+    # fontface    = "bold",
+    # label.color = NA,
+    family      = "serif",
+    angle       = c(35, 24, 15, -3),
+    color = "grey",
+    bg.color = "white"
+  ) +
   geom_point(
     data = lat_lon_dat,
     aes(
       x = lon,
-      y = lat
-      # shape = station,
+      y = lat,
+      fill = colors,
+      shape = colors,
     ),
-    size        = 2,
+    stroke      = 0.5,
+    size        = 6,
     # alpha     = 0.5,
     stroke      = 1.5,
-    show.legend = FALSE
+    # show.legend = FALSE
   ) +
 
   ggrepel::geom_label_repel(
@@ -191,21 +229,25 @@ stn_map <-
         y = lat, 
         label = station),
     data   = lat_lon_dat,
-    size   = 2.5,
+    size   = 6,
     hjust  = 0,
-    family = "serif"
+    family = "serif",
+    point.padding = 10,
+    min.segment.length = 0.01
+    # direction = "y"
   ) +    
 
   annotate(
     geom        = "text",
-    x           = c(-80.75, -80.5),
-    y           = c(25, 24.4),
-    label       = c("Florida Bay", "Atlantic Ocean"),
-    size        = 5,
-    # fontface    = "bold",
-    fill        = NA,
-    label.color = NA,
-    family      = "serif"
+    x           = c(-80.75, -81.0, -80.75, -80.25),
+    y           = c(25, 24.4, 25.5, 25.55),
+    label       = c("Florida Bay", "Atlantic Ocean", "Everglades", "Biscayne Bay"),
+    size        = 7,
+    fontface    = "bold",
+    # fill        = NA,
+    # label.color = NA,
+    family      = "serif",
+    angle = c(0, 0, 0, 72)
   ) +
     
   labs(
@@ -215,9 +257,23 @@ stn_map <-
   coord_sf(
     xlim = exnt[1:2], 
     ylim = exnt[3:4]) +
-  scale_shape_manual(values = c(24, 25, 21))
+  scale_shape_manual(values = c(25, 21)) +
+  scale_fill_manual(values = c("#88CCEE", "#882255")) +
+  theme(
+    legend.position        = "inside",
+    legend.position.inside = c(0.85, 0.1), 
+    legend.background      = element_rect(color = "black"),
+    plot.background        = element_rect(fill = "white"),
+    legend.text            = element_text(size = 15),
+    legend.title           = element_text(size = 17),
+    legend.key.height = unit(10, "mm")
+  )
 
 stn_map
+
+
+
+
 ```
 
 
@@ -254,7 +310,7 @@ May need to play with draw_plot(east.map, x, y, width and height)
 fullmap <- 
   ggdraw() +
   draw_plot(stn_map) +
-  draw_plot(inset_map, x = 0.04, y = 0.57, width = 0.19, height = 0.4)
+  draw_plot(inset_map, x = 0.06, y = 0.59, width = 0.2, height = 0.45)
 fullmap
 
 # ---- save plot
@@ -265,17 +321,32 @@ walk(
     save_location  = dir_plt_save,
     save_name      = "map_station_locations",
     verbose        = TRUE,
-    overwrite      = FALSE,
-    # overwrite      = TRUE,
+    # overwrite      = FALSE,
+    overwrite      = TRUE,
     time_stamp_fmt = NULL,
     device         = .x,
-    height         = 6,
+    height         = 8.5,
     width          = 10,
     dpi            = 600,
     units          = "in",
     bg             = "white"
   )
 )
+# shelf(camcorder)
+# camcorder::gg_record(
+#   dir    = here::here("data", "cam_test", "map_of_station"),
+#   device         = "png",
+#   height         = 8.5,
+#   width          = 10,
+#   dpi            = 600,
+#   units          = "in",
+#   bg             = "white"
+# )
+
+# shell.exec(here::here("data", "cam_test", "map"))
+# camcorder::gg_stop_recording()
+
+# camcorder::gg_resize_film(width = 90, height = 90 * 0.5625,  dpi = 600, units = "mm")
 
 ```
 
