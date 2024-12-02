@@ -55,18 +55,28 @@ phyto_name <-
   print()
 
 # ---- load chemtax data in wide format ---- #
-cmtx_w <-
+cmtx_w_og <-
   here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
+  mutate(
+    .after = cluster_code,
+    across(
+      chloro:pras,
+      ~ if_else(
+        str_detect(sample, "WS20278-32"),
+        .x / 10,
+        .x
+      )
+    )
+  ) %>%
   # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
   filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
   mutate(
     season = fct(season, levels = szn),
     # station = str_replace(station, "9B", "9.5"),
     station = fct_reorder(station, lon)
-  ) %>% 
+  ) %>%
   select(-c(hplc_gsfc_id, cruise:bottle, cluster_code, water_type)) %>%
-    
   # add PFT concentrations to get total chlorophyll-a
   rowwise() %>%
   mutate(
@@ -76,9 +86,9 @@ cmtx_w <-
   ungroup() %>%
   filter(
     .by = c(station, cruise_id),
-    depth == min(depth)
-    & depth < 20
-  ) %T>% 
+    depth == min(depth) &
+      depth < 20
+  ) %T>%
   print()
 
 ```
@@ -90,8 +100,9 @@ cmtx_w <-
 remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
 
 if (remove_out == 1) {
+  message("Filtering out outliers!")
   cmtx_w <-
-    cmtx_w %>%
+    cmtx_w_og %>%
     filter(
       total_chl_a <= 1
     ) %T>% 
@@ -99,6 +110,9 @@ if (remove_out == 1) {
   
   file_suffix <- "_no_out"
 } else {
+  message("Keeping outliers!")
+  cmtx_w <-
+    cmtx_w_og 
   file_suffix <- ""
 }
 ```
@@ -231,6 +245,7 @@ plt_fun <-
 # point plot with smoothing line for 1 functional group, colored by season
 plt_smooth <-
   cmtx_l_pct %>%
+  rename("conc" = percent) %>%
   filter(!is.na(conc)) %>%
   ggplot() +
   plt_fun
@@ -259,6 +274,7 @@ shelf(patchwork)
 
 ```{r, fig.width=40, fig.asp=0.5}
 cmtx_l_pct %>%
+  rename("conc" = percent) %>%
   mutate(
     names2 = names
   ) %>%
@@ -392,6 +408,7 @@ Diat 1
 
 ```{r, fig.width=40, fig.asp=0.5}
 cmtx_l_pct %>%
+  rename("conc" = percent) %>%
   mutate(
     # conc = conc / total_chl_a,
     names2 = names
@@ -627,8 +644,9 @@ WS
 ### 4.1. Each Station Facet by PFT
 
 
-```{r station, fig.width=40, fig.asp=0.5}
+```{r pft-by-station, fig.width=40, fig.asp=0.5}
 cmtx_l_pct %>%
+  rename("conc" = percent) %>%
   mutate(
     names2 = names,
     names = fct_reorder(
@@ -772,8 +790,9 @@ cmtx_l_pct %>%
  
 ### 4.1. Each PFT Facet by Station
   
-```{r pft, fig.width=40, fig.asp=0.5}
+```{r station-by-pft, fig.width=40, fig.asp=0.5}
 cmtx_l_pct %>%
+  rename("conc" = percent) %>%
   mutate(
     names2 = names,
     names = fct_reorder(
@@ -908,7 +927,7 @@ cmtx_l_pct %>%
 
 ```
 
-```{r}
+```{r tchla-by-station, fig.width=40, fig.asp=0.5}
 cmtx_w %>%
   filter(
     .by = c(station),
@@ -993,7 +1012,7 @@ cmtx_w %>%
 cmtx_l %>%
   mutate(pft_pct = conc/total_chl_a) %>%
   summarise(
-    .by = c(cruise_id, func_type, names),
+    .by = c(cruise_id, phyto, names),
     avg = mean(pft_pct),
     sd  = sd(pft_pct),
     dates = mean(date_time_utc)
@@ -1141,5 +1160,197 @@ cmtx_w_pct %>%
 ```{r}
 lm(total_chl_a ~ season, data = cmtx_w) %>%
     summary()
+```
+
+```{r station-by-pft, fig.width=40, fig.asp=0.5}
+test1 <-   
+  cmtx_l_pct %>%
+  rename("conc" = percent) %>%
+  mutate(
+    names2 = names,
+    names = fct_reorder(
+      names,
+      conc,
+      .fun  = median,
+      .desc = TRUE
+    )
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc)
+  )
+sec <- ggh4x::help_secondary(
+  test1,
+  primary   = c(0, 1),
+  secondary = total_chl_a,
+  method    = "range",
+  name      = "Total Chlor a"
+)
+```
+### Hurricane Dates
+from: <https://coast.noaa.gov/hurricanes>
+```{r hurricane-dates}
+hurricane_dates <-
+  tribble(
+    ~date, ~name,
+    # "2015-08-30", "Erika", ## 
+    
+    # "2016-10-12", "Nicole", ##
+    
+    # "2017-07-31", "Emily", ##
+    "2017-09-10", "Irma",
+    # "2017-10-29", "Philippe", ##
+    
+    "2018-09-03", "Gordon", 
+    
+    # "2019-09-01", "Dorian", ##
+    
+    # "2020-05-25", "Bertha", ##
+    "2020-08-02", "Isaias",
+    # "2020-08-26", "Laura", ##
+    "2020-09-11", "Sally",
+    "2020-11-09", "Eta", 
+    
+  ) %>%
+  mutate(date = as_datetime(date)) %T>% 
+  print()
+
+
+```
+
+```{r stack-station-by-pft, fig.width=40, fig.asp=0.5}
+test1 %>%
+  mutate(
+    # date_time_utc = as_date(date_time_utc)
+    names = fct_reorder(
+      names,
+      conc,
+      .fun = median,
+      .desc = FALSE
+    )
+  ) %>%
+  ggplot(
+    .,
+    aes(
+      x = date_time_utc,
+      y = conc,
+      fill = names
+    )
+  ) +
+  geom_area(alpha = 0.6, linewidth = 1, colour = "black") +
+  facet_wrap(~station, ncol = 4) +
+  ggnewscale::new_scale_fill() +
+  ggnewscale::new_scale_color() +
+  geom_line(
+    aes(y = sec$proj(total_chl_a)),
+    color = "firebrick1",
+    alpha = 0.5,
+    na.rm = TRUE
+  ) +
+  geom_point(
+    aes(y = sec$proj(total_chl_a)),
+    color = "firebrick1",
+    na.rm = TRUE
+  ) +
+  geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
+  scale_y_continuous(
+    expand       = c(0, 0),
+    limits       = c(0, NA),
+    breaks       = seq(0.0, 1, 0.1),
+    minor_breaks = seq(0.05, 1, 0.1),
+    sec.axis     = sec
+  ) +
+  scale_x_datetime(
+    date_labels = "%Y",
+    breaks = "1 year",
+  ) +
+  theme(
+    panel.grid.major.x = element_line(color = "black", linewidth = 0.5),
+    panel.grid.minor = element_line(color = "grey80", linewidth = 0.4)
+  )
+```
+
+```{r station-by-pft, fig.width=40, fig.asp=0.5}
+test2 <-
+  cmtx_l %>%
+  mutate(
+    names2 = names,
+    names = fct_reorder(
+      names,
+      conc,
+      .fun  = median,
+      .desc = TRUE
+    )
+  ) %>%
+  filter(
+    .by = c(station, names),
+    n() > 3,
+    !is.na(conc)
+  )
+
+sec2 <- ggh4x::help_secondary(
+  test2,
+  primary = c(0, 1),
+  secondary = total_chl_a,
+  method = "range",
+  name = "Total Chlor a"
+)
+```
+
+```{r}
+test2 %>%
+  mutate(
+    # date_time_utc = as_date(date_time_utc)
+    names = fct_reorder(
+      names,
+      conc,
+      .fun = median,
+      .desc = FALSE
+    )
+  ) %>%
+  ggplot(
+    .,
+    aes(
+      x = date_time_utc,
+      y = conc,
+      fill = names
+    )
+  ) +
+  geom_area(alpha = 0.6, linewidth = 1, colour = "black") +
+  facet_wrap(~station, ncol = 4) +
+  ggnewscale::new_scale_fill() +
+  ggnewscale::new_scale_color() +
+  # geom_line(
+  #   aes(y = total_chl_a),
+  #   # aes(y = sec2$proj(total_chl_a)),
+  #   color = "firebrick1",
+  #   alpha = 0.5,
+  #   na.rm = TRUE
+  # ) +
+  geom_point(
+    aes(y = total_chl_a, color = season),
+    # aes(y = sec$proj(total_chl_a)),
+    # color = "firebrick1",
+    na.rm = TRUE
+  ) +
+  geom_vline(xintercept = hurricane_dates$date, color = "red", linetype = "dashed") +
+  scale_y_continuous(
+    expand       = c(0, 0),
+    limits       = c(0, NA),
+    breaks       = seq(0.0, 1, 0.1),
+    minor_breaks = seq(0.05, 1, 0.1),
+    # sec.axis     = sec2,
+    oob = scales::oob_keep
+  ) +
+  scale_x_datetime(
+    date_labels = "%Y",
+    breaks = "1 year",
+  ) +
+  coord_cartesian(ylim = c(NA, 1.5), clip = "on") +
+  theme(
+    panel.grid.major.x = element_line(color = "black", linewidth = 0.5),
+    panel.grid.minor = element_line(color = "grey80", linewidth = 0.4)
+  )
 ```
 
