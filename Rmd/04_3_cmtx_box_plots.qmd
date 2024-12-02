@@ -56,9 +56,19 @@ phyto_name <-
   print()
 
 # ---- load chemtax data in wide format ---- #
-cmtx_w <-
+cmtx_w_og <-
   here("data", "processed", "04_1_merge_meta_cmtx", "chemtax_w_meta_wide.csv") %>%
   read_csv(show_col_types = FALSE) %>%
+    mutate(
+      .after = cluster_code,
+      across(
+          chloro:pras,
+          ~ if_else(
+          str_detect(sample, "WS20278-32"), 
+          .x / 10,
+            .x)
+      )
+  ) %>%
   # filter(!str_detect(station, "60|21.5|24|^3$|9B|9.5")) %>%
   filter(!str_detect(station, "60|21.5|24|^3$|9.5")) %>%
   mutate(
@@ -86,17 +96,22 @@ cmtx_w <-
 ## 2.2.1 Remove Outliers?
 
 ```{r remove-outliers}
-remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+# remove_out <- menu(c("yes", "no"), title = "Remove Outliers?")
+
+remove_out <- 2
 
 if (remove_out == 1) {
+  message("Removing Outliers!")
   cmtx_w <-
-    cmtx_w %>%
+    cmtx_w_og %>%
     filter(
       total_chl_a <= 1
     )
   
   file_suffix <- "_no_out"
 } else {
+  message("Keeping Outliers!") 
+  cmtx_w <- cmtx_w_og    
   file_suffix <- ""
 }
 ```
