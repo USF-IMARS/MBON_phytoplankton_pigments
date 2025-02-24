@@ -37,6 +37,21 @@ conflicts_prefer(
 source(here("scripts", "misc_functions.R"))
 ```
 
+```{r}
+col_manual <-
+  c(
+    # "Offshore"  = "blue",
+    # "Nearshore" = "red",
+    "Offshore"  = "#882255",
+    "Nearshore" = "#88CCEE",
+    "Winter"    = "#88CCEE",
+    "Spring"    = "#44AA99",
+    "Summer"    = "#DDCC77",
+    "Autumn"    = "#CC6677"
+  )
+```
+
+
 ## 2.2 Load Dataset
 
 ```{r load-data}
@@ -73,6 +88,16 @@ cmtx_w_og <-
     .before = chloro
   ) %>%
   ungroup() %>%
+  mutate(
+      .after = total_chl_a,
+      across(
+          total_chl_a:pras,
+          ~ if_else(
+          str_detect(sample, "WS20278-32"), 
+          .x / 10,
+            .x)
+      )
+  ) %>%
   filter(
     .by = c(station, cruise_id),
     depth == min(depth)
@@ -678,7 +703,7 @@ plot_template <- function(
       color = "black"
     ) +
     # geom_text(
-        geom_shadowtext(
+    geom_shadowtext(
       data = .cap_score,
       aes(
         x = LD1,
@@ -744,14 +769,7 @@ cap_extract_szn <- cap_extraction(
     .col       = season
   ) +
   scale_color_manual(
-    values = c(
-      "Offshore"  = "blue",
-      "Nearshore" = "red",
-      "Winter"    = "#88CCEE",
-      "Spring"    = "#44AA99",
-      "Summer"    = "#DDCC77",
-      "Autumn"    = "#CC6677"
-    )
+    values = col_manual
   )
 )
 
@@ -803,14 +821,7 @@ cap_extract_szn <- cap_extraction(
     .col       = season
   ) +
   scale_color_manual(
-    values = c(
-      "Offshore"  = "blue",
-      "Nearshore" = "red",
-      "Winter"    = "#88CCEE",
-      "Spring"    = "#44AA99",
-      "Summer"    = "#DDCC77",
-      "Autumn"    = "#CC6677"
-    )
+    values = col_manual
   )
 )
 ```
@@ -883,14 +894,7 @@ cap_extract_dist <- cap_extraction(
     .col       = nearoff
   ) +
   scale_color_manual(
-    values = c(
-      "Offshore"  = "blue",
-      "Nearshore" = "red",
-      "Winter"    = "#88CCEE",
-      "Spring"    = "#44AA99",
-      "Summer"    = "#DDCC77",
-      "Autumn"    = "#CC6677"
-    )
+    values = col_manual
   ) +
   coord_cartesian(xlim = c(NA, 4))
 )
@@ -944,14 +948,7 @@ cap_extract_dist <- cap_extraction(
     .col       = nearoff
   ) +
   scale_color_manual(
-    values = c(
-      "Offshore"  = "blue",
-      "Nearshore" = "red",
-      "Winter"    = "#88CCEE",
-      "Spring"    = "#44AA99",
-      "Summer"    = "#DDCC77",
-      "Autumn"    = "#CC6677"
-    )
+    values = col_manual
   )
 )
 
