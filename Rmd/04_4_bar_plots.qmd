@@ -108,7 +108,7 @@ if (remove_out == 1) {
       total_chl_a <= 1
     )
   
-  file_suffix <- "_no_out"
+  file_suffix <- "_rm_outlier"
 } else {
   message("Keeping Outliers!")
   cmtx_w <-
@@ -241,7 +241,8 @@ cmtx_avg_season_fract_l <-
     percent_avg = scales::label_percent(accuracy  = 0.01)(frac_avg),
     percent_sd  = scales::label_percent(accuracy  = 0.01)(frac_sd),
     percent_se  = scales::label_percent(accuracy  = 0.01)(frac_se),
-    season1 = glue("{season} (N = {frac_num})"),
+    # season1 = glue("{season} (N = {frac_num})"),
+    season1 = glue("{season} (<i>n</i> = {frac_num})"),
     season1 = fct_reorder(season1, as.numeric(season))
   ) %>%
  arrange(season) %T>% print()
@@ -289,7 +290,8 @@ cmtx_l_pct %>%
 ## 3.3  Plot: Seasonal Fraction of each PFT (Bar)
 
 ### 3.3.1 Stacked Bar Chart
-```{r plt-fracs, fig.width=20, fig.height=10}
+```{r plt-fracs}
+# , fig.width=20, fig.height=10}
 new_dat <- 
   summarise(
     cmtx_w, 
@@ -299,7 +301,7 @@ new_dat <-
     chl_se  = chl_sd / sqrt(n()),
     num = n()
     ) %>%
-  mutate(season = glue("{season} (N = {num})")) %T>% 
+  mutate(season = glue("{season} (<i>n</i> = {num})")) %T>% 
   print() 
 
 sec_axe <- 
@@ -307,10 +309,8 @@ sec_axe <-
   ggh4x::help_secondary(
     # secondary = c(0, 1.5), 
     secondary = c(0, 1.0), 
-    name = bquote("Chlorophyll-a Concentration"~(mg~m^-3))
+    name = bquote(bold("Chlorophyll-a Concentration"~(mg~m^-3)))
     )
-
-
 
 cmtx_avg_season_fract_l %>%
   mutate(names = fct_reorder(names, frac_avg)) %>%
@@ -331,7 +331,8 @@ cmtx_avg_season_fract_l %>%
     data = new_dat,
     aes(x = season, y = sec_axe$proj(chl_avg), group = 1),
     inherit.aes = FALSE,
-    linewidth = 0.2
+    linewidth = 0.2,
+    color = "#00824e",    
     ) +
   geom_linerange(
     data = new_dat,
@@ -342,16 +343,18 @@ cmtx_avg_season_fract_l %>%
       
       # ymin = sec_axe$proj(chl_avg) - sec_axe$proj(chl_se), # standard error
       # ymax = sec_axe$proj(chl_avg) + sec_axe$proj(chl_se)),  # standard error
-  ),
+    ),
     inherit.aes = FALSE,
-  linewidth = 0.3
+    linewidth = 0.3,
+    color = "#00824e",
   ) +
   geom_point(
     data = new_dat,
     aes(x = season, y = sec_axe$proj(chl_avg)),
     inherit.aes = FALSE,
     size  = 1,
-    shape = 20
+    shape = 20,
+    color = "#00824e",
     ) +
   labs(
     x = NULL,
@@ -376,12 +379,19 @@ cmtx_avg_season_fract_l %>%
   # theme
   theme_bw() +
   theme(
-    text              = element_text(family = "serif", size = 6, color = "black"),
+    # text              = element_text(family = "serif", size = 6, color = "black"),
+    text              = element_text(family = "TT Arial", size = 6, color = "black",
+                                     face = "bold"),
     line              = element_line(color = "black", linewidth = 0.2),
     rect              = element_rect(color = "black", linewidth = 0.2),
     axis.title        = element_text(size = 5),
     axis.text         = element_text(color = "black"),
+    axis.text.x       = element_markdown(),
+    axis.text.y.right = element_text(color = "#00824e"),
+    axis.title.y.right = element_text(color = "#00824e"),
+    axis.ticks.y.right = element_line(color = "#00824e"),
     axis.ticks.x      = element_blank(),
+    panel.grid        = element_blank(),
     legend.position   = "bottom",
     legend.direction  = "horizontal",
     legend.text       = element_text(size = 4),
@@ -488,7 +498,8 @@ new_dat <-
   cmtx_w  %>%
   mutate(
     .by = season,
-    season1 = glue("{season} (N = {n()})")) %>%
+    # season1 = glue("{season} (N = {n()})")) %>%
+    season1 = glue("{season} (<i>n</i> = {n()})")) %>%
   mutate(
     season = fct_reorder(season1, as.numeric(season))
   ) %>%
@@ -512,7 +523,7 @@ sec_axe <-
   new_dat %>%
   ggh4x::help_secondary(
     secondary = c(0, 2), 
-    name = bquote("Chlorophyll-a Concentration"~(mg~m^-3))
+    name = bquote(bold("Chlorophyll-a Concentration"~(mg~m^-3)))
     )
 
 
@@ -522,7 +533,7 @@ cmtx_stck_bar_szn_stn <-
   filter(!is.na(conc)) %>%
   mutate(
     .by = season,
-    season1 = glue("{season} (N = {n()/10})")
+    season1 = glue("{season} (<i>n</i> = {n()/10})")
     ) %>%
   mutate(
     season = fct_reorder(season1, as.numeric(season)),
@@ -595,15 +606,17 @@ cmtx_stck_bar_szn_stn <-
       # ymax = sec_axe$proj(chl_avg) + sec_axe$proj(chl_se)),  # standard error
     ),
     inherit.aes = FALSE,
-    linewidth = 0.2
+    linewidth = 0.2,
+    color = "#00824e",
   ) +
   geom_point(
     data = new_dat,
     aes(x = station, y = sec_axe$proj(chl_avg)),
     inherit.aes = FALSE,
     fill  = "white",
-    size  = 0.5,
+    size  = 0.6,
     shape = 20,
+    color = "#00824e",
   ) +
   labs(
     # x     = "Station",
@@ -627,13 +640,18 @@ cmtx_stck_bar_szn_stn <-
   theme_bw() +
   theme(
     # text               = element_text(family = "serif", size = 20, color = "black"),
-    text               = element_text(family = "serif", size = 6, color = "black"),
+    text               = element_text(family = "TT Arial", size = 6, color = "black",
+                                      face = "bold"),
     line               = element_line(color = "black", linewidth = 0.2),
     rect               = element_rect(color = "black", linewidth = 0.2),
     # axis.title       = element_text(size = 20),
     axis.title         = element_text(size = 5),
     axis.text          = element_text(color = "black"),
+    axis.text.y.right  = element_text(color = "#00824e"),
+    axis.title.y.right = element_text(color = "#00824e"),
+    axis.ticks.y.right = element_line(color = "#00824e"),
     axis.ticks.x       = element_blank(),
+    panel.grid        = element_blank(),
     legend.position    = "bottom",
     legend.direction   = "horizontal",
     legend.text        = element_text(size = 4),
@@ -641,7 +659,7 @@ cmtx_stck_bar_szn_stn <-
     legend.key.size    = unit(2, "mm"),
     # legend.box.spacing = unit(2, "mm"),
     legend.box.margin  = margin(t = -11, b = -5),
-    strip.text.x       = element_text(size = 6, face = "bold", margin = margin(t = 2, b = 2)), # remove later
+    strip.text.x       = element_markdown(size = 6, face = "bold", margin = margin(t = 2, b = 2)), # remove later
     # strip.text.x       = element_text(size = 4, margin = margin(t = 2, b = 2)),
     strip.background   = element_rect(fill = "white", colour = "black"),
     
@@ -649,9 +667,10 @@ cmtx_stck_bar_szn_stn <-
 
 cmtx_stck_bar_szn_stn %>%
   egg::tag_facet(
-    family   = "serif", 
-    tag_pool = LETTERS, 
-    fontface = 1, 
+    family   = "TT Arial", 
+    # tag_pool = LETTERS, # uppercase 
+    tag_pool = letters, # lowercase
+    fontface = "bold", 
     vjust    = -0.5,
     hjust    = 0, 
     size     = 2
