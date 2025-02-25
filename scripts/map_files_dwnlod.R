@@ -398,7 +398,10 @@ load_map_obj <- function(
 base_map_plot <- function(
         .topo,
         .bathy,
-        .extent
+        .extent,
+        .set_breaks = c(100, 50, 25, 10, 0),
+        contour_labels = FALSE,
+        familyface = "serif"
 ) {
     
     # ---- libraries
@@ -419,14 +422,15 @@ base_map_plot <- function(
         )  +
         theme_bw() +
         theme(
-            text = element_text(family = "serif", size = 10),
+            text = element_text(family = familyface, size = 10),
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank()
         )
     
     if (rlang::is_empty(.bathy)) return(plt)
     
-    plt +
+    plt <- 
+        plt +
         geom_contour2(
             data = .bathy,
             aes(
@@ -435,8 +439,12 @@ base_map_plot <- function(
                 z = -altitude
             ),
             col = "grey70",
-            breaks = c(100, 50, 25, 10, 0)
-        ) +
+            breaks = .set_breaks
+        )
+    
+    if (!contour_labels) return(plt)
+    
+    plt +
         directlabels::geom_dl(
             data = filter(
                 .bathy,
@@ -456,7 +464,7 @@ base_map_plot <- function(
                 alpha = 0.5,
                 hjust = 1.5),
             stat   = "contour",
-            breaks = c(100, 50, 25, 10, 0)
+            breaks = .set_breaks
         )
     
     # ---- End of `base_map_plot` Function ----
