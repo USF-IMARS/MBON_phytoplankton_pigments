@@ -150,7 +150,21 @@ map_obj <-
     )
 
 # create base map
-base_map <- with(map_obj, base_map_plot(coast_topo, bathy, exnt))
+(base_map <-
+  with(
+    map_obj,
+    base_map_plot(
+      coast_topo,
+      bathy,
+      exnt,
+      .set_breaks = c(10, 50, 100),
+      familyface = NULL,
+      # contour_labels = TRUE
+    )
+  )
+)
+
+
 
 ```
 ```{r}
@@ -179,7 +193,9 @@ lat_lon_dat <-
   pig_dat %>%
   filter(
       name_of_water_body == "Florida Keys"
-      & !str_detect(station, "21.5|9B|24|^3$")) %>%
+      & !str_detect(station, "21.5|9B|24|^3$")
+      # & str_detect(station, "MR|LK|WS")
+          ) %>%
   select(station, lat, lon) %>%
   distinct(station, lat, lon) %>% 
   mutate(
@@ -198,14 +214,19 @@ stn_map <-
   
   annotate(
     geom        = "shadowtext",
-    x           = c(-80.52, -81.1, -81.85, -81.95),
-    y           = c(24.84, 24.61, 24.455, 24.49),
-    label       = c(100, 50, 25, 10),
+    # x           = c(-80.52, -81.1, -81.85, -81.95),
+    # y           = c(24.84, 24.61, 24.455, 24.49),
+    # label       = c(100, 50, 25, 10),
+    # angle       = c(35, 24, 15, -3),
+    x           = c(-80.52, -81.1, -81.95),
+    y           = c(24.84, 24.61, 24.49),
+    angle       = c(35, 24, -3),
+    label       = c(100, 50, 10),
     size        = 7,
     # fontface    = "bold",
     # label.color = NA,
-    family      = "serif",
-    angle       = c(35, 24, 15, -3),
+    # family      = "serif",
+    # family      = "TT Arial",
     color = "grey",
     bg.color = "white"
   ) +
@@ -231,7 +252,8 @@ stn_map <-
     data   = lat_lon_dat,
     size   = 6,
     hjust  = 0,
-    family = "serif",
+    # family = "serif",
+    # family = "TT Arial",
     point.padding = 10,
     min.segment.length = 0.01
     # direction = "y"
@@ -240,13 +262,14 @@ stn_map <-
   annotate(
     geom        = "text",
     x           = c(-80.75, -81.0, -80.75, -80.25),
-    y           = c(25, 24.4, 25.5, 25.55),
+    y           = c(25.06, 24.4, 25.5, 25.55),
     label       = c("Florida Bay", "Atlantic Ocean", "Everglades", "Biscayne Bay"),
     size        = 7,
     fontface    = "bold",
     # fill        = NA,
     # label.color = NA,
-    family      = "serif",
+    # family      = "serif",
+    # family      = "TT Arial",
     angle = c(0, 0, 0, 72)
   ) +
     
@@ -315,15 +338,15 @@ fullmap
 
 # ---- save plot
 walk(
-  c("jpeg", "svg"),
+  c("png", "svg"),
   ~ save_gg(
     plt            = fullmap,
     save_location  = dir_plt_save,
     save_name      = "map_station_locations",
     verbose        = TRUE,
-    # overwrite      = FALSE,
-    overwrite      = TRUE,
-    time_stamp_fmt = NULL,
+    # overwrite      = TRUE,
+    # time_stamp_fmt = NULL,
+    time_stamp_fmt = "%Y%m%d",
     device         = .x,
     height         = 8.5,
     width          = 10,
