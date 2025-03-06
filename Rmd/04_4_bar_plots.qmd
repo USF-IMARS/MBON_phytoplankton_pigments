@@ -26,7 +26,8 @@ librarian::shelf(
     
     # additional
     rlang,
-    ggthemes
+    ggthemes,
+    ggtext
 )
 
 conflicts_prefer(
@@ -289,6 +290,35 @@ cmtx_l_pct %>%
 
 ## 3.3  Plot: Seasonal Fraction of each PFT (Bar)
 
+```{r}
+help_secondary2 <- 
+function (data = NULL, primary = c(0, 1), secondary = c(0, 1), 
+    method = c("range", "max", "fit", "ccf", "sortfit"), ...) {
+    primary <- enquo(primary)
+    secondary <- enquo(secondary)
+    method <- match.arg(method, c("range", "max", "fit", "ccf", 
+        "sortfit"))
+    name <- as_label(secondary)
+    primary <- eval_tidy(primary, data)
+    secondary <- eval_tidy(secondary, data)
+    help <- switch(
+        method, 
+        range = ggh4x:::help_sec_range(primary, secondary), 
+        max = ggh4x:::help_sec_max(primary, secondary), 
+        fit = ggh4x:::help_sec_fit(primary, 
+            secondary), ccf = ggh4x:::help_sec_ccf(primary, secondary), 
+        sortfit = ggh4x:::help_sec_sortfit(primary, secondary))
+    out <- ggproto(NULL, sec_axis(transform = help$reverse, ...), 
+        proj = help$forward)
+    if (inherits(out$name, "waiver")) {
+        out$name <- name
+    }
+    return(out)
+}
+
+```
+
+
 ### 3.3.1 Stacked Bar Chart
 ```{r plt-fracs}
 # , fig.width=20, fig.height=10}
@@ -306,7 +336,8 @@ new_dat <-
 
 sec_axe <- 
   new_dat %>%
-  ggh4x::help_secondary(
+  help_secondary2(
+  # ggh4x::help_secondary(
     # secondary = c(0, 1.5), 
     secondary = c(0, 1.0), 
     name = bquote(bold("Chlorophyll-a Concentration"~(mg~m^-3)))
@@ -364,8 +395,18 @@ cmtx_avg_season_fract_l %>%
     fill  = "Phytoplankton\nFunctional Type",
     color = "Phytoplankton\nFunctional Type"
   ) +
-  scale_fill_manual(values  = tol_muted) +
-  scale_color_manual(values = tol_muted) +
+  scale_color_manual(
+      values = c(
+        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
+        tol_muted[2:3])
+                     ) +
+  scale_fill_manual(
+      values = c(
+        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
+        tol_muted[2:3])
+                    ) +
+  # scale_fill_manual(values  = tol_muted) +
+  # scale_color_manual(values = tol_muted) +
   scale_y_continuous(
     labels = scales::percent_format(accuracy = 1),
     expand = c(0,0),
@@ -632,7 +673,17 @@ cmtx_stck_bar_szn_stn <-
     oob    = scales::squish,
     sec.axis = sec_axe
   ) +
-  scale_fill_manual(values = tol_muted) +
+  # scale_color_manual(
+  #     values = c(
+  #       ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
+  #       tol_muted[2:3])
+  #                    ) +
+  scale_fill_manual(
+      values = c(
+        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
+        tol_muted[2:3])
+                    ) +
+  # scale_fill_manual(values = tol_muted) +
   coord_cartesian(clip = "off") +
   facet_wrap(~ season, nrow = 2) +
     
@@ -682,7 +733,7 @@ save_gg(
   save_location  = here(dir_plt_save, "season_station"),
   save_name      = glue("pft_bar_percent_season", file_suffix),
   verbose        = TRUE,
-  overwrite      = TRUE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
   # 90 x 90 for figure
@@ -959,8 +1010,18 @@ cmtx_l_pct %>%
     fill  = "Phytoplankton Functional Type",
     color = "Phytoplankton Functional Type"
   ) +
-  scale_fill_manual(values = tol_muted) +
-  scale_color_manual(values = tol_muted) +
+  scale_color_manual(
+      values = c(
+        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
+        tol_muted[2:3])
+                     ) +
+  scale_fill_manual(
+      values = c(
+        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
+        tol_muted[2:3])
+                    ) +
+  # scale_fill_manual(values = tol_muted) +
+  # scale_color_manual(values = tol_muted) +
   scale_y_continuous(
     labels = scales::label_percent(),
     expand = c(0, 0)
