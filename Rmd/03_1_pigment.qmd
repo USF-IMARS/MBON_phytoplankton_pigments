@@ -1416,6 +1416,7 @@ geom_jitter(
   ) +
 
 ```{r chla-boxplot, fig.width=10}
+theme_set(theme_calc(base_size = 12, base_family = "TT Arial"))
 chl_a_box <-
   # pig_dat %>%
   pig_dat_keys %>%
@@ -1438,7 +1439,8 @@ chl_a_box <-
         szn_labels <- 
           .x %>%
           count(season) %>%
-          mutate(labels = glue("{season} (N = {n})"))
+          # mutate(labels = glue("{season} (N = {n})"))
+          mutate(labels = glue("{season} (<i>n</i> = {n})"))
         
         .x %>%
           ggplot(
@@ -1518,16 +1520,19 @@ chl_a_box <-
               ) +
           coord_cartesian(y = ylims, clip = "on") +
           theme(
-            text            = element_text(size = 6),
+            text            = element_text(size = 6, face = "bold"),
             line            = element_line(color = "black", linewidth = 0.2),
             rect            = element_rect(color = "black", linewidth = 0.2),
             axis.title.y    = element_markdown(),
             axis.title.x    = element_markdown(),
-            axis.text.x     = element_text(color = "black"),
+            axis.text.x     = element_markdown(color = "black"),
             axis.text.y     = element_text(color = "black"),
             axis.ticks.x    = element_blank(),
             plot.background = element_rect(color = "white"),
-            panel.border    = element_rect(color = "black")
+            panel.border    = element_rect(color = "black"),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_blank(),
+            panel.grid.minor.y = element_blank(),
           )
       }
     )
@@ -1591,8 +1596,8 @@ chl_a_box  %>%
   walk2(
     .x = name_of_water_body,
     .y = plt,
-    # overwrite = FALSE,
-    overwrite = TRUE,
+    overwrite = FALSE,
+    # overwrite = TRUE,
     titles = "without", # "with", "both"
     \(.x, .y, overwrite, titles) {
       naming <-
@@ -1844,7 +1849,8 @@ szn_labels <-
   pig_dat_keys %>%
   filter(str_detect(station, "10|12|16|18")) %>%
   count(season) %>%
-  mutate(labels = glue("{season} (N = {n})")) %T>%
+  # mutate(labels = glue("{season} (N = {n})")) %T>%
+  mutate(labels = glue("{season}\n(<i>n</i> = {n})")) %T>%
   print()
 
 ```
@@ -1853,15 +1859,15 @@ szn_labels <-
 pig_dat_keys %>%
   filter(str_detect(station, "10|12|16|18")) %>%
   summarise(
-    .by = c(season, nearoff),
-    num = n(),
+    .by  = c(season, nearoff),
+    num  = n(),
     mean = mean(tot_chl_a),
-    sd = sd(tot_chl_a),
-    se = sd(tot_chl_a)/(sqrt(n())),
+    sd   = sd(tot_chl_a),
+    se   = sd(tot_chl_a)/(sqrt(n())),
     ci95 = sd(tot_chl_a)/(sqrt(n())) * 1.96,
-    lwr = mean(tot_chl_a) - sd(tot_chl_a),
-    hi = mean(tot_chl_a) + sd(tot_chl_a),
-    med = median(tot_chl_a, na.rm = TRUE),
+    lwr  = mean(tot_chl_a) - sd(tot_chl_a),
+    hi   = mean(tot_chl_a) + sd(tot_chl_a),
+    med  = median(tot_chl_a, na.rm = TRUE),
     ) %>%
   arrange(season)
 
@@ -1893,7 +1899,8 @@ boxplot_near_off <- function(.x, .y, rm_out) {
   szn_labels_nearoff <-
     .x %>%
     count(nearoff) %>%
-    mutate(labels = glue("{nearoff}\n(N = {n})"))
+    # mutate(labels = glue("{nearoff}\n(N = {n})"))
+    mutate(labels = glue("{nearoff}<br>(<i>n</i> = {n})"))
 
   plt <-
     .x %>%
@@ -1922,13 +1929,13 @@ boxplot_near_off <- function(.x, .y, rm_out) {
       # fun.data    = mean_cl_normal, # lower and upper Gaussian confidence limits
       # fun.data    = mean_cl_boot, # nonparametric bootstrap for confidence limits of population mean
       # geom        = "linerange",
-      geom = "errorbar",
-      linewidth = 0.5,
-      width = 0.1,
-      size = 0.5,
-      na.rm = TRUE,
+      geom        = "errorbar",
+      linewidth   = 0.5,
+      width       = 0.1,
+      # size        = 0.5,
+      na.rm       = TRUE,
       show.legend = FALSE,
-      position = position_dodge2(0.75, preserve = "single"),
+      position    = position_dodge2(0.75, preserve = "single"),
     ) +
     stat_summary(
       color = "#CC0000",
@@ -1939,6 +1946,15 @@ boxplot_near_off <- function(.x, .y, rm_out) {
       na.rm = TRUE,
       position = position_dodge2(0.75, preserve = "single"),
       show.legend = FALSE,
+    ) +
+      
+     # add top line
+    annotate(
+        geom = 'segment',
+        y    = Inf,
+        yend = Inf,
+        x    = -Inf,
+        xend = Inf
     ) +
     labs(
       title = NULL,
@@ -1956,26 +1972,35 @@ boxplot_near_off <- function(.x, .y, rm_out) {
     ) +
     scale_fill_manual(values = c("#88CCEE", "#882255")) +
     coord_cartesian(y = ylims, clip = "on") +
-    theme_classic(base_family = "serif") +
+    # theme_classic(base_family = "serif") +
+    theme_classic(base_family = "TT Arial") +
+    # theme_calc(base_family = "TT Arial") +
     theme(
-      text = element_text(size = 6),
+      text = element_text(size = 6, face = "bold"),
       line = element_line(color = "black", linewidth = 0.2),
       rect = element_rect(color = "black", linewidth = 0.2),
-      axis.title.y = element_markdown(),
-      axis.title.x = element_markdown(),
-      axis.text.x = element_text(color = "black"),
-      axis.text.y = element_text(color = "black"),
-      axis.ticks.x = element_blank(),
+      
+      axis.title.y    = element_markdown(),
+      axis.title.x    = element_markdown(),
+      axis.text.x     = element_markdown(size = 3, color = "black"),
+      axis.text.y     = element_text(color = "black"),
+      axis.ticks.x    = element_blank(),
       plot.background = element_rect(color = "white"),
-      legend.position = c(0.8, 0.9),
-      legend.text = element_text(size = 5),
-      legend.key.size = unit(2.5, "mm"),
-      legend.margin = margin(0.5, 0.5, 0.5, 0.5),
+      
+      legend.position   = c(0.8, 0.9),
+      legend.text       = element_text(size = 5),
+      legend.key.size   = unit(2.5, "mm"),
+      legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
       legend.background = element_rect(color = "black"),
+      
+      strip.text       = element_markdown(),
       strip.background = element_blank(),
-      strip.placement = "outside",
-      panel.spacing = unit(0, "lines"),
-      panel.grid.major.y = element_line(color = "black")
+      strip.placement  = "outside",
+      
+      panel.spacing      = unit(0, "lines"),
+      
+      panel.grid.major.y = element_blank()
+      # panel.grid.major.y = element_line(color = "black")
     )
 
   # if (.env$remove_out == 2 &
@@ -2031,9 +2056,11 @@ boxplot_total <-
   filter(str_detect(station, "10|12|16|18")) %>%
   mutate(
     .by = nearoff,
-    label = glue("{nearoff}\n(N = {n()})")
+    # label = glue("{nearoff}\n(N = {n()})")
+    label = glue("{nearoff}<br>(<i>n</i> = {n()})")
       ) %>%
-  mutate(labels = glue("Total (N = {n()})")) %>%
+  # mutate(labels = glue("Total (N = {n()})")) %>%
+  mutate(labels = glue("Total (<i>n</i> = {n()})")) %>%
   ggplot(
       aes(
         # x = nearoff,
@@ -2078,6 +2105,15 @@ stat_summary(
       position = position_dodge2(0.75, preserve = "single"),
       show.legend = FALSE,
     ) +
+    
+    # add top and right lines
+    annotate(
+        geom = 'segment',
+        y    = c(Inf, -Inf),
+        yend = c(Inf, Inf),
+        x    = c(-Inf, Inf),
+        xend = c(Inf, Inf)
+    ) +
     labs(
       title = NULL,
       x     = NULL,
@@ -2095,26 +2131,33 @@ stat_summary(
     ) +
     scale_fill_manual(values = c("#88CCEE", "#882255")) +
     coord_cartesian(y = c(0, 0.8), clip = "on") +
-    theme_classic(base_family = "serif") +
+    # theme_classic(base_family = "serif") +
+    theme_classic(base_family = "TT Arial") +
     theme(
-      text = element_text(size = 6),
+      text = element_text(size = 6, face = "bold"),
       line = element_line(color = "black", linewidth = 0.2),
       rect = element_rect(color = "black", linewidth = 0.2),
-      axis.title.y = element_markdown(),
-      axis.title.x = element_markdown(),
-      axis.text.x = element_text(color = "black"),
-      axis.text.y = element_text(color = "black"),
-      axis.ticks.x = element_blank(),
+      
+      axis.title.y    = element_markdown(),
+      axis.title.x    = element_markdown(),
+      axis.text.x     = element_markdown(size = 3, color = "black"),
+      axis.text.y     = element_text(color = "black"),
+      axis.ticks.x    = element_blank(),
       plot.background = element_rect(color = "white"),
-      legend.position = c(0.8, 0.9),
-      legend.text = element_text(size = 5),
-      legend.key.size = unit(2.5, "mm"),
-      legend.margin = margin(0.5, 0.5, 0.5, 0.5),
+      
+      legend.position   = c(0.8, 0.9),
+      legend.text       = element_text(size = 5),
+      legend.key.size   = unit(2.5, "mm"),
+      legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
       legend.background = element_rect(color = "black"),
+      
+      strip.text       = element_markdown(),
       strip.background = element_blank(),
-      strip.placement = "outside",
-      panel.spacing = unit(0, "lines"),
-      panel.grid.major.y = element_line(color = "black")
+      strip.placement  = "outside",
+      
+      panel.spacing      = unit(0, "lines"),
+      # panel.grid.major.y = element_line(color = "black")
+      panel.grid.major.y = element_blank()
     )
 
 boxplot_total
@@ -2126,7 +2169,8 @@ nearoff_plt <-
   (   
   pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
   pull(pig_keys_plt, plt)[[2]] 
-  + theme(legend.position = "inside", legend.position.inside = c(0.6, 0.9)) |
+  + theme(legend.position = "inside", legend.position.inside = c(0.58, 0.9),
+          legend.key.spacing.y = unit(0.5, "mm")) |
   pull(pig_keys_plt, plt)[[3]] + theme(legend.position = "none") |
   pull(pig_keys_plt, plt)[[4]] + theme(legend.position = "none") |
   # overall total
@@ -2162,6 +2206,65 @@ save_gg(
   bg             = "white"
   ) 
 ```
+
+5.3.3 Combine Seasonal Chlor-a and Near/Off
+
+Doesn't work for some reason. Issue is that the seasonal chlor-a y axis ticks 
+are separated from the grid panel
+
+
+```{r combine-plts}
+nearoff_plt2 <-
+  (   
+  pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
+  pull(pig_keys_plt, plt)[[2]] 
+  + theme(legend.position = "inside", legend.position.inside = c(0.58, 0.9),
+          legend.key.spacing.y = unit(0.5, "mm")) |
+  pull(pig_keys_plt, plt)[[3]] + theme(legend.position = "none") |
+  pull(pig_keys_plt, plt)[[4]] + theme(legend.position = "none") +
+      annotate(
+        geom = 'segment',
+        y    = c(Inf, -Inf),
+        yend = c(Inf, Inf),
+        x    = c(-Inf, Inf),
+        xend = c(Inf, Inf)
+    ) 
+  ) +
+ plot_layout(
+    # ncol = 2,
+    # guides = "keep",
+    axes = "collect_y"
+             )  &
+  theme(
+    panel.spacing    = unit(0, "lines"),
+    plot.margin      = margin(t = 5),
+    plot.background  = element_blank()
+    
+  )
+
+combine_plt <-
+  (chl_a_box$plt[[1]] / nearoff_plt2) +
+  plot_layout(axis_titles = "collect")
+
+combine_plt
+
+
+save_gg(
+  plt            = combine_plt, # edit if want specific plot
+  save_location  = here(dir_plt_save, "chla_combine"),
+  save_name      = "chla_combine",
+  verbose        = TRUE,
+  # overwrite      = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  width          = 180,
+  height         = 180 * 0.5625,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+  ) 
+```
+
 
 ## 5.4 Time Series Stations Tchla
 
@@ -2219,7 +2322,7 @@ dat_month_stk <-
       # shape = station
     )
   ) +
-  geom_path(key_glyph = draw_key_point) +
+  geom_path(key_glyph = draw_key_rect) +
   geom_point(
     shape = 21, 
     fill = "white",
@@ -2232,7 +2335,7 @@ dat_month_stk <-
     color      = "red", 
     linetype   = "dashed"
     ) +
-  # geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  # geom_hline(yintercept = 0.6, color = "gray", linetype = "dashed") +
   # ggrepel::geom_text_repel(
   
   #  ---- hurricane names ---- #
@@ -2266,6 +2369,7 @@ dat_month_stk <-
     limits = c(-0.005, NA),
     expand = expansion(add = c(0, 0.1))
   ) +
+  scale_color_manual(values = ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1,8)]) +
   facet_wrap(
     ~nearoff,
     ncol   = 1,
@@ -2280,6 +2384,7 @@ dat_month_stk <-
     legend.position    = "inside",
     legend.position.inside = c(0.06, 0.85),
     legend.key.size    = unit(4, "mm"),
+    legend.key.spacing.y = unit(0.5, "mm"), 
     legend.title       = element_text(size = 8, face = "bold"),
     legend.text        = element_text(size = 6),
     legend.background  = element_rect(
@@ -2295,10 +2400,13 @@ dat_month_stk <-
       color     = "grey30",
       linewidth = 0.2
     ),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
 
   )
-
-egg::tag_facet(dat_month_stk)
+dat_month_stk
+# egg::tag_facet(dat_month_stk)
 
 # shell.exec(here::here("data", "cam_test", "ts_station"))
 # camcorder::gg_stop_recording()
