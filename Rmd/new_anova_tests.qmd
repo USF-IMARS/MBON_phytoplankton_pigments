@@ -601,7 +601,6 @@ cap_extraction <- function(
 ```{r plot-func}
 shelf(shadowtext)
 
-shadowtext::geom_shadowtext()
 plot_template <- function(
     cap_ext,
     label_name,
@@ -635,7 +634,7 @@ plot_template <- function(
     theme(
       axis.title       = element_text(size = 32 / .pt, face = "bold"),
       axis.text        = element_text(size = 22 / .pt, face = "bold", 
-                                      family = "serif"),
+                                      family = "TT arial"),
       legend.text      = element_text(size = 28 / .pt, face = "bold"),
       legend.title     = element_text(size = 32 / .pt, face = "bold"),
       legend.direction = "horizontal",
@@ -713,8 +712,17 @@ plot_template <- function(
       color = "black",
       vjust = "outward",
       hjust = "outward",
-      family = "serif",
+      family = "TT Arial",
       bg.color = "white"
+    ) +
+    # add top and right lines
+    annotate(
+        geom = 'segment',
+        y    = c(Inf, -Inf),
+        yend = c(Inf, Inf),
+        x    = c(-Inf, Inf),
+        xend = c(Inf, Inf),
+        linewidth = 1
     )
 
   # ---- end of function plot_template ---- #
@@ -1013,8 +1021,8 @@ cap_absolute <-
 # camcorder::gg_record(
 #   dir    = here::here("data", "cam_test", "cap_analysis"),
 #   device         = "png",
-#   height         = 70,
-#   width          = 90 * 0.5,
+#   height         = 170,
+#   width          = 170,
 #   dpi            = 600,
 #   units          = "mm",
 #   bg             = "white"
