@@ -38,6 +38,9 @@ conflicts_prefer(
 source(here("scripts", "misc_functions.R"))
 
 theme_set(theme_calc(base_size = 12, base_family = "serif"))
+
+# darker green (i.e. "#004225FF")
+green_col <- prismatic::clr_darken("#00824e", 0.25) 
 ```
 
 ## 2.2 Load Dataset
@@ -363,7 +366,7 @@ cmtx_avg_season_fract_l %>%
     aes(x = season, y = sec_axe$proj(chl_avg), group = 1),
     inherit.aes = FALSE,
     linewidth = 0.2,
-    color = "#00824e",    
+    color = green_col,    
     ) +
   geom_linerange(
     data = new_dat,
@@ -377,7 +380,7 @@ cmtx_avg_season_fract_l %>%
     ),
     inherit.aes = FALSE,
     linewidth = 0.3,
-    color = "#00824e",
+    color = green_col,
   ) +
   geom_point(
     data = new_dat,
@@ -385,7 +388,7 @@ cmtx_avg_season_fract_l %>%
     inherit.aes = FALSE,
     size  = 1,
     shape = 20,
-    color = "#00824e",
+    color = green_col,
     ) +
   labs(
     x = NULL,
@@ -421,24 +424,24 @@ cmtx_avg_season_fract_l %>%
   theme_bw() +
   theme(
     # text              = element_text(family = "serif", size = 6, color = "black"),
-    text              = element_text(family = "TT Arial", size = 6, color = "black",
-                                     face = "bold"),
-    line              = element_line(color = "black", linewidth = 0.2),
-    rect              = element_rect(color = "black", linewidth = 0.2),
-    axis.title        = element_text(size = 5),
-    axis.text         = element_text(color = "black"),
-    axis.text.x       = element_markdown(),
-    axis.text.y.right = element_text(color = "#00824e"),
-    axis.title.y.right = element_text(color = "#00824e"),
-    axis.ticks.y.right = element_line(color = "#00824e"),
-    axis.ticks.x      = element_blank(),
-    panel.grid        = element_blank(),
-    legend.position   = "bottom",
-    legend.direction  = "horizontal",
-    legend.text       = element_text(size = 4),
-    legend.title      = element_text(size = 5),
-    legend.key.size   = unit(2, "mm"),
-    legend.box.margin = margin(t = -11, b = -5)
+    text               = element_text(family = "TT Arial", size = 6, 
+                                      color = "black", face = "bold"),
+    line               = element_line(color = "black", linewidth = 0.2),
+    rect               = element_rect(color = "black", linewidth = 0.2),
+    axis.title         = element_text(size = 5),
+    axis.text          = element_text(color = "black"),
+    axis.text.x        = element_markdown(),
+    axis.text.y.right  = element_text(color = green_col),
+    axis.title.y.right = element_text(color = green_col),
+    axis.ticks.y.right = element_line(color = green_col),
+    axis.ticks.x       = element_blank(),
+    panel.grid         = element_blank(),
+    legend.position    = "bottom",
+    legend.direction   = "horizontal",
+    legend.text        = element_text(size = 4),
+    legend.title       = element_text(size = 5),
+    legend.key.size    = unit(2, "mm"),
+    legend.box.margin  = margin(t = -11, b = -5)
   )
 
 # ---- save plot
@@ -447,7 +450,7 @@ save_gg(
   save_location  = here(dir_plt_save, "season_stacked"),
   save_name      = glue("pft_season_avg_prcnt_stack", file_suffix),
   verbose        = TRUE,
-  # overwrite      = TRUE,
+  overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
   height         = 90 * 0.5625,
@@ -456,6 +459,7 @@ save_gg(
   units          = "mm",
   bg             = "white",
   )
+
 ```
 
 ### 3.3.1 Separated Bar Chart
@@ -648,7 +652,7 @@ cmtx_stck_bar_szn_stn <-
     ),
     inherit.aes = FALSE,
     linewidth = 0.2,
-    color = "#00824e",
+    color = green_col,
   ) +
   geom_point(
     data = new_dat,
@@ -657,7 +661,7 @@ cmtx_stck_bar_szn_stn <-
     fill  = "white",
     size  = 0.6,
     shape = 20,
-    color = "#00824e",
+    color = green_col,
   ) +
   labs(
     # x     = "Station",
@@ -698,9 +702,9 @@ cmtx_stck_bar_szn_stn <-
     # axis.title       = element_text(size = 20),
     axis.title         = element_text(size = 5),
     axis.text          = element_text(color = "black"),
-    axis.text.y.right  = element_text(color = "#00824e"),
-    axis.title.y.right = element_text(color = "#00824e"),
-    axis.ticks.y.right = element_line(color = "#00824e"),
+    axis.text.y.right  = element_text(color = green_col),
+    axis.title.y.right = element_text(color = green_col),
+    axis.ticks.y.right = element_line(color = green_col),
     axis.ticks.x       = element_blank(),
     panel.grid        = element_blank(),
     legend.position    = "bottom",
