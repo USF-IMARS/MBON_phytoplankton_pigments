@@ -1416,7 +1416,8 @@ geom_jitter(
   ) +
 
 ```{r chla-boxplot, fig.width=10}
-theme_set(theme_calc(base_size = 12, base_family = "TT Arial"))
+# theme_set(theme_calc(base_size = 12, base_family = "TT Arial"))
+theme_set(theme_calc(base_size = 12, base_family = "sans"))
 chl_a_box <-
   # pig_dat %>%
   pig_dat_keys %>%
@@ -1499,7 +1500,14 @@ chl_a_box <-
               color = "orange",
               size = 0.25
           ) +
-            
+          # add top and right lines
+          annotate(
+            geom = 'segment',
+            y    = c(Inf, -Inf),
+            yend = c(Inf, Inf),
+            x    = c(-Inf, Inf),
+            xend = c(Inf, Inf)
+          ) +
           labs(
             title = NULL,
             x     = NULL,
@@ -1519,21 +1527,51 @@ chl_a_box <-
               values =  c("#88CCEE", "#44AA99", "#DDCC77","#CC6677")
               ) +
           coord_cartesian(y = ylims, clip = "on") +
+          theme_classic(base_family = "sans") +
           theme(
-            text            = element_text(size = 6, face = "bold"),
-            line            = element_line(color = "black", linewidth = 0.2),
-            rect            = element_rect(color = "black", linewidth = 0.2),
+            text = element_text(size = 10, face = "bold"),
+            line = element_line(color = "black", linewidth = 0.2),
+            rect = element_rect(color = "black", linewidth = 0.2),
+            
             axis.title.y    = element_markdown(),
             axis.title.x    = element_markdown(),
-            axis.text.x     = element_markdown(color = "black"),
+            axis.text.x     = element_markdown(size = 10, color = "black"),
             axis.text.y     = element_text(color = "black"),
             axis.ticks.x    = element_blank(),
             plot.background = element_rect(color = "white"),
-            panel.border    = element_rect(color = "black"),
-            panel.grid.minor.x = element_blank(),
+            
+            legend.position   = c(0.8, 0.9),
+            legend.text       = element_text(size = 5),
+            legend.key.size   = unit(2.5, "mm"),
+            legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
+            legend.background = element_rect(color = "black"),
+            
+            strip.text       = element_markdown(),
+            strip.background = element_blank(),
+            strip.placement  = "outside",
+            
+            panel.spacing      = unit(0, "lines"),
             panel.grid.major.y = element_blank(),
-            panel.grid.minor.y = element_blank(),
+            plot.margin      = margin(t = 5)
+           
           )
+            
+            
+          # theme(
+          #   text            = element_text(size = 6, face = "bold"),
+          #   line            = element_line(color = "black", linewidth = 0.2),
+          #   rect            = element_rect(color = "black", linewidth = 0.2),
+          #   axis.title.y    = element_markdown(),
+          #   axis.title.x    = element_markdown(),
+          #   axis.text.x     = element_markdown(color = "black"),
+          #   axis.text.y     = element_text(color = "black"),
+          #   axis.ticks.x    = element_blank(),
+          #   plot.background = element_rect(color = "white"),
+          #   panel.border    = element_rect(color = "black"),
+          #   panel.grid.minor.x = element_blank(),
+          #   panel.grid.major.y = element_blank(),
+          #   panel.grid.minor.y = element_blank(),
+          # )
       }
     )
   )
@@ -1598,6 +1636,7 @@ chl_a_box  %>%
     .y = plt,
     overwrite = FALSE,
     # overwrite = TRUE,
+    
     titles = "without", # "with", "both"
     \(.x, .y, overwrite, titles) {
       naming <-
@@ -1900,7 +1939,8 @@ boxplot_near_off <- function(.x, .y, rm_out) {
     .x %>%
     count(nearoff) %>%
     # mutate(labels = glue("{nearoff}\n(N = {n})"))
-    mutate(labels = glue("{nearoff}<br>(<i>n</i> = {n})"))
+    # mutate(labels = glue("{nearoff}<br>(<i>n</i> = {n})"))
+    mutate(labels = glue("(<i>n</i> = {n})"))
 
   plt <-
     .x %>%
@@ -1948,7 +1988,7 @@ boxplot_near_off <- function(.x, .y, rm_out) {
       show.legend = FALSE,
     ) +
       
-     # add top line
+    # add top line
     annotate(
         geom = 'segment',
         y    = Inf,
@@ -1973,16 +2013,17 @@ boxplot_near_off <- function(.x, .y, rm_out) {
     scale_fill_manual(values = c("#88CCEE", "#882255")) +
     coord_cartesian(y = ylims, clip = "on") +
     # theme_classic(base_family = "serif") +
-    theme_classic(base_family = "TT Arial") +
+    # theme_classic(base_family = "TT Arial") +
+    theme_classic(base_family = "sans") +
     # theme_calc(base_family = "TT Arial") +
     theme(
-      text = element_text(size = 6, face = "bold"),
+      text = element_text(size = 10, face = "bold"),
       line = element_line(color = "black", linewidth = 0.2),
       rect = element_rect(color = "black", linewidth = 0.2),
       
       axis.title.y    = element_markdown(),
       axis.title.x    = element_markdown(),
-      axis.text.x     = element_markdown(size = 3, color = "black"),
+      axis.text.x     = element_markdown(size = 6, color = "black"),
       axis.text.y     = element_text(color = "black"),
       axis.ticks.x    = element_blank(),
       plot.background = element_rect(color = "white"),
@@ -1993,7 +2034,7 @@ boxplot_near_off <- function(.x, .y, rm_out) {
       legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
       legend.background = element_rect(color = "black"),
       
-      strip.text       = element_markdown(),
+      strip.text       = element_markdown(size = 10),
       strip.background = element_blank(),
       strip.placement  = "outside",
       
@@ -2057,7 +2098,8 @@ boxplot_total <-
   mutate(
     .by = nearoff,
     # label = glue("{nearoff}\n(N = {n()})")
-    label = glue("{nearoff}<br>(<i>n</i> = {n()})")
+    # label = glue("{nearoff}<br>(<i>n</i> = {n()})")
+    label = glue("(<i>n</i> = {n()})")
       ) %>%
   # mutate(labels = glue("Total (N = {n()})")) %>%
   mutate(labels = glue("Total (<i>n</i> = {n()})")) %>%
@@ -2132,15 +2174,16 @@ stat_summary(
     scale_fill_manual(values = c("#88CCEE", "#882255")) +
     coord_cartesian(y = c(0, 0.8), clip = "on") +
     # theme_classic(base_family = "serif") +
-    theme_classic(base_family = "TT Arial") +
+    # theme_classic(base_family = "TT Arial") +
+    theme_classic(base_family = "sans") +
     theme(
-      text = element_text(size = 6, face = "bold"),
+      text = element_text(size = 10, face = "bold"),
       line = element_line(color = "black", linewidth = 0.2),
       rect = element_rect(color = "black", linewidth = 0.2),
       
       axis.title.y    = element_markdown(),
       axis.title.x    = element_markdown(),
-      axis.text.x     = element_markdown(size = 3, color = "black"),
+      axis.text.x     = element_markdown(size = 6, color = "black"),
       axis.text.y     = element_text(color = "black"),
       axis.ticks.x    = element_blank(),
       plot.background = element_rect(color = "white"),
@@ -2151,7 +2194,7 @@ stat_summary(
       legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
       legend.background = element_rect(color = "black"),
       
-      strip.text       = element_markdown(),
+      strip.text       = element_markdown(size = 10),
       strip.background = element_blank(),
       strip.placement  = "outside",
       
@@ -2168,10 +2211,13 @@ boxplot_total
 nearoff_plt <-
   (   
   pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
+      
   pull(pig_keys_plt, plt)[[2]] 
   + theme(legend.position = "inside", legend.position.inside = c(0.58, 0.9),
           legend.key.spacing.y = unit(0.5, "mm")) |
+      
   pull(pig_keys_plt, plt)[[3]] + theme(legend.position = "none") |
+      
   pull(pig_keys_plt, plt)[[4]] + theme(legend.position = "none") |
   # overall total
   boxplot_total + theme(legend.position = "none")
@@ -2214,6 +2260,7 @@ are separated from the grid panel
 
 
 ```{r combine-plts}
+# does not include `total` box plot
 nearoff_plt2 <-
   (   
   pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
@@ -2264,6 +2311,37 @@ save_gg(
   bg             = "white"
   ) 
 ```
+```{r cow-plot}
+cowplot::plot_grid(
+  NULL,
+  chl_a_box$plt[[1]],
+  NULL,
+  nearoff_plt,
+  nrow             = 4,
+  label_fontfamily = "sans",
+  label_size       = 10,
+  labels           = c("", "a) Seasonal", "", "b) Distance from Shore"),
+  vjust            = 0.25,
+  hjust            = 0.0,
+  label_x          = 0.0,
+  rel_heights      = c(0.05, 1, 0.05, 1)
+  ) %>%
+
+  save_gg(
+    plt            = ., # edit if want specific plot
+    save_location  = here(dir_plt_save, "chla_combine"),
+    save_name      = "chla_combine",
+    verbose        = TRUE,
+    # overwrite      = TRUE,
+    time_stamp_fmt = "%Y%m%d_%H%M%S",
+    device         = "png",
+    width          = 170,
+    height         = 170,
+    dpi            = 600,
+    units          = "mm",
+    bg             = "white"
+  )
+```
 
 
 ## 5.4 Time Series Stations Tchla
@@ -2307,6 +2385,10 @@ dat_month_stk <-
     date2 = map(
       .x = date,
       .f = same_year
+    ),
+    nearoff = case_when(
+        str_detect(nearoff, "Nearshore") ~ "a) Nearshore",
+        str_detect(nearoff, "Offshore") ~ "b) Offshore"
     )
   ) %>%
   unnest(date2) %>%
@@ -2341,7 +2423,8 @@ dat_month_stk <-
   #  ---- hurricane names ---- #
   # geom_text(
   geom_label(
-    data = hurricane_dates,
+    data = mutate(hurricane_dates, 
+                  nearoff = "a) Nearshore"),
     aes(
       x     = date,
       y     = c(4, 4, 4, 3 , 3.7),
@@ -2352,6 +2435,7 @@ dat_month_stk <-
     hjust = 1.0,
     size  = 4,
     inherit.aes = FALSE,
+    fontface = "bold"
   ) +
   #  ---- end hurricane names ---- #
 
@@ -2377,6 +2461,7 @@ dat_month_stk <-
   ) +
   theme_bw() +
   theme(
+    text = element_text(face = "bold"),
     axis.text          = element_text(color = "black"),
     axis.title.y       = element_markdown(size = 10),
     axis.title.x       = element_markdown(),
@@ -2392,8 +2477,10 @@ dat_month_stk <-
       linewidth = 0.2
     ),
     
-    strip.background   = element_rect(fill = "white"),
-    strip.text = element_text(face = "bold"),
+    # strip.background   = element_rect(fill = "white"),
+    strip.background   = element_blank(),
+    strip.text = element_text(face = "bold", hjust = 0),
+    
     
     panel.grid.major.x = element_line(
       linetype  = "dashed",
