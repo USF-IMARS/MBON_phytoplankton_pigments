@@ -666,7 +666,8 @@ cmtx_stat_plt <-
           x = year,
           y = percent,
           xlab = "Year",
-          ylab = "Concentration",
+          # ylab = "Concentration",
+          ylab = "Relative Abundance (%)",
           title = glue("Year: {.y}"),
           type = "nonparametric"
         )
@@ -680,7 +681,8 @@ cmtx_stat_plt <-
           x = season,
           y = percent,
           xlab = "Season",
-          ylab = "Concentration",
+          # ylab = "Concentration",
+          ylab = "Relative Abundance (%)",
           title = glue("Season: {.y}"),
           type = "nonparametric"
         )
