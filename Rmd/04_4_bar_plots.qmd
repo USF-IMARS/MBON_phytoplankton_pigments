@@ -42,7 +42,7 @@ theme_set(theme_calc(base_size = 12, base_family = "serif"))
 # darker green (i.e. "#004225FF")
 green_col <- prismatic::clr_darken("#00824e", 0.25) 
 ```
-
+green_col <- "#138152"
 ## 2.2 Load Dataset
 
 ```{r load-data}
@@ -319,6 +319,11 @@ function (data = NULL, primary = c(0, 1), secondary = c(0, 1),
     return(out)
 }
 
+
+# cmtx_avg_season_fract_l_og <- cmtx_avg_season_fract_l
+cmtx_avg_season_fract_l <-
+cmtx_avg_season_fract_l_og %>%
+  mutate(names = str_replace(names, "\\s(\\d)", "-\\1"))
 ```
 
 
@@ -450,7 +455,7 @@ save_gg(
   save_location  = here(dir_plt_save, "season_stacked"),
   save_name      = glue("pft_season_avg_prcnt_stack", file_suffix),
   verbose        = TRUE,
-  overwrite      = TRUE,
+  # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
   device         = "png",
   height         = 90 * 0.5625,
@@ -461,7 +466,6 @@ save_gg(
   )
 
 ```
-
 ### 3.3.1 Separated Bar Chart
 
 ```{r plt-fracs, fig.width=20, fig.height=10}
@@ -540,7 +544,7 @@ Figure 6
 
 ```{r chemtax-stacked-bar}
 new_dat <- 
-  cmtx_w  %>%
+  cmtx_w %>%
   mutate(
     .by = season,
     # season1 = glue("{season} (N = {n()})")) %>%
@@ -594,20 +598,21 @@ cmtx_stck_bar_szn_stn <-
   conc = mean(conc)
   ) %>%
   mutate(
+    names = str_replace(names, "\\s(\\d)", "-\\1"),
     # names = fct_reorder(names, conc, .desc = FALSE),
     names = fct(
         names, 
         levels = c(
           "Dinoflagellate",
           "Prasinophyte", 
-          "Diatom 1",
+          "Diatom-1",
           "Cryptophyte",
           "Chlorophyte",
-          "Haptophyte 8",
-          "Diatom 2",        
-          "Haptophyte 6",
-          "Cyanobacteria 4",
-          "Cyanobacteria 2"
+          "Haptophyte-8",
+          "Diatom-2",        
+          "Haptophyte-6",
+          "Cyanobacteria-4",
+          "Cyanobacteria-2"
           )
         ),
   ) %T>%
@@ -711,7 +716,7 @@ cmtx_stck_bar_szn_stn <-
     legend.direction   = "horizontal",
     legend.text        = element_text(size = 4),
     legend.title       = element_text(size = 5),
-    legend.key.size    = unit(2, "mm"),
+    legend.key.size    = unit(1.75, "mm"),
     # legend.box.spacing = unit(2, "mm"),
     legend.box.margin  = margin(t = -11, b = -5),
     strip.text.x       = element_markdown(size = 6, face = "bold", margin = margin(t = 2, b = 2)), # remove later
