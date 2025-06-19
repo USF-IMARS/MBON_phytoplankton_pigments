@@ -1485,8 +1485,8 @@ chl_a_box <-
             data = ~ filter(.x, tot_chl_a < ylims[2]),
             shape = 16,
             color = "grey70",
-            size  = 0.55,
-            alpha = 0.5,
+            size  = 1.25,                                       # <<<<<<<<< edit
+            alpha = 0.7,
             na.rm = TRUE,
             seed  = 1234
           ) + 
@@ -1515,12 +1515,23 @@ chl_a_box <-
             size  = 2,
             na.rm = TRUE
           ) +
+          
+          # add geometric mean
+          stat_summary(
+            color = "purple",
+            fun   = ~ exp(mean(log(.x))),
+            geom  = "point",
+            shape = 20,
+            size  = 10,
+            na.rm = TRUE
+          ) +
             
           geom_point(
               data = ~ filter(.x, tot_chl_a > ylims[2])  %>%
-                       mutate(tot_chl_a = ylims[2] - 0.005 + 0.05),
+                       mutate(tot_chl_a = ylims[2] - 0.005 + 0.0425),
               color = "orange",
-              size = 0.25
+              # size = 0.25
+              size = 2                                       # <<<<<<<<< edit
           ) +
           # add top and right lines
           annotate(
@@ -1562,7 +1573,8 @@ chl_a_box <-
             axis.ticks.x    = element_blank(),
             plot.background = element_rect(color = "white"),
             
-            legend.position   = c(0.8, 0.9),
+            # legend.position   = "inside",
+            # legend.position.inside = c(0.8, 0.9),
             legend.text       = element_text(size = 5),
             legend.key.size   = unit(2.5, "mm"),
             legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
@@ -1574,7 +1586,7 @@ chl_a_box <-
             
             panel.spacing      = unit(0, "lines"),
             panel.grid.major.y = element_blank(),
-            plot.margin      = margin(t = 5)
+            plot.margin        = margin(t = 5)
            
           )
             
@@ -1598,16 +1610,15 @@ chl_a_box <-
     )
   )
 
-chl_a_box %$% 
-map2(
-  .x = plt,
-  .y = name_of_water_body,
-  \(.x, .y) {
-    .x +
-    labs(title = .y)
-    
+chl_a_box %$%
+  map2(
+    .x = plt,
+    .y = name_of_water_body,
+    \(.x, .y) {
+      .x +
+        labs(title = .y)
     }
-)
+  )
 
 # pig_dat %>%
 pig_dat_keys %>%
@@ -1622,30 +1633,30 @@ pig_dat_keys %>%
 
 pig_dat_keys %>%
   summarise(
-    .by = season,
-    num = n(),
+    .by  = season,
+    num  = n(),
     mean = mean(tot_chl_a),
-    sd = sd(tot_chl_a),
-    se = sd(tot_chl_a)/(sqrt(n())),
-    ci95 = sd(tot_chl_a)/(sqrt(n())) * 1.96,
-    lwr = mean(tot_chl_a) - sd(tot_chl_a),
-    hi = mean(tot_chl_a) + sd(tot_chl_a),
-    med = median(tot_chl_a, na.rm = TRUE),
-    ) %>%
+    sd   = sd(tot_chl_a),
+    se   = sd(tot_chl_a) / (sqrt(n())),
+    ci95 = sd(tot_chl_a) / (sqrt(n())) * 1.96,
+    lwr  = mean(tot_chl_a) - sd(tot_chl_a),
+    hi   = mean(tot_chl_a) + sd(tot_chl_a),
+    med  = median(tot_chl_a, na.rm = TRUE),
+  ) %>%
   arrange(season)
 
 pig_dat_keys %>%
   summarise(
-    .by = c(season, nearoff),
-    num = n(),
+    .by  = c(season, nearoff),
+    num  = n(),
     mean = mean(tot_chl_a),
-    sd = sd(tot_chl_a),
-    se = sd(tot_chl_a)/(sqrt(n())),
-    ci95 = sd(tot_chl_a)/(sqrt(n())) * 1.96,
-    lwr = mean(tot_chl_a) - sd(tot_chl_a),
-    hi = mean(tot_chl_a) + sd(tot_chl_a),
-    med = median(tot_chl_a, na.rm = TRUE),
-    ) %>%
+    sd   = sd(tot_chl_a),
+    se   = sd(tot_chl_a) / (sqrt(n())),
+    ci95 = sd(tot_chl_a) / (sqrt(n())) * 1.96,
+    lwr  = mean(tot_chl_a) - sd(tot_chl_a),
+    hi   = mean(tot_chl_a) + sd(tot_chl_a),
+    med  = median(tot_chl_a, na.rm = TRUE),
+  ) %>%
   arrange(season)
 ```
 ## 5.2 Save: Chlorophyll-a Plots
@@ -1656,8 +1667,8 @@ chl_a_box  %>%
   walk2(
     .x = name_of_water_body,
     .y = plt,
-    overwrite = FALSE,
-    # overwrite = TRUE,
+    # overwrite = FALSE,
+    overwrite = TRUE,
     
     titles = "without", # "with", "both"
     \(.x, .y, overwrite, titles) {
@@ -2050,7 +2061,8 @@ boxplot_near_off <- function(.x, .y, rm_out) {
       axis.ticks.x    = element_blank(),
       plot.background = element_rect(color = "white"),
       
-      legend.position   = c(0.8, 0.9),
+      legend.position   = "inside",
+      legend.position.inside = c(0.8, 0.9),
       legend.text       = element_text(size = 5),
       legend.key.size   = unit(2.5, "mm"),
       legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
@@ -2121,7 +2133,8 @@ boxplot_total <-
     .by = nearoff,
     # label = glue("{nearoff}\n(N = {n()})")
     # label = glue("{nearoff}<br>(<i>n</i> = {n()})")
-    label = glue("(<i>n</i> = {n()})")
+    label = glue("(<i>n</i> = {n()})"),
+    label = fct(label, levels = c("(<i>n</i> = 42)", "(<i>n</i> = 40)")),
       ) %>%
   # mutate(labels = glue("Total (N = {n()})")) %>%
   mutate(labels = glue("Total (<i>n</i> = {n()})")) %>%
@@ -2210,7 +2223,8 @@ stat_summary(
       axis.ticks.x    = element_blank(),
       plot.background = element_rect(color = "white"),
       
-      legend.position   = c(0.8, 0.9),
+      legend.position   = "inside",
+      legend.position.inside = c(0.8, 0.9),
       legend.text       = element_text(size = 5),
       legend.key.size   = unit(2.5, "mm"),
       legend.margin     = margin(0.5, 0.5, 0.5, 0.5),
@@ -2235,8 +2249,10 @@ nearoff_plt <-
   pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
       
   pull(pig_keys_plt, plt)[[2]] 
-  + theme(legend.position = "inside", legend.position.inside = c(0.58, 0.9),
-          legend.key.spacing.y = unit(0.5, "mm")) |
+  + theme(legend.position = "inside", 
+          legend.position.inside = c(0.58, 0.9),
+          legend.key.spacing.y = unit(0.5, "mm")
+          ) |
       
   pull(pig_keys_plt, plt)[[3]] + theme(legend.position = "none") |
       
@@ -2287,7 +2303,8 @@ nearoff_plt2 <-
   (   
   pull(pig_keys_plt, plt)[[1]] + theme(legend.position = "none") |
   pull(pig_keys_plt, plt)[[2]] 
-  + theme(legend.position = "inside", legend.position.inside = c(0.58, 0.9),
+  + theme(legend.position = "inside", 
+          legend.position.inside = c(0.58, 0.9),
           legend.key.spacing.y = unit(0.5, "mm")) |
   pull(pig_keys_plt, plt)[[3]] + theme(legend.position = "none") |
   pull(pig_keys_plt, plt)[[4]] + theme(legend.position = "none") +
@@ -2333,6 +2350,7 @@ save_gg(
   bg             = "white"
   ) 
 ```
+
 ```{r cow-plot}
 cowplot::plot_grid(
   NULL,
@@ -2347,8 +2365,8 @@ cowplot::plot_grid(
   hjust            = 0.0,
   label_x          = 0.0,
   rel_heights      = c(0.05, 1, 0.05, 1)
-  ) %>%
-
+  ) %T>%
+  print() %>%
   save_gg(
     plt            = ., # edit if want specific plot
     save_location  = here(dir_plt_save, "chla_combine"),
@@ -2845,4 +2863,33 @@ map2(
 
 
 
+
+```{r}
+pig_dat_keys %>%
+    arrange(date_time_utc) %>%
+    mutate(station2 = fct_reorder(station, lon, min)) %>%
+    
+    
+    ggplot(
+        aes(y = dv_chl_a, 
+            x = date_time_utc,
+            color = station)
+    ) +
+    geom_path() +
+    geom_point() +
+    facet_wrap(~ station2, ncol = 1, scales = "free_y",
+               strip.position = "right") +
+    scale_x_datetime(
+      breaks = "1 year",
+      date_labels = "%Y") +
+    guides(color = "none") +
+    labs(x = NULL,
+         y = NULL) +
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_line(color = "black"),
+      panel.grid.minor.x = element_line(color = "black",linetype = "dashed")
+
+    )
+```
 
