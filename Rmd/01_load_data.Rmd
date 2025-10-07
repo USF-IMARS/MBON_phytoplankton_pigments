@@ -315,16 +315,16 @@ names that are equal are represented here to match to when add rows.
 params <- c(
   # meta
   "hplc_gsfc_id" = "gsfc_lab_sample_code", "pi", "station",
-  "sample" = "original_pi_sample_label", "cruise" = "cruise_name",
+  "sample"       = "original_pi_sample_label", "cruise" = "cruise_name",
   "indicate_if_filters_are_replicates",
-  "volfilt" = "volume_filtered_ml", "bottle" = "bottle_number",
-  "depth" = "sampling_depth_meters",
-  "water_depth" = "total_water_depth_meters",
+  "volfilt"      = "volume_filtered_ml", "bottle" = "bottle_number",
+  "depth"        = "sampling_depth_meters",
+  "water_depth"  = "total_water_depth_meters",
   "name_of_water_body",
 
   # time
   "year" = "year_of_sample", "month" = "gregorian_month",
-  "day" = "day_of_gregorian_month", "sdy" = "sequential_day_of_year",
+  "day"  = "day_of_gregorian_month", "sdy" = "sequential_day_of_year",
   "time" = "gmt_time", "date_time_utc", "lon", "lat",
 
   # sample type
