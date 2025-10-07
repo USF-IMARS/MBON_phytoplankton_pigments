@@ -96,6 +96,15 @@ cmtx_w_og <-
 
 # color palette
 tol_muted <- c(khroma::color("muted", names = FALSE)(9), "#BBBBBB")
+col_pal <-
+  c(
+    ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
+    tol_muted[2:3]
+  )
+
+# label name for phytoplankton
+bar_label <- "Phytoplankton\nFunctional Type"
+bar_label <- "Phytoplankton\nGroups"
 ```
 ## 2.2.1 Remove Outliers?
 
@@ -321,9 +330,9 @@ function (data = NULL, primary = c(0, 1), secondary = c(0, 1),
 
 
 # cmtx_avg_season_fract_l_og <- cmtx_avg_season_fract_l
-cmtx_avg_season_fract_l <-
-cmtx_avg_season_fract_l_og %>%
-  mutate(names = str_replace(names, "\\s(\\d)", "-\\1"))
+# cmtx_avg_season_fract_l <-
+# cmtx_avg_season_fract_l_og %>%
+#   mutate(names = str_replace(names, "\\s(\\d)", "-\\1"))
 ```
 
 
@@ -396,25 +405,13 @@ cmtx_avg_season_fract_l %>%
     color = green_col,
     ) +
   labs(
-    x = NULL,
-    # y     = "Proportion to Total Chl-a",
-    # y     = "PFT:Total Chlorophyll-a (%)",
+    x     = NULL,
     y     = "Relative Abundance (%)",
-    fill  = "Phytoplankton\nFunctional Type",
-    color = "Phytoplankton\nFunctional Type"
+    fill  = bar_label,
+    color = bar_label
   ) +
-  scale_color_manual(
-      values = c(
-        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
-        tol_muted[2:3])
-                     ) +
-  scale_fill_manual(
-      values = c(
-        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
-        tol_muted[2:3])
-                    ) +
-  # scale_fill_manual(values  = tol_muted) +
-  # scale_color_manual(values = tol_muted) +
+  scale_color_manual(values = col_pal) +
+  scale_fill_manual(values  = col_pal) +
   scale_y_continuous(
     labels = scales::percent_format(accuracy = 1),
     expand = c(0,0),
@@ -672,8 +669,8 @@ cmtx_stck_bar_szn_stn <-
     # x     = "Station",
     x     = NULL,
     y     = "Relative Abundance (%)",
-    fill  = "Phytoplankton\nFunctional Type",
-    color = "Phytoplankton\nFunctional Type"
+    fill  = bar_label,
+    color = bar_label
   ) +
   scale_y_continuous(
     labels = scales::label_percent(),
@@ -682,17 +679,7 @@ cmtx_stck_bar_szn_stn <-
     oob    = scales::squish,
     sec.axis = sec_axe
   ) +
-  # scale_color_manual(
-  #     values = c(
-  #       ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
-  #       tol_muted[2:3])
-  #                    ) +
-  scale_fill_manual(
-      values = c(
-        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
-        tol_muted[2:3])
-                    ) +
-  # scale_fill_manual(values = tol_muted) +
+  scale_fill_manual(values = col_pal) +
   coord_cartesian(clip = "off") +
   facet_wrap(~ season, nrow = 2) +
     
@@ -736,7 +723,7 @@ cmtx_stck_bar_szn_stn %>%
     size     = 2
     )
 
-# ---- save plot
+# ---- save plot ---- #
 save_gg(
   plt            = last_plot(), # edit if want specific plot
   save_location  = here(dir_plt_save, "season_station"),
@@ -756,6 +743,208 @@ save_gg(
   units          = "mm",
   bg             = "white"
   )
+```
+
+
+# 3.4.1 Plot Each Station through Time
+
+```{r station-time-setup}
+new_dat <-
+  cmtx_w %>%
+    select(cruise_id, station, date_time_utc, total_chl_a) %>%
+    mutate(
+        .by = cruise_id,
+    my_date = min(date_time_utc),
+    my_date = fct_reorder(format(my_date, "%m-%Y"), my_date),
+    # my_date = fct(my_date)
+  )
+  # mutate(
+  #   .by = season,
+  #   season1 = glue("{season} (N = {n()})")) %>%
+  #   season1 = glue("{season} (<i>n</i> = {n()})")
+  #   ) %>%
+  mutate(
+    season = fct_reorder(season1, as.numeric(season))
+  ) %>%
+    # remove ---- #
+   mutate(
+    nearoff = case_when(
+        str_detect(station, "^16|^10|^7") ~ 1,
+        .default = 2
+        ),
+    station = fct_reorder2(station, lon, nearoff)
+  )  %>% # remove here ---- #
+  summarise(
+    .by = c(season, station), 
+    chl_avg = mean(total_chl_a), 
+    chl_sd  = sd(total_chl_a),
+    chl_se  = chl_sd / sqrt(n())
+    ) %T>% 
+  print() 
+
+sec_axe <- 
+  new_dat %>%
+  ggh4x::help_secondary(
+    secondary = c(0, 2), 
+    name = bquote(bold("Chlorophyll-a Concentration"~(mg~m^-3)))
+    )
+```
+
+
+```{r plt-station-time}
+cmtx_l %>%
+  filter(!is.na(conc)) %>%
+  arrange(date_time_utc) %>%
+  mutate(
+    names = str_replace(names, "\\s(\\d)", "-\\1"),
+    # names = fct_reorder(names, conc, .desc = FALSE),
+    names = fct(
+      names,
+      levels = c(
+        "Dinoflagellate",
+        "Prasinophyte",
+        "Diatom-1",
+        "Cryptophyte",
+        "Chlorophyte",
+        "Haptophyte-8",
+        "Diatom-2",
+        "Haptophyte-6",
+        "Cyanobacteria-4",
+        "Cyanobacteria-2"
+      )
+    ),
+    .by = cruise_id,
+    my_date = min(date_time_utc),
+    my_date = fct_reorder(format(my_date, "%m-%Y"), date_time_utc, .fun = min),
+    # my_date = fct(my_date)
+  ) %T>%
+  print() %>%
+  ggplot(
+    aes(
+      # x     = station,
+      x     = my_date,
+      y     = conc,
+      fill  = names
+    )
+  ) +
+  geom_bar(
+    color     = "black",
+    position  = "fill",
+    stat      = "identity",
+    na.rm     = TRUE,
+    linewidth = 0.1,
+    width     = 0.6
+  ) +
+  # geom_linerange(
+  #   data = new_dat,
+  #   aes(
+  #     x = station,
+  #     ymin = sec_axe$proj(chl_avg) - sec_axe$proj(chl_sd), # standard deviation
+  #     ymax = sec_axe$proj(chl_avg) + sec_axe$proj(chl_sd) # standard deviation
+  #
+  #     # ymin = sec_axe$proj(chl_avg) - sec_axe$proj(chl_se), # standard error
+  #     # ymax = sec_axe$proj(chl_avg) + sec_axe$proj(chl_se)),  # standard error
+  #   ),
+  #   inherit.aes = FALSE,
+  #   linewidth = 0.2,
+  #   color = green_col,
+  # ) +
+  geom_point(
+    data = new_dat,
+    aes(x = my_date, y = sec_axe$proj(total_chl_a)),
+    inherit.aes = FALSE,
+    size        = 0.6,
+    shape       = 20,
+    # fill        = "white",
+    # color       = green_col,
+    fill        = green_col,
+    color       = "white",
+  ) +
+    
+  # add horizontal line at 1 mg m^-3
+  # geom_hline(
+  #   yintercept = 0.5, 
+  #   linetype   = "dashed", 
+  #   color      = "grey70", 
+  #   linewidth  = 0.5,
+  #   alpha      = 0.75
+  #   ) +    
+    
+  labs(
+    # x     = "Station",
+    x     = NULL,
+    y     = "Relative Abundance (%)",
+    fill  = bar_label,
+    color = bar_label
+  ) +
+  scale_y_continuous(
+    labels   = scales::label_percent(),
+    expand   = c(0, 0),
+    limits   = c(0, 1),
+    oob      = scales::squish,
+    sec.axis = sec_axe
+  ) +
+  scale_fill_manual(values = col_pal) +
+  coord_cartesian(clip = "off") +
+  facet_wrap(~station, ncol = 2) +
+
+
+
+  # theme
+  theme_bw() +
+  theme(
+    # text               = element_text(family = "serif", size = 20, color = "black"),
+    text = element_text(
+      family = "TT Arial", size = 6, color = "black",
+      face   = "bold"
+    ),
+    line        = element_line(color = "black", linewidth = 0.2),
+    rect        = element_rect(color = "black", linewidth = 0.2),
+    axis.title  = element_text(size = 5),
+    axis.text   = element_text(color = "black"),
+    axis.text.x = element_text(angle = 90, size = 3, vjust = 0.5, hjust = 0,
+                               margin = margin()
+                               ),
+    axis.text.y.right  = element_text(color = green_col),
+    axis.title.y.right = element_text(color = green_col),
+    axis.ticks.y.right = element_line(color = green_col),
+    axis.ticks.x       = element_blank(),
+    panel.grid         = element_blank(),
+    legend.position    = "bottom",
+    legend.direction   = "horizontal",
+    legend.text        = element_text(size = 4),
+    legend.title       = element_text(size = 5),
+    legend.key.size    = unit(1.75, "mm"),
+    legend.box.margin  = margin(t = -11, b = -5),
+    strip.text.x = element_markdown(
+        size = 6, face = "bold", 
+        margin = margin(t = 2, b = 2)
+        ), # remove later
+    strip.background = element_rect(fill = "white", colour = "black"),
+  )
+
+
+# ---- save plot ---- #
+save_gg(
+  plt            = last_plot(), # edit if want specific plot
+  save_location  = here(dir_plt_save, "station_time"),
+  save_name      = glue("pft_bar_percent_station", file_suffix),
+  verbose        = TRUE,
+  overwrite      = TRUE,
+  time_stamp_fmt = "%Y%m%d_%H%M%S",
+  device         = "png",
+  # 90 x 90 for figure
+  height         = 90,
+  width          = 90,
+  # height         = 90 * 0.5625,
+  # 45 x 180 for presentation
+  # height         = 45,
+  # width          = 180,
+  dpi            = 600,
+  units          = "mm",
+  bg             = "white"
+  )
+
 ```
 
 
@@ -1019,18 +1208,8 @@ cmtx_l_pct %>%
     fill  = "Phytoplankton Functional Type",
     color = "Phytoplankton Functional Type"
   ) +
-  scale_color_manual(
-      values = c(
-        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
-        tol_muted[2:3])
-                     ) +
-  scale_fill_manual(
-      values = c(
-        ggsci::pal_cosmic("hallmarks_light", alpha = 1)(10)[-c(1, 8)],
-        tol_muted[2:3])
-                    ) +
-  # scale_fill_manual(values = tol_muted) +
-  # scale_color_manual(values = tol_muted) +
+  scale_color_manual(values = col_pal) +
+  scale_fill_manual(values  = col_pal) +
   scale_y_continuous(
     labels = scales::label_percent(),
     expand = c(0, 0)
