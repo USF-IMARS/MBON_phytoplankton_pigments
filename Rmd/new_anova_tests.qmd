@@ -466,7 +466,7 @@ walk(
 ```{r cap-func}
 shelf(BiodiversityR)
 
-cap_pctvars <- function(cap_out){
+cap_pctvars <- function(cap_out) {
   # A function that takes the output of the CAPdiscrim function and 
   # produces the percent of among-group variability explained by each
   # canonical axis.
@@ -491,6 +491,8 @@ cap_pctvars <- function(cap_out){
   
   # Trim columns not corresponding to canonical axes
   pct_var <- pct_var[1:ncol(cap_out$x)]
+  
+  # ---- end of function cap_pctvars ---- #
 }
 
 
@@ -499,8 +501,8 @@ cap_extraction <- function(
     .data_sub,
     cap_dist,
     scale_fact = 5,
-    ld2_range = c(-1.25, 1.25),
-    ld2_spc_h = c(-1, 1)) {
+    ld2_range  = c(-1.25, 1.25),
+    ld2_spc_h  = c(-1, 1)) {
 
   `%!in%` <- Negate(`%in%`)
 
@@ -836,7 +838,8 @@ cap_extract_szn <- cap_extraction(
 
 
 
-## 5.3 CAP on Distance From Shore
+## 5.3 CAP on Nearshore vs Offshore  
+- rm Distance From Shore
 
 LOOCV
 Nearshore  Offshore 
@@ -898,7 +901,8 @@ cap_extract_dist <- cap_extraction(
     cap_ext    = cap_extract_dist,
     label_name = NULL,
     axes       = c(1),
-    title      = "Distance from Shore",
+    # title      = "Distance from Shore",
+    title      = "Nearshore vs Offshore",
     .col       = nearoff
   ) +
   scale_color_manual(
@@ -952,7 +956,8 @@ cap_extract_dist <- cap_extraction(
     # label_name = "Distance from Shore",
     label_name = NULL,
     axes       = c(1),
-    title      = "Distance from Shore",
+    # title      = "Distance from Shore",
+    title      = "Nearshore vs Offshore",
     .col       = nearoff
   ) +
   scale_color_manual(
@@ -966,7 +971,7 @@ cap_extract_dist <- cap_extraction(
 
 ```{r}
 
-
+# relative abundance CAP plot
 ( 
  cap_relative <- 
   cap_rel_szn_plt/cap_rel_dist_plt +
@@ -992,6 +997,7 @@ cap_extract_dist <- cap_extraction(
   )
 )
 
+# absolute abundance CAP plot
 ( 
 cap_absolute <- 
   cap_abs_szn_plt/cap_abs_dist_plt +
@@ -1069,15 +1075,15 @@ save_gg(
 
 ```{r}
 cmtx_w %>%
-    # filter(str_detect(station, "10|12|16|18")) %>%
-summarise(
-          med = median(total_chl_a, na.rm = TRUE),
-          mean = mean(total_chl_a, na.rm = TRUE),
-          sd = sd(total_chl_a, na.rm = TRUE),
-          max = max(total_chl_a, na.rm = TRUE),
-          iqr = quantile(total_chl_a, probs = 0.75, na.rm = TRUE),
-          .by = season
-          )
+  # filter(str_detect(station, "10|12|16|18")) %>%
+  summarise(
+    med  = median(total_chl_a, na.rm = TRUE),
+    mean = mean(total_chl_a, na.rm = TRUE),
+    sd   = sd(total_chl_a, na.rm = TRUE),
+    max  = max(total_chl_a, na.rm = TRUE),
+    iqr  = quantile(total_chl_a, probs = 0.75, na.rm = TRUE),
+    .by  = season
+  )
 
 cmtx_w %>%
   count(
