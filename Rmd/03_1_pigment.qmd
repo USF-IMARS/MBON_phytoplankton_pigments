@@ -438,7 +438,7 @@ pig_dat %>%
   geom_boxplot(outliers = FALSE) +
   geom_violin(fill = NA) +
   geom_jitter(shape = 21, width = 0.2) +
-  scale_y_continuous(breaks = c(seq(0, 1, 0.1), 1:4))
+  scale_y_continuous(breaks = c(seq(0, 1, 0.25), 2:4))
 }
 ```
 
@@ -1046,6 +1046,8 @@ pig_dat_keys %>%
 
 
 ```
+
+
 ```{r}
 remove_out <- 1
 if (remove_out == 1) {
@@ -1516,15 +1518,15 @@ chl_a_box <-
             na.rm = TRUE
           ) +
           
-          # add geometric mean
-          stat_summary(
-            color = "purple",
-            fun   = ~ exp(mean(log(.x))),
-            geom  = "point",
-            shape = 20,
-            size  = 10,
-            na.rm = TRUE
-          ) +
+          # # add geometric mean
+          # stat_summary(
+          #   color = "purple",
+          #   fun   = ~ exp(mean(log(.x))),
+          #   geom  = "point",
+          #   shape = 20,
+          #   size  = 10,
+          #   na.rm = TRUE
+          # ) +
             
           geom_point(
               data = ~ filter(.x, tot_chl_a > ylims[2])  %>%
@@ -1667,8 +1669,8 @@ chl_a_box  %>%
   walk2(
     .x = name_of_water_body,
     .y = plt,
-    # overwrite = FALSE,
-    overwrite = TRUE,
+    overwrite = FALSE,
+    # overwrite = TRUE,
     
     titles = "without", # "with", "both"
     \(.x, .y, overwrite, titles) {
@@ -2156,7 +2158,7 @@ boxplot_total <-
       alpha = 1,
       key_glyph = draw_key_rect
     ) +
-stat_summary(
+  stat_summary(
       color = "#CC0000",
       alpha = 0.5,
       fun.data = mean_sdl, # std dev * 2
@@ -2360,7 +2362,8 @@ cowplot::plot_grid(
   nrow             = 4,
   label_fontfamily = "sans",
   label_size       = 10,
-  labels           = c("", "a) Seasonal", "", "b) Distance from Shore"),
+  # labels           = c("", "a) Seasonal", "", "b) Distance from Shore"),
+  labels           = c("", "a) Seasonal", "", "b) Nearshore vs Offshore"),
   vjust            = 0.25,
   hjust            = 0.0,
   label_x          = 0.0,
@@ -2372,7 +2375,7 @@ cowplot::plot_grid(
     save_location  = here(dir_plt_save, "chla_combine"),
     save_name      = "chla_combine",
     verbose        = TRUE,
-    # overwrite      = TRUE,
+    overwrite      = TRUE,
     time_stamp_fmt = "%Y%m%d_%H%M%S",
     device         = "png",
     width          = 170,
