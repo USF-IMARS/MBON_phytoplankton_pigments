@@ -54,6 +54,214 @@ sf::sf_use_s2(FALSE)
 ```
 
 
+AI attempt at plotting general currents
+```{r}
+shelf(maps)
+## 1. Simple basemap for W Atlantic / Gulf (replace with your own map)
+world <- ggplot2::map_data("usa")
+
+p_base <- ggplot() +
+  geom_polygon(
+    data = world,
+    aes(long, lat, group = group),
+    fill  = "grey85",
+    color = "grey40",
+    linewidth = 0.2
+  ) +
+  coord_quickmap(
+    xlim = c(-90, -70),
+    ylim = c(20, 30)
+  ) +
+  theme_minimal()
+
+# Loop Current (Caribbean -> Yucatan Channel -> Gulf interior -> FL Straits)
+loop_current <- tibble::tribble(
+  ~lon,  ~lat,
+  -84,   18,   # Caribbean north of Honduras
+  -86.5, 20,   # into Yucatan Channel
+  -87.5, 23,   # northward into central Gulf
+  -87.5, 26,   # extended Loop
+  -85,   24,   # turning east
+  -82,   24    # exiting towards Florida Straits
+)
+
+# Florida Current (Straits of Florida)
+florida_current <- tibble::tribble(
+  ~lon,  ~lat,
+  -82, 24,    # entry from Loop Current
+  -80.5, 25,  # along Keys
+  -80, 26.5   # off Miami
+)
+
+# Gulf Stream (up the U.S. East Coast)
+gulf_stream <- tibble::tribble(
+  ~lon,  ~lat,
+  -80, 26.5,  # from Florida Current
+  -79, 30,    # off NE Florida / Georgia
+  -77, 33,    # off Carolinas
+  -74, 36     # off mid‑Atlantic
+)
+
+p_base +
+  # Loop Current
+  geom_path(
+    data = loop_current,
+    aes(lon, lat),
+    colour    = "dodgerblue3",
+    linewidth = 1,
+    lineend   = "round"
+  ) +
+  geom_segment(
+    data = loop_current[nrow(loop_current), , drop = FALSE],
+    aes(
+      x = lon - 1, y = lat - 0.5,
+      xend = lon,  yend = lat
+    ),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed"),
+    colour = "dodgerblue3",
+    linewidth = 1
+  ) +
+  annotate(
+    "text",
+    x = -87, y = 24.5,
+    label = "Loop Current",
+    colour = "dodgerblue3",
+    fontface = "italic",
+    size = 3.2
+  ) +
+
+  # Florida Current
+  geom_path(
+    data = florida_current,
+    aes(lon, lat),
+    colour    = "dodgerblue3",
+    linewidth = 1,
+    lineend   = "round"
+  ) +
+  annotate(
+    "text",
+    x = -81, y = 26.5,
+    label = "Florida Current",
+    colour = "dodgerblue3",
+    fontface = "italic",
+    size = 3.2
+  ) +
+
+  # Gulf Stream
+  geom_path(
+    data = gulf_stream,
+    aes(lon, lat),
+    colour    = "dodgerblue3",
+    linewidth = 1,
+    lineend   = "round"
+  ) +
+  geom_segment(
+    data = gulf_stream[nrow(gulf_stream), , drop = FALSE],
+    aes(
+      x = lon - 1, y = lat - 0.5,
+      xend = lon,  yend = lat
+    ),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed"),
+    colour = "dodgerblue3",
+    linewidth = 1
+  ) +
+  annotate(
+    "text",
+    x = -77.5, y = 34.5,
+    label = "Gulf Stream",
+    colour = "dodgerblue3",
+    fontface = "italic",
+    size = 3.2
+  )
+
+currents <- data.frame(
+  lon = c(-88,-86,-84,-82,-80),
+  lat = c(24,25,26,27,28),
+  u = c(0.3,0.4,0.6,0.8,1.0),
+  v = c(0.1,0.2,0.3,0.5,0.7)
+)
+
+scale_factor <- 1.5   # controls arrow length
+
+ggplot() +
+
+  geom_polygon(data = world,
+               aes(long, lat, group = group),
+               fill = "grey85",
+               color = "black",
+               linewidth = 0.2) +
+
+  geom_segment(data = currents,
+               aes(x = lon,
+                   y = lat,
+                   xend = lon + u * scale_factor,
+                   yend = lat + v * scale_factor),
+               arrow = arrow(length = unit(0.15,"cm")),
+               linewidth = 0.5,
+               color = "black") +
+
+  coord_quickmap(xlim = c(-95,-70), ylim = c(20,40)) +
+
+  theme_classic() +
+  labs(x = "Longitude", y = "Latitude")
+```
+```{r WIP2}
+# shelf(grid, smoothr, maps)
+# ## 1. Simple basemap for W Atlantic / Gulf (replace with your own map)
+# world <- ggplot2::map_data("usa")
+# 
+# p_base <- ggplot() +
+#   geom_polygon(
+#     data = world,
+#     aes(long, lat, group = group),
+#     fill  = "grey85",
+#     color = "grey40",
+#     linewidth = 0.2
+#   ) +
+#   coord_quickmap(
+#     xlim = c(-90, -70),
+#     ylim = c(20, 30)
+#   ) +
+#   theme_minimal()
+# 
+# 
+# 
+# 
+# 
+# p_base +
+#   geom_sf(
+#     data = loop_smooth,
+#     color = "dodgerblue3",
+#     linewidth = 1
+#   ) +
+#   # add an arrow at the downstream end
+#   geom_segment(
+#     data = loop_pts[nrow(loop_pts), , drop = FALSE],
+#     aes(
+#       x = lon - 0.7, y = lat - 0.3,
+#       xend = lon,   yend = lat
+#     ),
+#     arrow = arrow(length = unit(0.3, "cm"), type = "closed"),
+#     color = "dodgerblue3",
+#     linewidth = 1,
+#     inherit.aes = FALSE
+#   ) +
+#   annotate(
+#     "text",
+#     x = -87, y = 24.5,
+#     label = "Loop Current",
+#     colour = "dodgerblue3",
+#     fontface = "italic",
+#     size = 3.2
+#   ) +
+#   geom_point(
+#     data = loop_pts,
+#     aes(x = lon, y = lat)
+#   ) +
+#   coord_sf(xlim = c(-90,-80), ylim = c(20,30))
+```
+
+
 ## 2.2 Set Map Information
 
 Set paths for download and search:
@@ -157,15 +365,12 @@ map_obj <-
       coast_topo,
       bathy,
       exnt,
-      .set_breaks = c(10, 50, 100),
+      .set_breaks = c(10, 50, 100, 200),
       familyface = NULL,
       # contour_labels = TRUE
     )
   )
 )
-
-
-
 ```
 ```{r}
 shelf(seascapeR)
@@ -174,8 +379,8 @@ ply_fknms <-
   get_url_ply(
     sanctuary = "fknms",
     dir_ply = here("data", "map", "sanctuary")
-  )
-
+  ) %>%
+  nngeo::st_remove_holes()
 
 ```
 
@@ -193,7 +398,7 @@ lat_lon_dat <-
   pig_dat %>%
   filter(
       name_of_water_body == "Florida Keys"
-      & !str_detect(station, "21.5|9B|24|^3$")
+      & !str_detect(station, "21.5|9B|24|^3$|9.5")
       # & str_detect(station, "MR|LK|WS")
           ) %>%
   select(station, lat, lon) %>%
@@ -210,7 +415,8 @@ lat_lon_dat <-
 
 stn_map <-
   base_map +
-  geom_sf(data = ply_fknms, fill = NA, color = "red") +
+  geom_sf(data = ply_fknms, fill = NA, color = "red", linewidth = rel(1.1)) +
+  # geom_sf(data = nngeo::st_remove_holes(ply_fknms), fill = NA, color = "red", alpha = 0.05) +
   
   annotate(
     geom        = "shadowtext",
@@ -218,10 +424,10 @@ stn_map <-
     # y           = c(24.84, 24.61, 24.455, 24.49),
     # label       = c(100, 50, 25, 10),
     # angle       = c(35, 24, 15, -3),
-    x           = c(-80.52, -81.1, -81.95),
-    y           = c(24.84, 24.61, 24.49),
-    angle       = c(35, 24, -3),
-    label       = c(100, 50, 10),
+    x           = c(-80.48, -80.52, -81.1, -81.95),
+    y           = c(24.7, 24.84, 24.61, 24.49),
+    angle       = c(35, 35, 24, -3),
+    label       = c(200, 100, 50, 10),
     size        = 7,
     # fontface    = "bold",
     # label.color = NA,
@@ -241,7 +447,6 @@ stn_map <-
     stroke      = 0.5,
     size        = 6,
     # alpha     = 0.5,
-    stroke      = 1.5,
     # show.legend = FALSE
   ) +
 
@@ -261,16 +466,12 @@ stn_map <-
 
   annotate(
     geom        = "text",
-    x           = c(-80.75, -81.0, -80.75, -80.25),
-    y           = c(25.06, 24.4, 25.5, 25.55),
+    x           = c(-80.73, -80.7, -80.75, -80.25),
+    y           = c(25.06, 24.5, 25.55, 25.55),
     label       = c("Florida Bay", "Atlantic Ocean", "Everglades", "Biscayne Bay"),
     size        = 7,
     fontface    = "bold",
-    # fill        = NA,
-    # label.color = NA,
-    # family      = "serif",
-    # family      = "TT Arial",
-    angle = c(0, 0, 0, 72)
+    angle = c(30, 30, 0, 72)
   ) +
     
   labs(
@@ -296,8 +497,22 @@ stn_map
 
 
 
-
 ```
+```{r}
+(stn_map2 <- 
+  stn_map +
+  geom_segment(
+    # data = ,
+    aes(x = c(-81.2, -81.3, -80.95),    y = c(24.99, 25.3, 25.1),
+        xend = c(-81.17, -81.25, -81.1), yend = c(24.8, 25.11, 25)
+        ),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed"),
+    color = "black",
+    linewidth = 1.2,
+    inherit.aes = FALSE
+  ))
+```
+
 
 
 ## 3.2 Create Inset Florida Map
@@ -321,6 +536,108 @@ inset_map <-
 
 inset_map
 ```
+```{r WIP2}
+# Example: schematic Loop Current waypoints (lon/lat)
+loop_pts <- tibble::tribble(
+  ~lon,  ~lat,
+  -80.7,   18, # 1
+  -85., 20, # 2
+  -87.2, 23, # 3
+  -87.5, 26, # 4
+  -86, 26.5, # 5
+  -84.5, 24.2, # 6
+  -82,   23.9 # 7
+) %>%
+  mutate(type = "loop")
+
+# 1) Make an sf LINESTRING
+loop_line <- st_as_sf(loop_pts, coords = c("lon", "lat"), crs = 4326) %>%
+  summarise(do_union = FALSE) %>%
+  st_cast("LINESTRING")
+
+# 2) Smooth it (Chaikin or spline)
+loop_smooth <- smoothr::smooth(
+  loop_line,
+  method = "spline",   # or "chaikin"
+  vertex_factor = 5       # increase for more curvature
+)  %>%
+  mutate(type = "loop")
+
+# Example: schematic Florida Current waypoints (lon/lat)
+fl_pts <- tibble::tribble(
+  ~lon,  ~lat,
+  -82,   23.9, # 1
+  -80,   24.5, # 2
+  -79.65,   25.5, # 3 
+) %>%
+  mutate(type = "fl")
+
+# 1) Make an sf LINESTRING
+fl_line <- st_as_sf(fl_pts, coords = c("lon", "lat"), crs = 4326) %>%
+  summarise(do_union = FALSE) %>%
+  st_cast("LINESTRING")
+
+# 2) Smooth it (Chaikin or spline)
+fl_smooth <- smoothr::smooth(
+  fl_line,
+  method = "spline",   # or "chaikin"
+  vertex_factor = 5       # increase for more curvature
+)  %>%
+  mutate(type = "fl")
+
+# Example: schematic Gulf Stream waypoints (lon/lat)
+gs_pts <- tibble::tribble(
+  ~lon,  ~lat,
+  -79.65,   25.5, # 1
+  -79.65,   28, # 2
+  -80,   31, # 3
+  -75,   34.5, # 4
+) %>%
+  mutate(type = "gs")
+
+# 1) Make an sf LINESTRING
+gs_line <- st_as_sf(gs_pts, coords = c("lon", "lat"), crs = 4326) %>%
+  summarise(do_union = FALSE) %>%
+  st_cast("LINESTRING")
+
+# 2) Smooth it (Chaikin or spline)
+gs_smooth <- smoothr::smooth(
+  gs_line,
+  method = "spline",   # or "chaikin"
+  vertex_factor = 5       # increase for more curvature
+)  %>%
+  mutate(type = "gs")
+
+inset_map2 <- 
+  inset_map +
+   geom_sf(
+    data      = bind_rows(gs_smooth, fl_smooth, loop_smooth),
+    color     = c("green", "red", "dodgerblue3"),
+    fill      = c("green", "red", "dodgerblue3"),
+    linewidth = 1,
+     arrow    = arrow(
+       ends = "last", 
+       type = "closed", 
+       length = unit(0.3, "cm"))
+  ) +
+
+  annotate(
+    "text",
+    x        = c(-86.1, -79.5, -78.5), 
+    y        = c(24.5, 24.25, 30),
+    angle    = c(0, 32, 85),
+    label    = c("Loop\nCurrent", "Florida Current", "Gulf Stream"),
+    colour   = c("dodgerblue3", "red", "green"),
+    fontface = "italic",
+    size     = 3.2
+  ) +
+  # geom_point(
+  #   data = loop_pts,
+  #   aes(x = lon, y = lat)
+  # ) +
+  labs(x = NULL, y = NULL) +
+  coord_sf(ylim = c(min(lat_lon_dat$lat) - 3.5, NA))
+```
 
 ## 3.3 Merge Station Map and Florida Map
 
@@ -332,13 +649,14 @@ May need to play with draw_plot(east.map, x, y, width and height)
 ```{r plt-lg-sm, fig.height=6, fig.width=10}
 fullmap <- 
   ggdraw() +
-  draw_plot(stn_map) +
-  draw_plot(inset_map, x = 0.06, y = 0.59, width = 0.2, height = 0.45)
+  draw_plot(stn_map2) +
+  draw_plot(inset_map2, x = 0.06, y = 0.52, width = 0.3, height = 0.5)
 fullmap
 
 # ---- save plot
 walk(
-  c("png", "svg"),
+  # c("png", "svg"),
+  c("jpeg"),
   ~ save_gg(
     plt            = fullmap,
     save_location  = dir_plt_save,
@@ -355,6 +673,7 @@ walk(
     bg             = "white"
   )
 )
+
 # shelf(camcorder)
 # camcorder::gg_record(
 #   dir    = here::here("data", "cam_test", "map_of_station"),
