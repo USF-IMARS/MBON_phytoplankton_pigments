@@ -786,9 +786,11 @@ Notes about PERMANOVA (use `betadisper`):
 ```{r permanova_func}
 disper_sum_func <- function(x) {
  
-  calls <- x$call$group %>%
-  as.character() %>%
+  calls <- 
+    x$call$group %>%
+    as.character() %>%
     .[3]
+  
   x %>%
   anova() %>%
   as_tibble(rownames = "type") %>%
@@ -877,11 +879,11 @@ Pituch and Stevens, 2015 pg. 232
 ```{r abs-dispersion}
 set.seed(1082002)
 
-perm_disp <- list()
+abs_perm_disp <- list()
 
 # PFT conc vs season
 cat("\n-----------------------\n\n---- PFT Abs vs season ----\n\n")
-perm_disp$season <-
+abs_perm_disp$season <-
   cmtx_w %>%
   select(chloro:pras) %>%
   vegdist(
@@ -892,26 +894,31 @@ perm_disp$season <-
     group = cmtx_w$season
   ) %T>% print()
 
-disper_plt(perm_disp$season)
+disper_plt(abs_perm_disp$season)
   
 cat("\n-----------------------\n\n---- PFT Abs vs distance from shore ----\n\n")
-perm_disp$near_off <-
+abs_perm_disp$near_off <-
   cmtx_w %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
   select(chloro:pras) %>%
   vegdist(
     .,
     method = "bray"
   ) %>%
   betadisper(
-    group = select(cmtx_w, "near_off" = labels)[["near_off"]]
+    # group = select(cmtx_w, "near_off" = labels)[["near_off"]]
+    group = cmtx_w %>%
+      filter(str_detect(station, "10|12|16|18"))  %>% 
+      select("near_off" = labels) %$%
+      near_off
   ) %T>% print()
 
-disper_plt(perm_disp$near_off)
+disper_plt(abs_perm_disp$near_off)
 
 count(cmtx_w, labels)
 
 cat("\n-----------------------\n\n---- PFT Abs vs Year ----\n\n")
-perm_disp$year <-
+abs_perm_disp$year <-
   cmtx_w %>%
   select(chloro:pras) %>%
   vegdist(
@@ -922,14 +929,14 @@ perm_disp$year <-
     group = cmtx_w$year
   ) %T>% print()
 
-disper_plt(perm_disp$year)
+disper_plt(abs_perm_disp$year)
 
-perm_disp$disper_summary <-
+abs_perm_disp$disper_summary <-
   reduce(
     list2(
-      disper_sum_func(perm_disp$season),
-      disper_sum_func(perm_disp$near_off),
-      disper_sum_func(perm_disp$year)
+      disper_sum_func(abs_perm_disp$year),
+      disper_sum_func(abs_perm_disp$near_off),
+      disper_sum_func(abs_perm_disp$season),
     ),
     bind_rows
   ) %T>%
@@ -942,11 +949,11 @@ perm_disp$disper_summary <-
 ```{r rel-dispersion}
 set.seed(1082002)
 
-perm_disp <- list()
+rel_perm_disp <- list()
 
 # PFT conc vs season
 cat("\n-----------------------\n\n---- PFT Rel vs season ----\n\n")
-perm_disp$season <-
+rel_perm_disp$season <-
   cmtx_w_pct %>%
   select(chloro:pras) %>%
   vegdist(
@@ -957,26 +964,32 @@ perm_disp$season <-
     group = cmtx_w$season
   ) %T>% print()
 
-disper_plt(perm_disp$season)
+disper_plt(rel_perm_disp$season)
   
 cat("\n-----------------------\n\n---- PFT Rel vs distance from shore ----\n\n")
-perm_disp$near_off <-
+rel_perm_disp$near_off <-
   cmtx_w_pct %>%
+  filter(str_detect(station, "10|12|16|18")) %>%
+  
   select(chloro:pras) %>%
   vegdist(
     .,
     method = "bray"
   ) %>%
   betadisper(
-    group = select(cmtx_w, "near_off" = labels)[["near_off"]]
+    # group = select(cmtx_w, "near_off" = labels)[["near_off"]]
+    group = cmtx_w %>%
+      filter(str_detect(station, "10|12|16|18"))  %>% 
+      select("near_off" = labels) %$%
+      near_off
   ) %T>% print()
 
-disper_plt(perm_disp$near_off)
+disper_plt(rel_perm_disp$near_off)
 
 count(cmtx_w_pct, labels)
 
 cat("\n-----------------------\n\n---- PFT Rel vs Year ----\n\n")
-perm_disp$year <-
+rel_perm_disp$year <-
   cmtx_w_pct %>%
   select(chloro:pras) %>%
   vegdist(
@@ -987,15 +1000,15 @@ perm_disp$year <-
     group = cmtx_w$year
   ) %T>% print()
 
-disper_plt(perm_disp$year)
+disper_plt(rel_perm_disp$year)
 
 
-perm_disp$disper_summary <-
+rel_perm_disp$disper_summary <-
   reduce(
     list2(
-      disper_sum_func(perm_disp$season),
-      disper_sum_func(perm_disp$near_off),
-      disper_sum_func(perm_disp$year)
+      disper_sum_func(rel_perm_disp$year),
+      disper_sum_func(rel_perm_disp$near_off),
+      disper_sum_func(rel_perm_disp$season),
     ),
     bind_rows
   ) %T>%
@@ -1021,24 +1034,14 @@ cat("\n-----------------------\n\n---- PFT conc vs year ----\n\n")
 perm_abs_summ$year <-
   adonis2(
     chemtax_matrix ~ year,
-    data   = select(cmtx_w, year),
+    data   = select(cmtx_w, year) %>%
+             mutate(year = as.factor(year)),
     method = "bray"
-  ) %T>%
+  ) %>%
+  MicEco::adonis_OmegaSq() %T>%
   print() %>%
   as_tibble(rownames = "results_id") %>%
   mutate(group = "year", .before = 1) 
-
-# ---- PFT vs season ---- #
-cat("\n-----------------------\n\n---- PFT conc vs season ----\n\n")
-perm_abs_summ$season <-
-  adonis2(
-    chemtax_matrix ~ season,
-    data   = select(cmtx_w, season),
-    method = "bray"
-  ) %T>%
-  print() %>%
-  as_tibble(rownames = "results_id") %>%
-  mutate(group = "season", .before = 1) 
 
 # ---- PFT vs distance ---- #
 cat("\n-----------------------\n\n---- PFT conc vs distance ----\n\n")
@@ -1047,10 +1050,24 @@ perm_abs_summ$near_off <-
     chemtax_matrix ~ near_off,
     data   = select(cmtx_w, "near_off" = labels),
     method = "bray"
-  ) %T>%
+  ) %>%
+  MicEco::adonis_OmegaSq() %T>%
   print() %>%
   as_tibble(rownames = "results_id") %>%
   mutate(group = "near_off", .before = 1)
+
+# ---- PFT vs season ---- #
+cat("\n-----------------------\n\n---- PFT conc vs season ----\n\n")
+perm_abs_summ$season <-
+  adonis2(
+    chemtax_matrix ~ season,
+    data   = select(cmtx_w, season),
+    method = "bray"
+  ) %>%
+  MicEco::adonis_OmegaSq() %T>%
+  print() %>%
+  as_tibble(rownames = "results_id") %>%
+  mutate(group = "season", .before = 1) 
 
 # ---- PFT vs distance + season ---- #
 cat("\n-----------------------\n\n---- PFT conc vs distance + season ----\n\n")
@@ -1059,7 +1076,8 @@ perm_abs_summ$near_off_season <-
     chemtax_matrix ~ near_off + season,
     data   = select(cmtx_w, "near_off" = labels, season),
     method = "bray"
-  ) %T>%
+  ) %>%
+  MicEco::adonis_OmegaSq() %T>%
   print() %>%
   as_tibble(rownames = "results_id") %>%
   mutate(group = "near_off + season", .before = 1)
@@ -1118,18 +1136,19 @@ set.seed(1082002)
 chemtax_matrix_pct <- select(cmtx_w_pct, chloro:pras) 
 perm_rel_summ <- list()
 
-# ---- PFT vs season ---- #
-cat("\n-----------------------\n\n---- PFT rel vs season ----\n\n")
-perm_rel_summ$season <-
+# ---- PFT vs year ---- #
+cat("\n-----------------------\n\n---- PFT rel vs year ----\n\n")
+perm_rel_summ$year <-
   adonis2(
-    chemtax_matrix_pct ~ season,
-    data   = select(cmtx_w_pct, season),
+    chemtax_matrix_pct ~ year,
+    data   = select(cmtx_w_pct, year) %>%
+             mutate(year = as.factor(year)),
     method = "bray"
   ) %>%
   MicEco::adonis_OmegaSq() %T>%
   print() %>%
   as_tibble(rownames = "results_id") %>%
-  mutate(group = "season", .before = 1) 
+  mutate(group = "year", .before = 1)
 
 # ---- PFT vs near_off ---- #
 cat("\n-----------------------\n\n---- PFT rel vs distance ----\n\n")
@@ -1148,11 +1167,12 @@ chemtax_matrix_pct2 <-
     cmtx_w_pct %>%
     filter(str_detect(station, "10|12|16|18")) %>%
     select(chloro:pras)
+
 perm_rel_summ$near_off <-
   adonis2(
     chemtax_matrix_pct2 ~ near_off,
     data = filter(cmtx_w_pct, str_detect(station, "10|12|16|18")) %>%
-           select(, "near_off" = labels),
+           select("near_off" = labels),
     method = "bray"
   ) %>%
   MicEco::adonis_OmegaSq() %T>%
@@ -1160,18 +1180,18 @@ perm_rel_summ$near_off <-
   as_tibble(rownames = "results_id") %>%
   mutate(group = "near_off", .before = 1)
 
-# ---- PFT vs year ---- #
-cat("\n-----------------------\n\n---- PFT rel vs year ----\n\n")
-perm_rel_summ$year <-
+# ---- PFT vs season ---- #
+cat("\n-----------------------\n\n---- PFT rel vs season ----\n\n")
+perm_rel_summ$season <-
   adonis2(
-    chemtax_matrix_pct ~ year,
-    data   = select(cmtx_w_pct, year),
+    chemtax_matrix_pct ~ season,
+    data   = select(cmtx_w_pct, season),
     method = "bray"
   ) %>%
   MicEco::adonis_OmegaSq() %T>%
   print() %>%
   as_tibble(rownames = "results_id") %>%
-  mutate(group = "year", .before = 1)
+  mutate(group = "season", .before = 1) 
 
 # ---- PFT vs near_off + season ---- #
 cat("\n-----------------------\n\n---- PFT rel vs distance + season ----\n\n")
@@ -1232,20 +1252,21 @@ perm_rel_summ$all <-
 ```{r save-perm-disper}
 list(
   rel_abund  = perm_rel_summ$all,
-  rel_disper = perm_disp$disper_summary,
-  abs_abund  = perm_abs_summ$all
+  rel_disper = rel_perm_disp$disper_summary,
+  abs_abund  = perm_abs_summ$all,
+  abs_disper = abs_perm_disp$disper_summary
   ) %T>%
   print() %>%
   {
     if (!file_exists(
-        here(dir_data_save, glue("permanova_results", file_suffix, ".xlsx"))
+        here(dir_data_save, glue("permanova_results4", file_suffix, ".xlsx"))
         )) {
       cli_alert_info("Writing PerMANOVA Results File")
       writexl::write_xlsx(
         ., 
-        path = here(dir_data_save, glue("permanova_results", file_suffix, ".xlsx"))
+        path = here(dir_data_save, glue("permanova_results4", file_suffix, ".xlsx"))
         )
-      shell.exec(here(dir_data_save, glue("permanova_results", file_suffix, ".xlsx")))
+      shell.exec(here(dir_data_save, glue("permanova_results4", file_suffix, ".xlsx")))
     } else {
       cli_alert_info("Ignoring PerMANOVA Results File")
     }
@@ -1253,6 +1274,7 @@ list(
 
 
 ```
+
 
 ## Restricted permutations
 <https://uw.pressbooks.pub/appliedmultivariatestatistics/chapter/restricting-permutations/>
