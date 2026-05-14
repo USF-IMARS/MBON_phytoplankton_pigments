@@ -412,7 +412,7 @@ base_map_plot <- function(
     # ---- plot 
     plt <- 
         ggplot() +
-        geom_sf(data = .topo) +
+        geom_sf(data = .topo, color = "black") +
         scale_x_continuous(expand = c(0, 0)) +
         scale_y_continuous(expand = c(0, 0), breaks = seq(24.5, 28.0, 0.5)) +
         coord_sf(xlim = .extent[1:2], ylim = .extent[3:4]) +
