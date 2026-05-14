@@ -25,7 +25,7 @@ librarian::shelf(
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional
-    patchwork
+    patchwork, gginnards
 )
 
 conflicts_prefer(
@@ -122,29 +122,25 @@ cruise_min <-
 
 
 ### Hurricane Dates
+
 from: <https://coast.noaa.gov/hurricanes>
+
 ```{r hurricane-dates}
 hurricane_dates <-
   tribble(
     ~date, ~name,
     # "2015-08-30", "Erika", ## 
-    
     # "2016-10-12", "Nicole", ##
-    
     # "2017-07-31", "Emily", ##
     "2017-09-10", "Irma",
     # "2017-10-29", "Philippe", ##
-    
     "2018-09-03", "Gordon", 
-    
     # "2019-09-01", "Dorian", ##
-    
     # "2020-05-25", "Bertha", ##
     "2020-08-02", "Isaias",
     # "2020-08-26", "Laura", ##
     "2020-09-11", "Sally",
     "2020-11-09", "Eta", 
-    
   ) %>%
   mutate(date = ymd(date)) %T>% 
   print()
@@ -160,29 +156,27 @@ hurricane_dates <-
 cmtx_nutr %>%
   select(
     cruise_id, date_time_utc, season, station, dist, water_depth
-  ) %>% 
-    filter(
-      !(str_detect(station, "18")
-      & water_depth < 5)
-    ) %>%
+  ) %>%
+  filter(
+    !(str_detect(station, "18") &
+      water_depth < 5)
+  ) %>%
   summarise(
     .by = dist,
     mean_water = mean(water_depth),
-    min_water = min(water_depth),
-    max_water = max(water_depth)
+    min_water  = min(water_depth),
+    max_water  = max(water_depth)
   )
-
 
 cmtx_nutr %>%
   select(
     cruise_id, date_time_utc, season, station, dist, water_depth
   ) %>%
-    
   summarise(
-    .by = c(station, dist),
+    .by        = c(station, dist),
     mean_water = mean(water_depth),
-    min_water = min(water_depth),
-    max_water = max(water_depth)
+    min_water  = min(water_depth),
+    max_water  = max(water_depth)
   )
 ```
 
@@ -193,7 +187,8 @@ cmtx_nutr %>%
 cmtx_sel_var <- 
   cmtx_nutr %>%
   select(
-    c(cruise_id, date_time_utc, season, station, dist, chloro:pras, chloro_pct:pras_pct, 
+    c(cruise_id, date_time_utc, season, station, dist, 
+      chloro:pras, chloro_pct:pras_pct, 
       temperature, salinity, 
       total_chl_a, avg_chl_a_ug_l:si_u_m),
       -nutrients_tube_number
@@ -460,7 +455,10 @@ cmtx_nutr_plt <-
   print() %>%
   nest(.by = name) %T>%
   print() %>%
-  left_join(
+    filter(name == "temperature") %>%
+    
+
+left_join(
     nest(cmtx_nutr_plt_l, .by = name, .key =  "data_raw"),
     by = join_by(name)
     ) %>%
@@ -489,6 +487,7 @@ cmtx_nutr_plt <-
 
       plt <-
         .x %>%
+        replace_na(list(value_sd = 0)) %>%
         ggplot(aes(x = month_year, y = value_avg, color = dist, fill = dist)) +
         geom_rect(
           data = stripe,
@@ -501,21 +500,11 @@ cmtx_nutr_plt <-
           inherit.aes = FALSE,
           show.legend = FALSE
         ) +
-        # scale_fill_manual(
-        #   values = c(
-        #     "Offshore"  = "blue",
-        #     "Nearshore" = "red",
-        #     "Winter"    = "grey",
-        #     "Spring"    = "white",
-        #     "Summer"    = "grey",
-        #     "Autumn"    = "white"
-        #     ),
-        #   guide = "none") +
         scale_fill_manual(
           values = color_val,
           guide = "none") +
         geom_line() +
-        geom_point(shape = 22, color = "black") +
+        geom_point(shape = 22, color = "black", na.rm = TRUE) +
         
         # ---- add raw data ---- #
         geom_point(
@@ -525,7 +514,8 @@ cmtx_nutr_plt <-
             y     = value,
             color = dist,
             shape = dist),
-          position = position_dodge(0.9)
+          position = position_dodge(0.9),
+          na.rm = TRUE
           ) +
         geom_errorbar(
           aes(ymin = value_avg - value_sd, ymax = value_avg + value_sd)
@@ -545,7 +535,7 @@ cmtx_nutr_plt <-
         ) +
         labs(
           title = .y,
-          x = NULL,
+          x     = NULL,
           color = NULL,
           shape = NULL
         ) +
@@ -559,9 +549,28 @@ cmtx_nutr_plt <-
         theme(
           legend.position = "top"
         )
+      
+      if (.y %in% c("temperature", "salinity")) {
+        plt <- 
+          plt +
+          scale_y_continuous(
+               # limits = c(34, 38),
+              limits = range(.x$value_avg),
+              # expand = expansion(mult = 1.2)
+              )
+        
+        plt <- 
+          delete_layers(plt, "GeomText") %>%
+          delete_layers("GeomHline")
+      }
+      
+      return(plt)
     }
   )
 ) 
+
+cmtx_nutr_plt %>%
+  pull(plt) 
 ```
 
 
@@ -694,7 +703,7 @@ nutrient_plt
 # shell.exec(here::here("data", "cam_test", "stetson_pres"))
 # camcorder::gg_stop_recording()
 
-camcorder::gg_resize_film(width = 180, height = 90,  dpi = 600, units = "mm")
+# camcorder::gg_resize_film(width = 180, height = 90,  dpi = 600, units = "mm")
 
 ```
 
@@ -941,7 +950,7 @@ dat_month_stk <-
         }
       )
   ) %T>% 
-  print()
+  print() 
 ```
 
 
@@ -950,6 +959,7 @@ dat_month_stk  %>%
   slice(c(11:20)) %>%
   pull(plt_stk)
 ```
+
 ```{r, fig.height=25}
 imap(
   .x  = dat_month_stk$plt_stk[12],
@@ -1158,9 +1168,12 @@ cmtx_nutr %>%
 
 # ---- Correlation ----
 
-```{r correlate}
+
+
+
+```{r correlate-absolute}
 cmtx_nutr %>%
-  select(temperature, salinity, chloro_pct:pras_pct) %>%
+  select(temperature, salinity, nh4_u_m:si_u_m, chloro:pras) %>%
   corrr::correlate() %>%
   mutate(
     across(
@@ -1168,18 +1181,23 @@ cmtx_nutr %>%
       \(.x) round(.x, 2)
       )
     ) %>%
-    corrr::focus(temperature, salinity) %>%
-    arrange(temperature)
+    corrr::focus(temperature, salinity, nh4_u_m:si_u_m) %>%
+    arrange(temperature) %>%
+    DT::datatable(
+        options = list(pageLength = 10, autoWidth = TRUE),
+        rownames = FALSE,
+        filter = "top"
+        )
 
 
 cmtx_nutr %>%
-  select(dist, temperature, salinity, chloro_pct:pras_pct) %>%
+  select(dist, temperature, salinity,  nh4_u_m:si_u_m, chloro:pras) %>%
   nest(.by = dist) %$% 
   map2(data,
        dist,
       \(.x, .y) .x %>%
   corrr::correlate() %>%
-  corrr::focus(temperature, salinity)  %>%
+  corrr::focus(temperature, salinity, nh4_u_m:si_u_m)  %>%
   arrange(temperature) %>%
   mutate(
     .before = 1,
@@ -1198,19 +1216,82 @@ cmtx_nutr %>%
         
     } %>%
      
-    arrange(temperature) 
+    arrange(temperature) %>%
+    DT::datatable(
+        options = list(pageLength = 50, autoWidth = TRUE),
+        rownames = FALSE,
+        filter = "top"
+        )
+
+# cmtx_nutr %>%
+#   select(temperature, salinity,  nh4_u_m:si_u_m, chloro:pras) %>%
+#     # as.matrix() %>%
+#     correlation::correlation() %>%
+#     correlation::cor_smooth()
+```
+```{r correlate-rel}
+cmtx_nutr %>%
+  select(temperature, salinity, nh4_u_m:si_u_m, chloro_pct:pras_pct) %>%
+  corrr::correlate() %>%
+  mutate(
+    across(
+      is.numeric, 
+      \(.x) round(.x, 2)
+      )
+    ) %>%
+    corrr::focus(temperature, salinity, nh4_u_m:si_u_m) %>%
+    arrange(temperature) %>%
+    DT::datatable(
+        options = list(pageLength = 10, autoWidth = TRUE),
+        rownames = FALSE,
+        filter = "top"
+        )
+
 
 cmtx_nutr %>%
-  select(temperature, salinity, chloro_pct:pras_pct) %>%
-    # as.matrix() %>%
-    correlation::correlation() %>%
-    correlation::cor_smooth()
+  select(dist, temperature, salinity,  nh4_u_m:si_u_m, chloro_pct:pras_pct) %>%
+  nest(.by = dist) %$% 
+  map2(data,
+       dist,
+      \(.x, .y) .x %>%
+  corrr::correlate() %>%
+  corrr::focus(temperature, salinity, nh4_u_m:si_u_m)  %>%
+  arrange(temperature) %>%
+  mutate(
+    .before = 1,
+    dist = .y,
+    across(
+      is.numeric, 
+      \(.x) round(.x, 2)
+      )
+    )
+      ) %>%
+        
+    list_c() %T>%
+    {
+      arrange(., salinity) %>%
+      print()
+        
+    } %>%
+     
+    arrange(temperature) %>%
+    DT::datatable(
+        options = list(pageLength = 50, autoWidth = TRUE),
+        rownames = FALSE,
+        filter = "top"
+        )
 
-cor_fun <- function(df) cor.test(df$value_pft, df$value_env, method = "pearson") %>% broom::tidy()
+# cmtx_nutr %>%
+#   select(temperature, salinity,  nh4_u_m:si_u_m, chloro_pct:pras_pct) %>%
+#     # as.matrix() %>%
+#     correlation::correlation() %>%
+#     correlation::cor_smooth()
+
 ```
 
 
 ```{r correlate-signifc}
+cor_fun <- function(df) cor.test(df$value_pft, df$value_env, method = "pearson") %>% broom::tidy()
 cmtx_nutr %>%
   select(temperature, salinity, chloro_pct:pras_pct) %>%
    pivot_longer(
