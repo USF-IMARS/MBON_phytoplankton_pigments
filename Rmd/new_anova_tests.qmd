@@ -37,7 +37,7 @@ conflicts_prefer(
 source(here("scripts", "misc_functions.R"))
 ```
 
-```{r}
+```{r colors}
 col_manual <-
   c(
     # "Offshore"  = "blue",
@@ -495,7 +495,24 @@ cap_pctvars <- function(cap_out) {
   # ---- end of function cap_pctvars ---- #
 }
 
-
+##%######################################################%##
+#                                                          #
+####       Extract Information From Cap Analysis        ####
+#                                                          #
+##%######################################################%##
+#' Extract Information From Cap Analysis
+#'
+#' Extract useful information from CAP analysis.
+#'
+#' @param .data All data
+#' @param .data_sub Response matrix
+#' @param cap_dist CAP results
+#' @param scale_fact Scaling factor for data
+#' @param ld2_range Range of jittered axis 
+#' @param ld2_spc_h Range of species on jittered axis
+#'
+#' @return 
+#'
 cap_extraction <- function(
     .data,
     .data_sub,
@@ -603,6 +620,23 @@ cap_extraction <- function(
 ```{r plot-func}
 shelf(shadowtext)
 
+##%######################################################%##
+#                                                          #
+####               Plot Template For CAP                ####
+#                                                          #
+##%######################################################%##
+#' Plot Template For CAP
+#'
+#' A plotting template used to show resutls of CAP analysis.
+#'
+#' @param cap_ext Results from `cap_extraction()`
+#' @param label_name Name of legend
+#' @param axes Which axes to plot
+#' @param title Title of plot
+#' @param .col Unquoted column name within tibble
+#'
+#' @return RETURN_DESCRIPTION
+#'
 plot_template <- function(
     cap_ext,
     label_name,
@@ -1000,7 +1034,8 @@ cap_extract_dist <- cap_extraction(
 # absolute abundance CAP plot
 ( 
 cap_absolute <- 
-  cap_abs_szn_plt/cap_abs_dist_plt +
+  # cap_abs_szn_plt/cap_abs_dist_plt +
+  cap_abs_szn_plt/(cap_abs_dist_plt + coord_cartesian(xlim = c(-4, 4))) +
   plot_annotation(
     # title      = "Composition and abundance",
     tag_levels = "a",
@@ -1047,7 +1082,8 @@ save_gg(
   verbose        = TRUE,
   # overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
-  device         = "png",
+  # device         = "png",
+  device         = "jpeg",
   width          = 170,
   height         = 170,
   dpi            = 600,
@@ -1060,9 +1096,10 @@ save_gg(
   save_location  = here(dir_plt_save),
   save_name      = glue("cap_absolute", file_suffix),
   verbose        = TRUE,
-  # overwrite      = TRUE,
+  overwrite      = TRUE,
   time_stamp_fmt = "%Y%m%d_%H%M%S",
-  device         = "png",
+  # device         = "png",
+  device         = "jpeg",
   width          = 170,
   height         = 170,
   dpi            = 600,
@@ -1070,6 +1107,7 @@ save_gg(
   bg             = "white"
 )
 ```
+
 
 
 
