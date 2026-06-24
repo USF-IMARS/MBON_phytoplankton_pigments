@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
-    librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
 
     
@@ -17,7 +17,7 @@ librarian::shelf(
     vegan, ggord,
     gavinsimpson/ggvegan
 )
-
+shelf(conflicted)
 conflicts_prefer(
   dplyr::filter,
   dplyr::select
@@ -74,7 +74,11 @@ You will need to restart R and run: pacman::p_install_gh("rspatial/raster")
 If `seasscapeR` version is not "0.4.1"     
 You will need to restart R and run: pacman::p_install_gh("marinebon/seascapeR") 
 
+
+
 ## Download Seascape Raster
+
+
 ```{r scp-dwnld}
 # ---- set location and temporal scale for each image
 arg_ls <-
@@ -96,7 +100,7 @@ seascapes_match <-
                                   unit = "year"),
         del_cache  = FALSE,
         verb       = TRUE
-        )  %>%
+        ) %>%
     mutate(yr_mth = str_extract(files, "[0-9]{4}\\.[0-9]{2}")) %>%
     
     # ---- Filter seascape files to the months of the data
@@ -113,6 +117,129 @@ rm(arg_ls)
 #     unzip(., exdir = seasc_path)
 ```
 
+## Plot SeaScape
+
+## 2.2 Set Map Information
+
+Set paths for download and search:
+  - land 
+  - topographic 
+    - Note: they don't have to be the same location
+    
+Set spatial extend as a bounding box
+- Florida Keys
+  - zoomed in for stations specific
+  - Min lon/lat: 
+    * -82.00 deg W
+    * 24.25 deg N
+  - Max lon/lat: 
+    * -80.00 deg W
+    * 24.25 deg N
+
+- Florida
+  - zoomed out for inset map
+  - Min lon/lat: 
+    * -90.00 deg W
+    * 20.00 deg N   
+  - Max lon/lat: 
+    * -75.00 deg W
+    * 35.00 deg N
+
+```{r map-info, include=FALSE}
+# source functions
+source(here("scripts", "map_files_dwnlod.R")) # map download function
+
+# path for map to find/download to, they can be different depending on
+# your computer
+path_land <- here("data", "map")
+path_topo <- here("data", "map")
+
+# Region of Interest Bounding Box                   ======== edit this if needed
+# Change the spatial extent
+exnt <- c(xmin = -82,   # West
+          xmax = -80,   # East
+          ymin = 24.25, # South
+          ymax = 25.75  # North 
+        )
+
+# inset extent (i.e. smaller map on top)            ======== edit this if needed
+exnt2 <-  c(-90, # West
+            -75, # East
+            20,  # South
+            35   # North
+            ) 
+
+names(exnt2) <- names(exnt)
+```
+
+
+## 2.3 Load Dataset
+
+Load data sets:
+- Combined Pigment Data created in `01_load_data.Rmd`
+ 
+TODO: *load additonal data*
+- CHEMTAX Seasonal Averages created in `04_chemtax_analysis.Rmd`
+- Surface Averaged CTD Data created in `02_ctd_download.Rmd`
+- Merge CHETMAX-CTD
+
+```{r load-pigment-data}
+dir_plt_save <- here("data", "plots", "map")
+
+pig_dat  <- 
+  here("data", "processed", "load_data", "combined_pig_dat.csv") %>%
+  read_csv(show_col_types = FALSE) %T>% print()
+```
+
+
+## 2.4 Download and Load Bathymetry and Coastline Files
+
+**Note:** this will be done automatically if files **do not exists**
+
+Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
+
+Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
+```{r maps-download-load}
+world_download(
+    path_land = path_land,
+    path_topo = path_topo,
+    extent    = exnt,
+    .timeout = 1000
+)
+
+# Load coastline and topography data
+map_obj <- 
+    load_map_obj( 
+    .map_coast = path_land, 
+    .map_state = path_land,
+    .map_bath  = path_topo, 
+    .map_file  = "etopo1.nc",
+    .extent    = exnt2
+    )
+
+# create base map
+(base_map <-
+  with(
+    map_obj,
+    base_map_plot(
+      coast_topo,
+      bathy,
+      exnt,
+      .set_breaks = c(10, 50, 100, 200),
+      familyface = NULL,
+      # contour_labels = TRUE
+    )
+  )
+)
+```
+
+
+```{r}
+rast(seascapes_match$files[1]) %>%
+  plot()
+```
+
+
 
 # Extract Seascape Class
 This is based on the highest proportion for each seascape with the closer the 
@@ -128,25 +255,32 @@ Steps:
     - sum all IDWs 
 4. Select the seascape with the highest proportion as the represenative  
 5. Join seascape classes with original CTD/CHEMTAX data
+
+
 ```{r sc-extract}
 cmtx_sea <-
-    env_cmtx %>% 
-    nest(.by = yr_mth) %>%
-    left_join(seascapes_match, 
-              by = "yr_mth") %>%
-    mutate(
-        sc = map2(
-            .x = files,
-            .y = data,
-            ~ extract_seascapes(.x, .y, verb = FALSE),
-            .progress = TRUE)) %>%
-    unnest(sc) %>%
-    select(-data) %>% 
-    drop_na(seascape, temp, par:sal) %T>% print()
+  env_cmtx %>%
+  nest(.by = yr_mth) %>%
+  left_join(seascapes_match,
+    by = "yr_mth"
+  ) %>%
+  mutate(
+    sc = map2(
+      .x = files,
+      .y = data,
+      ~ extract_seascapes(.x, .y, verb = FALSE),
+      .progress = TRUE
+    )
+  ) %>%
+  unnest(sc) %>%
+  select(-data) %>%
+  drop_na(seascape, temp, par:sal) %T>%
+  print()
 
 ```
 
 # CAP with Bray-Curtis?
+
 ```{r sc-cap}
 seascspec <- select(cmtx_sea, chloro:pras)
 
@@ -159,8 +293,10 @@ seasc_cap <-
 
 plot(seasc_cap)
 
-autoplot(seasc_cap,
-         legend.position = 'none') 
+autoplot(
+  seasc_cap,
+  legend.position = 'none'
+  ) 
 ```
 
 # CCA
@@ -187,16 +323,17 @@ plt_ord <-
     ellipse   = FALSE,
     ptslab    = TRUE,
     addsize   = 6,
-    ylim      = c(-6.25, 6.25),
-    xlim      = c(-4, 5),
+    # ylim      = c(-6.25, 6.25),
+    # xlim      = c(-4, 5),
     repel     = TRUE,
     txt       = 6,
     vec_lab   = new_lab,
     grp_title = "Seascape Class"
   ) +
+  ggvegan::geom_ordi_axis() +
   theme_classic() +
   theme(
-    text = element_text(family = "serif", size = 20),
+    text = element_text(size = 20),
     legend.position = c(0.15, 0.9)
   )
 
@@ -225,7 +362,13 @@ save_gg(
 for (szn in seasons) {
   # filter for season
   temp_sea_df <-
-    filter(cmtx_sea, str_detect(season, szn))
+    filter(cmtx_sea, str_detect(season, szn)) %>%
+    mutate(
+      .by = seascape,
+      pct = n() / nrow(.),
+      pct = scales::label_percent(0.1)(pct),
+      seascape2 = glue("{seascape} ({pct})")
+    )
 
   # filtered df and select PFTs
   temp_sea_mat <-
@@ -242,45 +385,47 @@ for (szn in seasons) {
     ggord(
       temp_cca,
       size      = 4,
-      grp_in    = as.character(temp_sea_df$seascape),
+      grp_in    = as.character(temp_sea_df$seascape2),
       ellipse   = FALSE,
       ptslab    = TRUE,
       addsize   = 6,
-      ylim      = c(-6.25, 6.25),
-      xlim      = c(-4, 5),
+      # ylim      = c(-6.25, 6.25),
+      # xlim      = c(-4, 5),
       repel     = TRUE,
       txt       = 6,
       vec_lab   = new_lab,
       grp_title = "Seascape Class"
     ) +
+    ggvegan::geom_ordi_axis() +
     labs(title = szn) +
+    coord_equal() +
     theme_classic() +
     theme(
       text = element_text(
-        family = "serif",
+        # family = "serif",
         size   = 20
       ),
-      legend.position = c(0.15, 0.9)
+      legend.position = c(0.20, 0.9)
     )
 
   print(cca_szn)
 
 
   # ---- save plot
-  save_gg(
-    plt            = cca_szn,
-    save_location  = dir_plt_save,
-    save_name      = glue("seascape_cca_{str_to_lower(szn)}"),
-    verbose        = TRUE,
-    overwrite      = FALSE,
-    time_stamp_fmt = "%Y%m%d_%H%M%S",
-    device         = "jpeg",
-    height         = 10,
-    width          = 8,
-    dpi            = 600,
-    units          = "in",
-    bg             = "white"
-  )
+  # save_gg(
+  #   plt            = cca_szn,
+  #   save_location  = dir_plt_save,
+  #   save_name      = glue("seascape_cca_{str_to_lower(szn)}"),
+  #   verbose        = TRUE,
+  #   overwrite      = FALSE,
+  #   time_stamp_fmt = "%Y%m%d_%H%M%S",
+  #   device         = "jpeg",
+  #   height         = 10,
+  #   width          = 8,
+  #   dpi            = 600,
+  #   units          = "in",
+  #   bg             = "white"
+  # )
 }
 
 ```
@@ -289,6 +434,7 @@ for (szn in seasons) {
 information on the seascapes classes: https://shiny.marinebon.app/seascapes/classes.html
 
 ## Calculate Fractions of PFT to Total Chlor-a
+
 ```{r}
 # sum each seascape class
 # sc_cnt <-
@@ -307,9 +453,9 @@ sea_fract <-
   cmtx_sea %>%
   mutate(
     # combine certain PFTs
-    diat  = diat1 + diat2,
+    diat  = diat1  + diat2,
     cyano = cyano2 + cyano4,
-    hapt  = hapt6 + hapt8,
+    hapt  = hapt6  + hapt8,
     total = chloro + crypto + diat + dino + hapt + pras + cyano,
 
     # calc fraction of PFT
@@ -383,7 +529,7 @@ plt_nmds <-
   scale_colour_manual(values = tol_muted) +
 
   # theme
-  ggthemes::theme_tufte() +
+  # ggthemes::theme_tufte() +
   theme(
     axis.text.y = element_text(
       colour = "black",
@@ -463,10 +609,11 @@ ano2 <-
     permutations = 999
   )
 
-ano1
-ano2
+summary(ano1)
+summary(ano2)
 ```
-Seascape ---
+---
+Seascape 
 
 ANOSIM statistic R: 0.2343 
       Significance: 0.009901 
@@ -475,14 +622,16 @@ Permutation: free
 Number of permutations: 100
 
 ---
-Season ---
+
+---
+Season
 
 ANOSIM statistic R: 0.1379 
       Significance: 0.009901 
 
 Permutation: free
 Number of permutations: 100
-
+---
 
 
 # Determine PFT Dominance by Season and Seascape

@@ -60,17 +60,17 @@ dwnld_seascp <- function(
     #         "\n------------\n"))
     #     }
         
-    if (!str_detect(getNamespaceVersion("seascapeR")[[1]], "0.4.1")) {
-        stop(glue(
-            "\n\n------------\n",
-            "You need to update the version of `seascapeR` ",
-            "before continuing!\n\n",
-            "Current: {getNamespaceVersion(\"seascapeR\")[[1]]}\n",
-            "Needed:  0.4.1\n\n",
-            "Restart R and run pacman::p_install_gh(\"marinebon/seascapeR\")\n",
-            "Top ribbon: Session > Restart R",
-            "\n------------\n"))
-        }
+    # if (!str_detect(getNamespaceVersion("seascapeR")[[1]], "0.4.1")) {
+    #     stop(glue(
+    #         "\n\n------------\n",
+    #         "You need to update the version of `seascapeR` ",
+    #         "before continuing!\n\n",
+    #         "Current: {getNamespaceVersion(\"seascapeR\")[[1]]}\n",
+    #         "Needed:  0.4.1\n\n",
+    #         "Restart R and run pacman::p_install_gh(\"marinebon/seascapeR\")\n",
+    #         "Top ribbon: Session > Restart R",
+    #         "\n------------\n"))
+    #     }
 
     # ---- inform
     cli::cli_alert_info(
